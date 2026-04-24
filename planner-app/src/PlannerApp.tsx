@@ -1,6 +1,5 @@
 import { Canvas, type ThreeEvent, useThree } from '@react-three/fiber'
 import {
-  Grid,
   Html,
   OrbitControls,
   TransformControls,
@@ -28,11 +27,22 @@ import {
 } from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import './App.css'
+import FactoryFloor from './components/FactoryFloor'
+import FactoryWalls from './components/FactoryWalls'
+import Lighting from './components/Lighting'
 
 type PlannerTool = 'select' | 'place'
 type CameraPreset = 'perspective' | 'top' | 'front' | 'side'
 type TransformMode = 'translate' | 'rotate'
-type AssetShape = 'box' | 'rhombus' | 'cylinder' | 'cone' | 'sphere' | 'hex'
+type AssetShape =
+  | 'box'
+  | 'rectangle'
+  | 'circle'
+  | 'rhombus'
+  | 'cylinder'
+  | 'cone'
+  | 'sphere'
+  | 'hex'
 
 interface AssetDefinition {
   id: string
@@ -67,7 +77,6 @@ interface AssetMeshProps {
   isPlacementMode: boolean
   useTransformGizmo: boolean
   transformMode: TransformMode
-  isAltPressed: boolean
   isCtrlPressed: boolean
   orbitRef: RefObject<OrbitControlsImpl | null>
   onSelect: (id: string, addToSelection: boolean) => void
@@ -89,7 +98,6 @@ interface ColorInputProps {
 interface MultiTransformGizmoProps {
   selectedAssets: PlacedAsset[]
   mode: TransformMode
-  isAltPressed: boolean
   isCtrlPressed: boolean
   orbitRef: RefObject<OrbitControlsImpl | null>
   onCommit: (updates: Array<{ id: string; position: Vector3Tuple; rotation: Vector3Tuple }>) => void
@@ -105,14 +113,28 @@ const SNAP_UNIT = 1
 const MAX_HISTORY = 80
 const FALLBACK_ASSET_COLOR = '#8ca0b6'
 const FALLBACK_ASSET_DIMENSIONS: Vector3Tuple = [1, 1, 1]
+const COLOR_SWATCHES = [
+  '#e03131',
+  '#f08c00',
+  '#f59f00',
+  '#2f9e44',
+  '#0ca678',
+  '#15aabf',
+  '#1c7ed6',
+  '#3d8bfd',
+  '#5f3dc4',
+  '#7048e8',
+  '#c2255c',
+  '#495057',
+]
 
 const DEFAULT_ASSET_DEFINITIONS: AssetDefinition[] = [
   {
-    id: 'assembly-line',
-    label: 'Montage-Linie',
+    id: 'production-line',
+    label: 'Produktionslinie',
     category: 'Produktion',
-    size: [4, 1.4, 1.6],
-    shape: 'box',
+    size: [5, 1.2, 1.8],
+    shape: 'rectangle',
     color: '#3d8bfd',
     metadataTemplate: {
       Bereich: 'FA1-Montage',
@@ -144,6 +166,45 @@ const DEFAULT_ASSET_DEFINITIONS: AssetDefinition[] = [
       Bereich: 'FA2-Montage',
       Schicht: 'Frueh',
       Personal: '2',
+    },
+  },
+  {
+    id: 'forklift',
+    label: 'Hubwagen',
+    category: 'Logistik',
+    size: [1.6, 1.1, 2.4],
+    shape: 'rectangle',
+    color: '#f59f00',
+    metadataTemplate: {
+      Bereich: 'Materialfluss',
+      Status: 'Bereit',
+      Fahrer: 'M. Keller',
+    },
+  },
+  {
+    id: 'employee',
+    label: 'Angestellte',
+    category: 'Personal',
+    size: [0.8, 1.75, 0.8],
+    shape: 'circle',
+    color: '#15aabf',
+    metadataTemplate: {
+      Bereich: 'Montage',
+      Schicht: 'Frueh',
+      Anzahl: '1',
+    },
+  },
+  {
+    id: 'crate-stack',
+    label: 'Kisten',
+    category: 'Logistik',
+    size: [1.2, 1.2, 1.2],
+    shape: 'box',
+    color: '#8d6e63',
+    metadataTemplate: {
+      Bereich: 'Wareneingang',
+      Inhalt: 'Komponenten',
+      Bestand: '32',
     },
   },
   {
@@ -208,6 +269,32 @@ const DEFAULT_ASSET_DEFINITIONS: AssetDefinition[] = [
     metadataTemplate: {
       Bereich: 'Formen',
       Hinweis: 'Hexagon',
+      Status: 'Neu',
+    },
+  },
+  {
+    id: 'simple-rectangle',
+    label: 'Rechteck',
+    category: 'Formen',
+    size: [2.5, 1, 1.4],
+    shape: 'rectangle',
+    color: '#5c7cfa',
+    metadataTemplate: {
+      Bereich: 'Formen',
+      Hinweis: 'Rechteck',
+      Status: 'Neu',
+    },
+  },
+  {
+    id: 'simple-circle',
+    label: 'Kreis',
+    category: 'Formen',
+    size: [1.8, 0.6, 1.8],
+    shape: 'circle',
+    color: '#20c997',
+    metadataTemplate: {
+      Bereich: 'Formen',
+      Hinweis: 'Kreis',
       Status: 'Neu',
     },
   },
@@ -308,12 +395,35 @@ function parseFiniteInput(rawValue: string): number | null {
 function isAssetShape(value: unknown): value is AssetShape {
   return (
     value === 'box' ||
+    value === 'rectangle' ||
+    value === 'circle' ||
     value === 'rhombus' ||
     value === 'cylinder' ||
     value === 'cone' ||
     value === 'sphere' ||
     value === 'hex'
   )
+}
+
+function clampRgbChannel(value: number) {
+  return Math.min(255, Math.max(0, Math.round(value)))
+}
+
+function channelToHex(value: number) {
+  return clampRgbChannel(value).toString(16).padStart(2, '0')
+}
+
+function rgbToHex(red: number, green: number, blue: number) {
+  return `#${channelToHex(red)}${channelToHex(green)}${channelToHex(blue)}`
+}
+
+function hexToRgb(color: string) {
+  const normalized = sanitizeColor(color).slice(1)
+  return {
+    red: Number.parseInt(normalized.slice(0, 2), 16),
+    green: Number.parseInt(normalized.slice(2, 4), 16),
+    blue: Number.parseInt(normalized.slice(4, 6), 16),
+  }
 }
 
 function isEditableTarget(target: EventTarget | null) {
@@ -458,10 +568,10 @@ function createDemoLayout(): PlacedAsset[] {
   return [
     {
       id: newAssetId(),
-      definitionId: 'assembly-line',
+      definitionId: 'production-line',
       position: [0, 0.7, 0],
       rotation: [0, 0, 0],
-      dimensions: [4, 1.4, 1.6],
+      dimensions: [5, 1.2, 1.8],
       color: '#3d8bfd',
       metadata: {
         Bereich: 'FA1-Montage',
@@ -471,10 +581,10 @@ function createDemoLayout(): PlacedAsset[] {
     },
     {
       id: newAssetId(),
-      definitionId: 'assembly-line',
+      definitionId: 'production-line',
       position: [0, 0.7, 4],
       rotation: [0, 0, 0],
-      dimensions: [4, 1.4, 1.6],
+      dimensions: [5, 1.2, 1.8],
       color: '#3d8bfd',
       metadata: {
         Bereich: 'FA2-Montage',
@@ -562,26 +672,36 @@ function AssetPrimitive({
   dimensions,
   color,
   isSelected,
+  ghost = false,
 }: {
   shape: AssetShape
   dimensions: Vector3Tuple
   color: string
   isSelected: boolean
+  ghost?: boolean
 }) {
   const x = Math.max(dimensions[0], 0.05)
   const y = Math.max(dimensions[1], 0.05)
   const z = Math.max(dimensions[2], 0.05)
+  const materialColor = ghost ? '#7ce9a4' : isSelected ? '#74c0fc' : color
+  const materialRoughness = ghost ? 0.35 : 0.62
+  const materialMetalness = ghost ? 0.06 : 0.18
+  const materialEmissive = ghost ? '#1a7f47' : isSelected ? '#0b7285' : '#000000'
+  const materialEmissiveIntensity = ghost ? 0.22 : isSelected ? 0.15 : 0
+  const materialOpacity = ghost ? 0.45 : 1
 
   if (shape === 'rhombus') {
     return (
       <mesh castShadow receiveShadow rotation={[0, Math.PI / 4, 0]}>
         <boxGeometry args={[x / Math.SQRT2, y, z / Math.SQRT2]} />
         <meshStandardMaterial
-          color={isSelected ? '#74c0fc' : color}
-          roughness={0.55}
-          metalness={0.25}
-          emissive={isSelected ? '#0b7285' : '#000000'}
-          emissiveIntensity={isSelected ? 0.15 : 0}
+          color={materialColor}
+          roughness={materialRoughness}
+          metalness={materialMetalness}
+          emissive={materialEmissive}
+          emissiveIntensity={materialEmissiveIntensity}
+          transparent={ghost}
+          opacity={materialOpacity}
         />
       </mesh>
     )
@@ -592,11 +712,13 @@ function AssetPrimitive({
       <mesh castShadow receiveShadow>
         <cylinderGeometry args={[x / 2, z / 2, y, 24]} />
         <meshStandardMaterial
-          color={isSelected ? '#74c0fc' : color}
-          roughness={0.55}
-          metalness={0.25}
-          emissive={isSelected ? '#0b7285' : '#000000'}
-          emissiveIntensity={isSelected ? 0.15 : 0}
+          color={materialColor}
+          roughness={materialRoughness}
+          metalness={materialMetalness}
+          emissive={materialEmissive}
+          emissiveIntensity={materialEmissiveIntensity}
+          transparent={ghost}
+          opacity={materialOpacity}
         />
       </mesh>
     )
@@ -607,11 +729,13 @@ function AssetPrimitive({
       <mesh castShadow receiveShadow>
         <coneGeometry args={[Math.max(x, z) / 2, y, 24]} />
         <meshStandardMaterial
-          color={isSelected ? '#74c0fc' : color}
-          roughness={0.55}
-          metalness={0.25}
-          emissive={isSelected ? '#0b7285' : '#000000'}
-          emissiveIntensity={isSelected ? 0.15 : 0}
+          color={materialColor}
+          roughness={materialRoughness}
+          metalness={materialMetalness}
+          emissive={materialEmissive}
+          emissiveIntensity={materialEmissiveIntensity}
+          transparent={ghost}
+          opacity={materialOpacity}
         />
       </mesh>
     )
@@ -622,11 +746,13 @@ function AssetPrimitive({
       <mesh castShadow receiveShadow scale={[x, y, z]}>
         <sphereGeometry args={[0.5, 24, 16]} />
         <meshStandardMaterial
-          color={isSelected ? '#74c0fc' : color}
-          roughness={0.55}
-          metalness={0.25}
-          emissive={isSelected ? '#0b7285' : '#000000'}
-          emissiveIntensity={isSelected ? 0.15 : 0}
+          color={materialColor}
+          roughness={materialRoughness}
+          metalness={materialMetalness}
+          emissive={materialEmissive}
+          emissiveIntensity={materialEmissiveIntensity}
+          transparent={ghost}
+          opacity={materialOpacity}
         />
       </mesh>
     )
@@ -637,11 +763,47 @@ function AssetPrimitive({
       <mesh castShadow receiveShadow>
         <cylinderGeometry args={[x / 2, z / 2, y, 6]} />
         <meshStandardMaterial
-          color={isSelected ? '#74c0fc' : color}
-          roughness={0.55}
-          metalness={0.25}
-          emissive={isSelected ? '#0b7285' : '#000000'}
-          emissiveIntensity={isSelected ? 0.15 : 0}
+          color={materialColor}
+          roughness={materialRoughness}
+          metalness={materialMetalness}
+          emissive={materialEmissive}
+          emissiveIntensity={materialEmissiveIntensity}
+          transparent={ghost}
+          opacity={materialOpacity}
+        />
+      </mesh>
+    )
+  }
+
+  if (shape === 'circle') {
+    return (
+      <mesh castShadow receiveShadow>
+        <cylinderGeometry args={[Math.max(x, z) / 2, Math.max(x, z) / 2, y, 48]} />
+        <meshStandardMaterial
+          color={materialColor}
+          roughness={materialRoughness}
+          metalness={materialMetalness}
+          emissive={materialEmissive}
+          emissiveIntensity={materialEmissiveIntensity}
+          transparent={ghost}
+          opacity={materialOpacity}
+        />
+      </mesh>
+    )
+  }
+
+  if (shape === 'rectangle') {
+    return (
+      <mesh castShadow receiveShadow>
+        <boxGeometry args={[x, y, z]} />
+        <meshStandardMaterial
+          color={materialColor}
+          roughness={materialRoughness}
+          metalness={materialMetalness}
+          emissive={materialEmissive}
+          emissiveIntensity={materialEmissiveIntensity}
+          transparent={ghost}
+          opacity={materialOpacity}
         />
       </mesh>
     )
@@ -651,11 +813,13 @@ function AssetPrimitive({
     <mesh castShadow receiveShadow>
       <boxGeometry args={[x, y, z]} />
       <meshStandardMaterial
-        color={isSelected ? '#74c0fc' : color}
-        roughness={0.55}
-        metalness={0.25}
-        emissive={isSelected ? '#0b7285' : '#000000'}
-        emissiveIntensity={isSelected ? 0.15 : 0}
+        color={materialColor}
+        roughness={materialRoughness}
+        metalness={materialMetalness}
+        emissive={materialEmissive}
+        emissiveIntensity={materialEmissiveIntensity}
+        transparent={ghost}
+        opacity={materialOpacity}
       />
     </mesh>
   )
@@ -690,7 +854,14 @@ function AssetVisual({
         {isSelected && (
           <mesh>
             <boxGeometry args={dimensions} />
-            <meshBasicMaterial color="#74c0fc" wireframe />
+            <meshStandardMaterial
+              color="#74c0fc"
+              wireframe
+              roughness={0.35}
+              metalness={0.1}
+              emissive="#74c0fc"
+              emissiveIntensity={0.15}
+            />
           </mesh>
         )}
       </group>
@@ -748,6 +919,11 @@ function NumericTransformInput({ label, value, step = '0.1', onCommit }: Numeric
 function ColorInput({ value, onCommit }: ColorInputProps) {
   const [draft, setDraft] = useState(sanitizeColor(value))
   const [isEditing, setIsEditing] = useState(false)
+  const [isPickerOpen, setIsPickerOpen] = useState(false)
+  const pickerRef = useRef<HTMLDivElement>(null)
+
+  const activeColor = sanitizeColor(isEditing ? draft : value)
+  const activeRgb = useMemo(() => hexToRgb(activeColor), [activeColor])
 
   const commitDraft = useCallback(() => {
     const normalized = sanitizeColor(draft)
@@ -756,40 +932,142 @@ function ColorInput({ value, onCommit }: ColorInputProps) {
     setIsEditing(false)
   }, [draft, onCommit])
 
+  useEffect(() => {
+    if (!isPickerOpen) {
+      return
+    }
+    const onWindowPointerDown = (event: PointerEvent) => {
+      const target = event.target
+      if (!(target instanceof Node)) {
+        return
+      }
+      if (pickerRef.current?.contains(target)) {
+        return
+      }
+      setIsPickerOpen(false)
+      setDraft(sanitizeColor(value))
+      setIsEditing(false)
+    }
+    window.addEventListener('pointerdown', onWindowPointerDown)
+    return () => window.removeEventListener('pointerdown', onWindowPointerDown)
+  }, [isPickerOpen, value])
+
+  const applyRgbDraft = useCallback(
+    (channel: 'red' | 'green' | 'blue', inputValue: string) => {
+      const parsed = parseFiniteInput(inputValue)
+      if (parsed === null) {
+        return
+      }
+      const nextChannel = clampRgbChannel(parsed)
+      const { red, green, blue } = activeRgb
+      const nextColor =
+        channel === 'red'
+          ? rgbToHex(nextChannel, green, blue)
+          : channel === 'green'
+            ? rgbToHex(red, nextChannel, blue)
+            : rgbToHex(red, green, nextChannel)
+      setDraft(nextColor)
+      onCommit(nextColor)
+    },
+    [activeRgb, onCommit],
+  )
+
   return (
-    <label className="color-field">
+    <label className="color-picker">
       Farbe
-      <div className="color-row">
-        <input
-          type="color"
-          value={sanitizeColor(isEditing ? draft : value)}
-          onChange={(event) => {
-            setDraft(event.target.value)
-            onCommit(sanitizeColor(event.target.value))
-          }}
-          aria-label="Asset-Farbe waehlen"
-        />
-        <input
-          type="text"
-          value={isEditing ? draft : sanitizeColor(value)}
-          onFocus={() => {
+      <div className="color-control" ref={pickerRef}>
+        <button
+          type="button"
+          className="color-trigger"
+          onClick={() => {
             setDraft(sanitizeColor(value))
-            setIsEditing(true)
+            setIsEditing(false)
+            setIsPickerOpen((previous) => !previous)
           }}
-          onChange={(event) => setDraft(event.target.value)}
-          onBlur={commitDraft}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              commitDraft()
-            }
-            if (event.key === 'Escape') {
-              setDraft(sanitizeColor(value))
-              setIsEditing(false)
-            }
-          }}
-          placeholder="#RRGGBB"
-          aria-label="Hex-Farbwert"
-        />
+        >
+          <span className="color-trigger-swatch" style={{ backgroundColor: activeColor }} />
+          <span>{activeColor.toUpperCase()}</span>
+        </button>
+
+        {isPickerOpen && (
+          <div className="color-popover" role="dialog" aria-label="Farbenauswahl">
+            <div className="color-swatch-grid">
+              {COLOR_SWATCHES.map((swatch) => (
+                <button
+                  key={swatch}
+                  type="button"
+                  className="color-swatch"
+                  style={{ backgroundColor: swatch }}
+                  aria-label={`Farbe ${swatch}`}
+                  onClick={() => {
+                    setDraft(swatch)
+                    setIsEditing(false)
+                    onCommit(swatch)
+                    setIsPickerOpen(false)
+                  }}
+                />
+              ))}
+            </div>
+
+            <div className="color-rgb-grid">
+              <label>
+                R
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={String(activeRgb.red)}
+                  onChange={(event) => applyRgbDraft('red', event.target.value)}
+                  aria-label="Rotkanal"
+                />
+              </label>
+              <label>
+                G
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={String(activeRgb.green)}
+                  onChange={(event) => applyRgbDraft('green', event.target.value)}
+                  aria-label="Gruenkanal"
+                />
+              </label>
+              <label>
+                B
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={String(activeRgb.blue)}
+                  onChange={(event) => applyRgbDraft('blue', event.target.value)}
+                  aria-label="Blaukanal"
+                />
+              </label>
+            </div>
+
+            <label className="color-hex-field">
+              Hex
+              <input
+                type="text"
+                value={isEditing ? draft : sanitizeColor(value)}
+                onFocus={() => {
+                  setDraft(sanitizeColor(value))
+                  setIsEditing(true)
+                }}
+                onChange={(event) => setDraft(event.target.value)}
+                onBlur={commitDraft}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    commitDraft()
+                  }
+                  if (event.key === 'Escape') {
+                    setDraft(sanitizeColor(value))
+                    setIsEditing(false)
+                  }
+                }}
+                placeholder="#RRGGBB"
+                aria-label="Hex-Farbwert"
+              />
+            </label>
+          </div>
+        )}
       </div>
     </label>
   )
@@ -802,7 +1080,6 @@ function AssetMesh({
   isPlacementMode,
   useTransformGizmo,
   transformMode,
-  isAltPressed,
   isCtrlPressed,
   orbitRef,
   onSelect,
@@ -870,7 +1147,7 @@ function AssetMesh({
         <TransformControls
           object={groupRef}
           mode={transformMode}
-          translationSnap={transformMode === 'translate' && !isAltPressed ? SNAP_UNIT : undefined}
+          translationSnap={transformMode === 'translate' && !isCtrlPressed ? SNAP_UNIT : undefined}
           rotationSnap={transformMode === 'rotate' && !isCtrlPressed ? Math.PI / 8 : undefined}
           onMouseDown={() => {
             isDraggingRef.current = true
@@ -885,7 +1162,13 @@ function AssetMesh({
   )
 }
 
-function MultiTransformGizmo({ selectedAssets, mode, orbitRef, onCommit }: MultiTransformGizmoProps) {
+function MultiTransformGizmo({
+  selectedAssets,
+  mode,
+  isCtrlPressed,
+  orbitRef,
+  onCommit,
+}: MultiTransformGizmoProps) {
   const pivotRef = useRef<Group>(null!)
   const isDraggingRef = useRef(false)
   const dragStartRef = useRef<{
@@ -993,6 +1276,8 @@ function MultiTransformGizmo({ selectedAssets, mode, orbitRef, onCommit }: Multi
       <TransformControls
         object={pivotRef}
         mode={mode}
+        translationSnap={mode === 'translate' && !isCtrlPressed ? SNAP_UNIT : undefined}
+        rotationSnap={mode === 'rotate' && !isCtrlPressed ? Math.PI / 8 : undefined}
         onMouseDown={() => {
           const pivot = pivotRef.current
           isDraggingRef.current = true
@@ -1037,7 +1322,6 @@ export default function PlannerApp() {
   const [cameraPreset, setCameraPreset] = useState<CameraPreset>('perspective')
   const [activeDefinitionId, setActiveDefinitionId] = useState<string>(DEFAULT_ASSET_DEFINITIONS[0].id)
   const [previewPosition, setPreviewPosition] = useState<Vector3Tuple | null>(null)
-  const [isAltPressed, setIsAltPressed] = useState(false)
   const [isCtrlPressed, setIsCtrlPressed] = useState(false)
 
   const [historyPast, setHistoryPast] = useState<HistorySnapshot[]>([])
@@ -1191,9 +1475,6 @@ export default function PlannerApp() {
       const editable = isEditableTarget(event.target)
       const hasPrimaryModifier = event.ctrlKey || event.metaKey
 
-      if (event.key === 'Alt') {
-        setIsAltPressed(true)
-      }
       if (event.key === 'Control' || event.key === 'Meta') {
         setIsCtrlPressed(true)
       }
@@ -1237,16 +1518,12 @@ export default function PlannerApp() {
     }
 
     const handleKeyUp = (event: KeyboardEvent) => {
-      if (event.key === 'Alt') {
-        setIsAltPressed(false)
-      }
       if (event.key === 'Control' || event.key === 'Meta') {
         setIsCtrlPressed(false)
       }
     }
 
     const handleWindowBlur = () => {
-      setIsAltPressed(false)
       setIsCtrlPressed(false)
     }
 
@@ -1282,10 +1559,10 @@ export default function PlannerApp() {
       if (tool !== 'place' || !activeDefinition) {
         return
       }
-      const position = resolvePlacementPosition(point, isAltPressed, activeDefinition.size[1])
+      const position = resolvePlacementPosition(point, isCtrlPressed, activeDefinition.size[1])
       setPreviewPosition(position)
     },
-    [activeDefinition, isAltPressed, tool],
+    [activeDefinition, isCtrlPressed, tool],
   )
 
   const onFloorAction = useCallback(
@@ -1294,7 +1571,7 @@ export default function PlannerApp() {
         const newAsset: PlacedAsset = {
           id: newAssetId(),
           definitionId: activeDefinition.id,
-          position: resolvePlacementPosition(point, isAltPressed, activeDefinition.size[1]),
+          position: resolvePlacementPosition(point, isCtrlPressed, activeDefinition.size[1]),
           rotation: [0, 0, 0],
           dimensions: [...activeDefinition.size] as Vector3Tuple,
           color: activeDefinition.color,
@@ -1307,7 +1584,7 @@ export default function PlannerApp() {
       }
       setSelectedIds([])
     },
-    [activeDefinition, applySceneChange, isAltPressed, tool],
+    [activeDefinition, applySceneChange, isCtrlPressed, tool],
   )
 
   const updateAssetTransform = useCallback(
@@ -1587,45 +1864,12 @@ export default function PlannerApp() {
 
         <main className="scene-wrapper">
           <Canvas shadows camera={{ position: CAMERA_PRESETS.perspective.position, fov: 48 }}>
-            <color attach="background" args={['#0a1018']} />
-            <fog attach="fog" args={['#0a1018', 40, 95]} />
-            <hemisphereLight intensity={0.35} groundColor="#172029" />
-            <ambientLight intensity={0.6} />
-            <directionalLight
-              castShadow
-              position={[18, 20, 14]}
-              intensity={1}
-              shadow-mapSize-width={1024}
-              shadow-mapSize-height={1024}
-            />
+            <color attach="background" args={['#d2dae3']} />
+            <fog attach="fog" args={['#d2dae3', 55, 135]} />
+            <Lighting />
             <CameraController preset={cameraPreset} orbitRef={orbitRef} />
-
-            <mesh
-              rotation={[-Math.PI / 2, 0, 0]}
-              receiveShadow
-              onPointerMove={(event: ThreeEvent<PointerEvent>) => {
-                const point = event.point
-                onFloorHover([point.x, point.y, point.z])
-              }}
-              onClick={(event: ThreeEvent<MouseEvent>) => {
-                event.stopPropagation()
-                const point = event.point
-                onFloorAction([point.x, point.y, point.z])
-              }}
-            >
-              <planeGeometry args={[80, 80]} />
-              <meshStandardMaterial color="#1f2a35" roughness={0.95} metalness={0.05} />
-            </mesh>
-
-            <Grid
-              position={[0, 0.02, 0]}
-              args={[80, 80]}
-              cellColor="#2b8aef"
-              sectionColor="#8ce99a"
-              cellSize={1}
-              sectionSize={5}
-              fadeDistance={70}
-            />
+            <FactoryFloor onHover={onFloorHover} onAction={onFloorAction} />
+            <FactoryWalls />
 
             {assets.map((asset) => {
               const definition = definitionById.get(asset.definitionId)
@@ -1640,7 +1884,6 @@ export default function PlannerApp() {
                   isSelected={selectedIds.includes(asset.id)}
                   useTransformGizmo={selectedIds.length === 1 && selectedIds.includes(asset.id)}
                   isPlacementMode={tool === 'place'}
-                  isAltPressed={isAltPressed}
                   isCtrlPressed={isCtrlPressed}
                   transformMode={transformMode}
                   orbitRef={orbitRef}
@@ -1654,7 +1897,6 @@ export default function PlannerApp() {
               <MultiTransformGizmo
                 selectedAssets={selectedAssets}
                 mode={transformMode}
-                isAltPressed={isAltPressed}
                 isCtrlPressed={isCtrlPressed}
                 orbitRef={orbitRef}
                 onCommit={updateManyAssetTransforms}
@@ -1664,11 +1906,12 @@ export default function PlannerApp() {
             {tool === 'place' && activeDefinition && previewPosition && (
               <group>
                 <group position={previewPosition}>
-                  <AssetVisual
-                    definition={activeDefinition}
+                  <AssetPrimitive
+                    shape={activeDefinition.shape}
                     dimensions={activeDefinition.size}
                     color={activeDefinition.color}
                     isSelected={false}
+                    ghost
                   />
                 </group>
                 <Html
@@ -1689,14 +1932,19 @@ export default function PlannerApp() {
               makeDefault
               enablePan
               enableZoom
+              enableDamping
+              dampingFactor={0.08}
+              screenSpacePanning
+              zoomToCursor
               minDistance={6}
               maxDistance={75}
-              maxPolarAngle={Math.PI / 2}
+              minPolarAngle={0.2}
+              maxPolarAngle={Math.PI / 2 - 0.03}
             />
           </Canvas>
 
           <div className="status-bar">
-            <span>ALT: frei platzieren</span>
+            <span>STRG/CMD: freie Platzierung und freies Bewegen/Rotieren</span>
             <span>STRG/CMD + Z: Undo | Shift+Z/Y: Redo</span>
             <span>STRG/CMD + C/V: Copy/Paste</span>
           </div>
