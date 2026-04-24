@@ -1,12 +1,6 @@
-import { Canvas, type ThreeEvent, useThree } from '@react-three/fiber'
+import { Canvas, useThree, type ThreeEvent } from '@react-three/fiber'
+import { Html, OrbitControls, TransformControls } from '@react-three/drei'
 import {
-  Html,
-  OrbitControls,
-  TransformControls,
-  useGLTF,
-} from '@react-three/drei'
-import {
-  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -16,103 +10,38 @@ import {
   type RefObject,
 } from 'react'
 import {
-  Box3,
   Euler,
   Group,
-  Mesh,
   Quaternion,
   Vector3,
-  type Object3D,
   type Vector3Tuple,
 } from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
+
 import './App.css'
 import FactoryFloor from './components/FactoryFloor'
 import FactoryWalls from './components/FactoryWalls'
 import Lighting from './components/Lighting'
+import ViewModeOverlay from './components/ViewModeOverlay'
+import AssetInfoModal from './components/AssetInfoModal'
+import AssetRenderer, { GhostAssetRenderer } from './components/AssetRenderer'
+
+import {
+  getTemplatesByCategory,
+  createAssetFromTemplate,
+  geometryKindSupports2D,
+} from './AssetFactory'
+import { useAssetsStore } from './store/useAssetsStore'
+import type { Asset, AssetTemplate } from './types/asset'
+import { sanitizeColor } from './types/asset'
 
 type PlannerTool = 'select' | 'place'
+type PlannerMode = 'edit' | 'view'
 type CameraPreset = 'perspective' | 'top' | 'front' | 'side'
-type TransformMode = 'translate' | 'rotate'
-type AssetShape =
-  | 'box'
-  | 'rectangle'
-  | 'circle'
-  | 'rhombus'
-  | 'cylinder'
-  | 'cone'
-  | 'sphere'
-  | 'hex'
+type TransformMode = 'translate' | 'rotate' | 'scale'
 
-interface AssetDefinition {
-  id: string
-  label: string
-  category: string
-  size: Vector3Tuple
-  shape: AssetShape
-  color: string
-  metadataTemplate: Record<string, string>
-  modelUrl?: string
-}
-
-interface PlacedAsset {
-  id: string
-  definitionId: string
-  position: Vector3Tuple
-  rotation: Vector3Tuple
-  dimensions: Vector3Tuple
-  color: string
-  metadata: Record<string, string>
-}
-
-interface HistorySnapshot {
-  assets: PlacedAsset[]
-  selectedIds: string[]
-}
-
-interface AssetMeshProps {
-  asset: PlacedAsset
-  definition: AssetDefinition
-  isSelected: boolean
-  isPlacementMode: boolean
-  useTransformGizmo: boolean
-  transformMode: TransformMode
-  isCtrlPressed: boolean
-  orbitRef: RefObject<OrbitControlsImpl | null>
-  onSelect: (id: string, addToSelection: boolean) => void
-  onTransformCommit: (id: string, position: Vector3Tuple, rotation: Vector3Tuple) => void
-}
-
-interface NumericTransformInputProps {
-  label: string
-  value: number
-  step?: string
-  onCommit: (value: number) => void
-}
-
-interface ColorInputProps {
-  value: string
-  onCommit: (value: string) => void
-}
-
-interface MultiTransformGizmoProps {
-  selectedAssets: PlacedAsset[]
-  mode: TransformMode
-  isCtrlPressed: boolean
-  orbitRef: RefObject<OrbitControlsImpl | null>
-  onCommit: (updates: Array<{ id: string; position: Vector3Tuple; rotation: Vector3Tuple }>) => void
-}
-
-interface StoredLayoutPayload {
-  assets: PlacedAsset[]
-  assetDefinitions: AssetDefinition[]
-}
-
-const STORAGE_KEY = 'layout-planner-v2'
 const SNAP_UNIT = 1
-const MAX_HISTORY = 80
 const FALLBACK_ASSET_COLOR = '#8ca0b6'
-const FALLBACK_ASSET_DIMENSIONS: Vector3Tuple = [1, 1, 1]
 const COLOR_SWATCHES = [
   '#e03131',
   '#f08c00',
@@ -128,295 +57,32 @@ const COLOR_SWATCHES = [
   '#495057',
 ]
 
-const DEFAULT_ASSET_DEFINITIONS: AssetDefinition[] = [
-  {
-    id: 'production-line',
-    label: 'Produktionslinie',
-    category: 'Produktion',
-    size: [5, 1.2, 1.8],
-    shape: 'rectangle',
-    color: '#3d8bfd',
-    metadataTemplate: {
-      Bereich: 'FA1-Montage',
-      Kapazitaet: '60 Teile/h',
-      Verantwortlich: 'Team Alpha',
-    },
-  },
-  {
-    id: 'shelf-block',
-    label: 'Regalblock',
-    category: 'Logistik',
-    size: [1.8, 2.4, 0.8],
-    shape: 'box',
-    color: '#2f9e44',
-    metadataTemplate: {
-      Bereich: 'Logistik',
-      Inhalt: 'Bauteile',
-      Reichweite: '2 Tage',
-    },
-  },
-  {
-    id: 'workbench',
-    label: 'Arbeitsplatz',
-    category: 'Produktion',
-    size: [1.2, 1, 1.2],
-    shape: 'cylinder',
-    color: '#f08c00',
-    metadataTemplate: {
-      Bereich: 'FA2-Montage',
-      Schicht: 'Frueh',
-      Personal: '2',
-    },
-  },
-  {
-    id: 'forklift',
-    label: 'Hubwagen',
-    category: 'Logistik',
-    size: [1.6, 1.1, 2.4],
-    shape: 'rectangle',
-    color: '#f59f00',
-    metadataTemplate: {
-      Bereich: 'Materialfluss',
-      Status: 'Bereit',
-      Fahrer: 'M. Keller',
-    },
-  },
-  {
-    id: 'employee',
-    label: 'Angestellte',
-    category: 'Personal',
-    size: [0.8, 1.75, 0.8],
-    shape: 'circle',
-    color: '#15aabf',
-    metadataTemplate: {
-      Bereich: 'Montage',
-      Schicht: 'Frueh',
-      Anzahl: '1',
-    },
-  },
-  {
-    id: 'crate-stack',
-    label: 'Kisten',
-    category: 'Logistik',
-    size: [1.2, 1.2, 1.2],
-    shape: 'box',
-    color: '#8d6e63',
-    metadataTemplate: {
-      Bereich: 'Wareneingang',
-      Inhalt: 'Komponenten',
-      Bestand: '32',
-    },
-  },
-  {
-    id: 'office-block',
-    label: 'Buero',
-    category: 'Verwaltung',
-    size: [2.8, 2.1, 2],
-    shape: 'box',
-    color: '#7048e8',
-    metadataTemplate: {
-      Bereich: 'Buero',
-      Nutzung: 'Planung',
-      Plaetze: '6',
-    },
-  },
-  {
-    id: 'service-zone',
-    label: 'Service/TPM',
-    category: 'Support',
-    size: [2.2, 1.6, 2.2],
-    shape: 'rhombus',
-    color: '#e03131',
-    metadataTemplate: {
-      Bereich: 'TPM',
-      Status: 'Aktiv',
-      Letzte_Wartung: '2026-04-20',
-    },
-  },
-  {
-    id: 'cone-marker',
-    label: 'Kegel-Markierung',
-    category: 'Formen',
-    size: [1.4, 2, 1.4],
-    shape: 'cone',
-    color: '#ff6b6b',
-    metadataTemplate: {
-      Bereich: 'Formen',
-      Hinweis: 'Kegel',
-      Status: 'Neu',
-    },
-  },
-  {
-    id: 'sphere-buffer',
-    label: 'Kugel-Puffer',
-    category: 'Formen',
-    size: [1.8, 1.8, 1.8],
-    shape: 'sphere',
-    color: '#38d9a9',
-    metadataTemplate: {
-      Bereich: 'Formen',
-      Hinweis: 'Kugel',
-      Status: 'Neu',
-    },
-  },
-  {
-    id: 'hex-station',
-    label: 'Hex-Station',
-    category: 'Formen',
-    size: [2.2, 1.6, 2.2],
-    shape: 'hex',
-    color: '#74c0fc',
-    metadataTemplate: {
-      Bereich: 'Formen',
-      Hinweis: 'Hexagon',
-      Status: 'Neu',
-    },
-  },
-  {
-    id: 'simple-rectangle',
-    label: 'Rechteck',
-    category: 'Formen',
-    size: [2.5, 1, 1.4],
-    shape: 'rectangle',
-    color: '#5c7cfa',
-    metadataTemplate: {
-      Bereich: 'Formen',
-      Hinweis: 'Rechteck',
-      Status: 'Neu',
-    },
-  },
-  {
-    id: 'simple-circle',
-    label: 'Kreis',
-    category: 'Formen',
-    size: [1.8, 0.6, 1.8],
-    shape: 'circle',
-    color: '#20c997',
-    metadataTemplate: {
-      Bereich: 'Formen',
-      Hinweis: 'Kreis',
-      Status: 'Neu',
-    },
-  },
-]
-
 const CAMERA_PRESETS: Record<CameraPreset, { position: Vector3Tuple; target: Vector3Tuple }> = {
-  perspective: {
-    position: [22, 18, 22],
-    target: [0, 0, 0],
-  },
-  top: {
-    position: [0, 42, 0.01],
-    target: [0, 0, 0],
-  },
-  front: {
-    position: [0, 12, 36],
-    target: [0, 2, 0],
-  },
-  side: {
-    position: [36, 12, 0],
-    target: [0, 2, 0],
-  },
+  perspective: { position: [22, 18, 22], target: [0, 0, 0] },
+  top: { position: [0, 42, 0.01], target: [0, 0, 0] },
+  front: { position: [0, 12, 36], target: [0, 2, 0] },
+  side: { position: [36, 12, 0], target: [0, 2, 0] },
 }
 
 const round2 = (value: number) => Number(value.toFixed(2))
-const isFiniteNumber = (value: number) => Number.isFinite(value)
 const formatNumber = (value: number) => String(round2(value))
 const radToDeg = (value: number) => round2((value * 180) / Math.PI)
 const degToRad = (value: number) => round2((value * Math.PI) / 180)
-
-function sanitizeColor(value: string) {
-  if (/^#[\da-fA-F]{6}$/.test(value)) {
-    return value
-  }
-  return FALLBACK_ASSET_COLOR
-}
-
-function newAssetId() {
-  return `asset-${crypto.randomUUID()}`
-}
-
-function newDefinitionId() {
-  return `custom-${crypto.randomUUID()}`
-}
-
-function clonePlacedAsset(asset: PlacedAsset): PlacedAsset {
-  return {
-    ...asset,
-    position: [...asset.position] as Vector3Tuple,
-    rotation: [...asset.rotation] as Vector3Tuple,
-    dimensions: [...asset.dimensions] as Vector3Tuple,
-    color: asset.color,
-    metadata: { ...asset.metadata },
-  }
-}
-
-function cloneAssets(assets: PlacedAsset[]) {
-  return assets.map(clonePlacedAsset)
-}
-
-function cloneDefinition(definition: AssetDefinition): AssetDefinition {
-  return {
-    ...definition,
-    size: [...definition.size] as Vector3Tuple,
-    shape: definition.shape,
-    metadataTemplate: { ...definition.metadataTemplate },
-  }
-}
-
-function cloneDefinitions(definitions: AssetDefinition[]) {
-  return definitions.map(cloneDefinition)
-}
-
-function resolvePlacementPosition(point: Vector3Tuple, freePlacement: boolean, sizeY: number) {
-  const x = freePlacement ? point[0] : Math.round(point[0] / SNAP_UNIT) * SNAP_UNIT
-  const z = freePlacement ? point[2] : Math.round(point[2] / SNAP_UNIT) * SNAP_UNIT
-  return [round2(x), round2(sizeY / 2), round2(z)] as Vector3Tuple
-}
-
-function isVector3Tuple(value: unknown): value is Vector3Tuple {
-  return (
-    Array.isArray(value) &&
-    value.length === 3 &&
-    typeof value[0] === 'number' &&
-    typeof value[1] === 'number' &&
-    typeof value[2] === 'number' &&
-    isFiniteNumber(value[0]) &&
-    isFiniteNumber(value[1]) &&
-    isFiniteNumber(value[2])
-  )
-}
-
-function parseFiniteInput(rawValue: string): number | null {
-  const parsedValue = Number(rawValue)
-  return isFiniteNumber(parsedValue) ? parsedValue : null
-}
-
-function isAssetShape(value: unknown): value is AssetShape {
-  return (
-    value === 'box' ||
-    value === 'rectangle' ||
-    value === 'circle' ||
-    value === 'rhombus' ||
-    value === 'cylinder' ||
-    value === 'cone' ||
-    value === 'sphere' ||
-    value === 'hex'
-  )
+const isFiniteNumber = (value: number) => Number.isFinite(value)
+const parseFiniteInput = (rawValue: string): number | null => {
+  const parsed = Number(rawValue)
+  return isFiniteNumber(parsed) ? parsed : null
 }
 
 function clampRgbChannel(value: number) {
   return Math.min(255, Math.max(0, Math.round(value)))
 }
-
 function channelToHex(value: number) {
   return clampRgbChannel(value).toString(16).padStart(2, '0')
 }
-
 function rgbToHex(red: number, green: number, blue: number) {
   return `#${channelToHex(red)}${channelToHex(green)}${channelToHex(blue)}`
 }
-
 function hexToRgb(color: string) {
   const normalized = sanitizeColor(color).slice(1)
   return {
@@ -427,185 +93,30 @@ function hexToRgb(color: string) {
 }
 
 function isEditableTarget(target: EventTarget | null) {
-  if (!target || !(target instanceof HTMLElement)) {
-    return false
-  }
+  if (!target || !(target instanceof HTMLElement)) return false
   const tag = target.tagName.toLowerCase()
   return tag === 'input' || tag === 'textarea' || target.isContentEditable
 }
 
-function normalizeDefinition(input: unknown): AssetDefinition | null {
-  if (typeof input !== 'object' || input === null) {
-    return null
-  }
-  const entry = input as Record<string, unknown>
-  if (
-    typeof entry.id !== 'string' ||
-    typeof entry.label !== 'string' ||
-    typeof entry.category !== 'string' ||
-    !isVector3Tuple(entry.size) ||
-    !isAssetShape(entry.shape) ||
-    typeof entry.color !== 'string' ||
-    typeof entry.metadataTemplate !== 'object' ||
-    entry.metadataTemplate === null
-  ) {
-    return null
-  }
-
-  return {
-    id: entry.id,
-    label: entry.label,
-    category: entry.category,
-    size: entry.size,
-    shape: entry.shape,
-    color: entry.color,
-    metadataTemplate: Object.fromEntries(
-      Object.entries(entry.metadataTemplate).map(([key, value]) => [key, String(value)]),
-    ),
-    modelUrl: typeof entry.modelUrl === 'string' ? entry.modelUrl : undefined,
-  }
+function resolvePlacementPosition(
+  point: Vector3Tuple,
+  freePlacement: boolean,
+  template: AssetTemplate,
+): Vector3Tuple {
+  const x = freePlacement ? point[0] : Math.round(point[0] / SNAP_UNIT) * SNAP_UNIT
+  const z = freePlacement ? point[2] : Math.round(point[2] / SNAP_UNIT) * SNAP_UNIT
+  const isFlat = geometryKindSupports2D(template.geometry.kind)
+  const y = isFlat ? 0.02 : template.scale[1] / 2
+  return [round2(x), round2(y), round2(z)]
 }
 
-function parseStoredAssets(raw: unknown) {
-  if (!Array.isArray(raw)) {
-    return []
-  }
-  const safeAssets: PlacedAsset[] = []
-  for (const entry of raw) {
-    if (
-      typeof entry !== 'object' ||
-      entry === null ||
-      typeof entry.id !== 'string' ||
-      typeof entry.definitionId !== 'string' ||
-      !isVector3Tuple((entry as Record<string, unknown>).position) ||
-      !isVector3Tuple((entry as Record<string, unknown>).rotation) ||
-      typeof (entry as Record<string, unknown>).metadata !== 'object' ||
-      (entry as Record<string, unknown>).metadata === null
-    ) {
-      continue
-    }
-
-    const casted = entry as {
-      id: string
-      definitionId: string
-      position: Vector3Tuple
-      rotation: Vector3Tuple
-      dimensions?: Vector3Tuple
-      color?: string
-      metadata: Record<string, unknown>
-    }
-    safeAssets.push({
-      id: casted.id,
-      definitionId: casted.definitionId,
-      position: casted.position,
-      rotation: casted.rotation,
-      dimensions: isVector3Tuple(casted.dimensions)
-        ? casted.dimensions
-        : [...FALLBACK_ASSET_DIMENSIONS],
-      color:
-        typeof casted.color === 'string' && casted.color.trim().length > 0
-          ? casted.color
-          : FALLBACK_ASSET_COLOR,
-      metadata: Object.fromEntries(
-        Object.entries(casted.metadata).map(([key, value]) => [key, String(value)]),
-      ),
-    })
-  }
-  return safeAssets
-}
-
-function parseStoredLayout(rawLayout: string): StoredLayoutPayload | null {
-  try {
-    const parsed = JSON.parse(rawLayout) as unknown
-
-    // Backward compatibility: old payload only contained assets array.
-    if (Array.isArray(parsed)) {
-      return {
-        assets: parseStoredAssets(parsed),
-        assetDefinitions: cloneDefinitions(DEFAULT_ASSET_DEFINITIONS),
-      }
-    }
-
-    if (typeof parsed !== 'object' || parsed === null) {
-      return null
-    }
-    const payload = parsed as Record<string, unknown>
-    const assets = parseStoredAssets(payload.assets)
-    const definitionsRaw = Array.isArray(payload.assetDefinitions) ? payload.assetDefinitions : []
-    const definitions = definitionsRaw
-      .map((entry) => normalizeDefinition(entry))
-      .filter((definition): definition is AssetDefinition => definition !== null)
-
-    const resolvedDefinitions =
-      definitions.length > 0 ? definitions : cloneDefinitions(DEFAULT_ASSET_DEFINITIONS)
-    const definitionById = new Map(resolvedDefinitions.map((definition) => [definition.id, definition]))
-    const hydratedAssets = assets.map((asset) => {
-      const definition = definitionById.get(asset.definitionId)
-      return {
-        ...asset,
-        dimensions: (
-          isVector3Tuple(asset.dimensions)
-            ? asset.dimensions
-            : definition?.size ?? [...FALLBACK_ASSET_DIMENSIONS]
-        ) as Vector3Tuple,
-        color:
-          typeof asset.color === 'string' && asset.color.trim().length > 0
-            ? asset.color
-            : definition?.color ?? FALLBACK_ASSET_COLOR,
-      }
-    })
-
-    return {
-      assets: hydratedAssets,
-      assetDefinitions: resolvedDefinitions,
-    }
-  } catch {
-    return null
-  }
-}
-
-function createDemoLayout(): PlacedAsset[] {
-  return [
-    {
-      id: newAssetId(),
-      definitionId: 'production-line',
-      position: [0, 0.7, 0],
-      rotation: [0, 0, 0],
-      dimensions: [5, 1.2, 1.8],
-      color: '#3d8bfd',
-      metadata: {
-        Bereich: 'FA1-Montage',
-        Kapazitaet: '60 Teile/h',
-        Verantwortlich: 'Team Alpha',
-      },
-    },
-    {
-      id: newAssetId(),
-      definitionId: 'production-line',
-      position: [0, 0.7, 4],
-      rotation: [0, 0, 0],
-      dimensions: [5, 1.2, 1.8],
-      color: '#3d8bfd',
-      metadata: {
-        Bereich: 'FA2-Montage',
-        Kapazitaet: '55 Teile/h',
-        Verantwortlich: 'Team Beta',
-      },
-    },
-    {
-      id: newAssetId(),
-      definitionId: 'shelf-block',
-      position: [-6, 1.2, -6],
-      rotation: [0, Math.PI / 4, 0],
-      dimensions: [1.8, 2.4, 0.8],
-      color: '#2f9e44',
-      metadata: {
-        Bereich: 'Logistik',
-        Inhalt: 'Bauteile',
-        Reichweite: '2 Tage',
-      },
-    },
-  ]
+function readFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result ?? ''))
+    reader.onerror = () => reject(new Error('Datei konnte nicht gelesen werden.'))
+    reader.readAsDataURL(file)
+  })
 }
 
 function CameraController({
@@ -616,276 +127,44 @@ function CameraController({
   orbitRef: RefObject<OrbitControlsImpl | null>
 }) {
   const { camera } = useThree()
-
   useEffect(() => {
-    const selectedPreset = CAMERA_PRESETS[preset]
-    camera.position.set(...selectedPreset.position)
+    const selected = CAMERA_PRESETS[preset]
+    camera.position.set(...selected.position)
     const controls = orbitRef.current
     if (controls) {
-      controls.target.set(...selectedPreset.target)
+      controls.target.set(...selected.target)
       controls.update()
     } else {
-      camera.lookAt(...selectedPreset.target)
+      camera.lookAt(...selected.target)
     }
   }, [preset, camera, orbitRef])
-
   return null
 }
 
-function UploadedAssetModel({ url, targetSize }: { url: string; targetSize: Vector3Tuple }) {
-  const gltf = useGLTF(url) as { scene: Group }
-  const normalizedScene = useMemo(() => {
-    const cloned = gltf.scene.clone(true)
-    const size = new Vector3()
-    const rawBox = new Box3().setFromObject(cloned)
-    rawBox.getSize(size)
+// --- Inputs
 
-    const maxDim = Math.max(size.x, size.y, size.z, 0.001)
-    const targetMax = Math.max(targetSize[0], targetSize[1], targetSize[2], 0.001)
-    const scale = targetMax / maxDim
-    cloned.scale.setScalar(scale)
-
-    const centeredBox = new Box3().setFromObject(cloned)
-    const center = new Vector3()
-    centeredBox.getCenter(center)
-    cloned.position.sub(center)
-
-    const floorBox = new Box3().setFromObject(cloned)
-    cloned.position.y -= floorBox.min.y
-
-    cloned.traverse((child: Object3D) => {
-      const maybeMesh = child as Mesh
-      if (maybeMesh.isMesh) {
-        maybeMesh.castShadow = true
-        maybeMesh.receiveShadow = true
-      }
-    })
-
-    return cloned
-  }, [gltf.scene, targetSize])
-
-  return <primitive object={normalizedScene} />
+interface NumericInputProps {
+  label: string
+  value: number
+  step?: string
+  onCommit: (value: number) => void
 }
 
-function AssetPrimitive({
-  shape,
-  dimensions,
-  color,
-  isSelected,
-  ghost = false,
-}: {
-  shape: AssetShape
-  dimensions: Vector3Tuple
-  color: string
-  isSelected: boolean
-  ghost?: boolean
-}) {
-  const x = Math.max(dimensions[0], 0.05)
-  const y = Math.max(dimensions[1], 0.05)
-  const z = Math.max(dimensions[2], 0.05)
-  const materialColor = ghost ? '#7ce9a4' : isSelected ? '#74c0fc' : color
-  const materialRoughness = ghost ? 0.35 : 0.62
-  const materialMetalness = ghost ? 0.06 : 0.18
-  const materialEmissive = ghost ? '#1a7f47' : isSelected ? '#0b7285' : '#000000'
-  const materialEmissiveIntensity = ghost ? 0.22 : isSelected ? 0.15 : 0
-  const materialOpacity = ghost ? 0.45 : 1
-
-  if (shape === 'rhombus') {
-    return (
-      <mesh castShadow receiveShadow rotation={[0, Math.PI / 4, 0]}>
-        <boxGeometry args={[x / Math.SQRT2, y, z / Math.SQRT2]} />
-        <meshStandardMaterial
-          color={materialColor}
-          roughness={materialRoughness}
-          metalness={materialMetalness}
-          emissive={materialEmissive}
-          emissiveIntensity={materialEmissiveIntensity}
-          transparent={ghost}
-          opacity={materialOpacity}
-        />
-      </mesh>
-    )
-  }
-
-  if (shape === 'cylinder') {
-    return (
-      <mesh castShadow receiveShadow>
-        <cylinderGeometry args={[x / 2, z / 2, y, 24]} />
-        <meshStandardMaterial
-          color={materialColor}
-          roughness={materialRoughness}
-          metalness={materialMetalness}
-          emissive={materialEmissive}
-          emissiveIntensity={materialEmissiveIntensity}
-          transparent={ghost}
-          opacity={materialOpacity}
-        />
-      </mesh>
-    )
-  }
-
-  if (shape === 'cone') {
-    return (
-      <mesh castShadow receiveShadow>
-        <coneGeometry args={[Math.max(x, z) / 2, y, 24]} />
-        <meshStandardMaterial
-          color={materialColor}
-          roughness={materialRoughness}
-          metalness={materialMetalness}
-          emissive={materialEmissive}
-          emissiveIntensity={materialEmissiveIntensity}
-          transparent={ghost}
-          opacity={materialOpacity}
-        />
-      </mesh>
-    )
-  }
-
-  if (shape === 'sphere') {
-    return (
-      <mesh castShadow receiveShadow scale={[x, y, z]}>
-        <sphereGeometry args={[0.5, 24, 16]} />
-        <meshStandardMaterial
-          color={materialColor}
-          roughness={materialRoughness}
-          metalness={materialMetalness}
-          emissive={materialEmissive}
-          emissiveIntensity={materialEmissiveIntensity}
-          transparent={ghost}
-          opacity={materialOpacity}
-        />
-      </mesh>
-    )
-  }
-
-  if (shape === 'hex') {
-    return (
-      <mesh castShadow receiveShadow>
-        <cylinderGeometry args={[x / 2, z / 2, y, 6]} />
-        <meshStandardMaterial
-          color={materialColor}
-          roughness={materialRoughness}
-          metalness={materialMetalness}
-          emissive={materialEmissive}
-          emissiveIntensity={materialEmissiveIntensity}
-          transparent={ghost}
-          opacity={materialOpacity}
-        />
-      </mesh>
-    )
-  }
-
-  if (shape === 'circle') {
-    return (
-      <mesh castShadow receiveShadow>
-        <cylinderGeometry args={[Math.max(x, z) / 2, Math.max(x, z) / 2, y, 48]} />
-        <meshStandardMaterial
-          color={materialColor}
-          roughness={materialRoughness}
-          metalness={materialMetalness}
-          emissive={materialEmissive}
-          emissiveIntensity={materialEmissiveIntensity}
-          transparent={ghost}
-          opacity={materialOpacity}
-        />
-      </mesh>
-    )
-  }
-
-  if (shape === 'rectangle') {
-    return (
-      <mesh castShadow receiveShadow>
-        <boxGeometry args={[x, y, z]} />
-        <meshStandardMaterial
-          color={materialColor}
-          roughness={materialRoughness}
-          metalness={materialMetalness}
-          emissive={materialEmissive}
-          emissiveIntensity={materialEmissiveIntensity}
-          transparent={ghost}
-          opacity={materialOpacity}
-        />
-      </mesh>
-    )
-  }
-
-  return (
-    <mesh castShadow receiveShadow>
-      <boxGeometry args={[x, y, z]} />
-      <meshStandardMaterial
-        color={materialColor}
-        roughness={materialRoughness}
-        metalness={materialMetalness}
-        emissive={materialEmissive}
-        emissiveIntensity={materialEmissiveIntensity}
-        transparent={ghost}
-        opacity={materialOpacity}
-      />
-    </mesh>
-  )
-}
-
-function AssetVisual({
-  definition,
-  dimensions,
-  color,
-  isSelected,
-}: {
-  definition: AssetDefinition
-  dimensions: Vector3Tuple
-  color: string
-  isSelected: boolean
-}) {
-  if (definition.modelUrl) {
-    return (
-      <group>
-        <Suspense
-          fallback={
-            <AssetPrimitive
-              shape={definition.shape}
-              dimensions={dimensions}
-              color={color}
-              isSelected={isSelected}
-            />
-          }
-        >
-          <UploadedAssetModel url={definition.modelUrl} targetSize={dimensions} />
-        </Suspense>
-        {isSelected && (
-          <mesh>
-            <boxGeometry args={dimensions} />
-            <meshStandardMaterial
-              color="#74c0fc"
-              wireframe
-              roughness={0.35}
-              metalness={0.1}
-              emissive="#74c0fc"
-              emissiveIntensity={0.15}
-            />
-          </mesh>
-        )}
-      </group>
-    )
-  }
-
-  return <AssetPrimitive shape={definition.shape} dimensions={dimensions} color={color} isSelected={isSelected} />
-}
-
-function NumericTransformInput({ label, value, step = '0.1', onCommit }: NumericTransformInputProps) {
+function NumericInput({ label, value, onCommit }: NumericInputProps) {
   const [draft, setDraft] = useState(formatNumber(value))
-  const [isEditing, setIsEditing] = useState(false)
+  const [editing, setEditing] = useState(false)
 
   const commitDraft = useCallback(() => {
-    const parsedValue = parseFiniteInput(draft)
-    if (parsedValue === null) {
+    const parsed = parseFiniteInput(draft)
+    if (parsed === null) {
       setDraft(formatNumber(value))
-      setIsEditing(false)
+      setEditing(false)
       return
     }
-    const normalizedValue = round2(parsedValue)
-    onCommit(normalizedValue)
-    setDraft(formatNumber(normalizedValue))
-    setIsEditing(false)
+    const normalized = round2(parsed)
+    onCommit(normalized)
+    setDraft(formatNumber(normalized))
+    setEditing(false)
   }, [draft, onCommit, value])
 
   return (
@@ -894,80 +173,74 @@ function NumericTransformInput({ label, value, step = '0.1', onCommit }: Numeric
       <input
         type="text"
         inputMode="decimal"
-        value={isEditing ? draft : formatNumber(value)}
+        value={editing ? draft : formatNumber(value)}
         onFocus={() => {
           setDraft(formatNumber(value))
-          setIsEditing(true)
+          setEditing(true)
         }}
         onChange={(event) => setDraft(event.target.value)}
         onBlur={commitDraft}
         onKeyDown={(event) => {
-          if (event.key === 'Enter') {
-            commitDraft()
-          }
+          if (event.key === 'Enter') commitDraft()
           if (event.key === 'Escape') {
             setDraft(formatNumber(value))
-            setIsEditing(false)
+            setEditing(false)
           }
         }}
-        data-step={step}
       />
     </label>
   )
 }
 
+interface ColorInputProps {
+  value: string
+  onCommit: (value: string) => void
+}
+
 function ColorInput({ value, onCommit }: ColorInputProps) {
   const [draft, setDraft] = useState(sanitizeColor(value))
-  const [isEditing, setIsEditing] = useState(false)
-  const [isPickerOpen, setIsPickerOpen] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [open, setOpen] = useState(false)
   const pickerRef = useRef<HTMLDivElement>(null)
 
-  const activeColor = sanitizeColor(isEditing ? draft : value)
+  const activeColor = sanitizeColor(editing ? draft : value)
   const activeRgb = useMemo(() => hexToRgb(activeColor), [activeColor])
 
   const commitDraft = useCallback(() => {
     const normalized = sanitizeColor(draft)
     onCommit(normalized)
     setDraft(normalized)
-    setIsEditing(false)
+    setEditing(false)
   }, [draft, onCommit])
 
   useEffect(() => {
-    if (!isPickerOpen) {
-      return
-    }
-    const onWindowPointerDown = (event: PointerEvent) => {
+    if (!open) return
+    const handler = (event: PointerEvent) => {
       const target = event.target
-      if (!(target instanceof Node)) {
-        return
-      }
-      if (pickerRef.current?.contains(target)) {
-        return
-      }
-      setIsPickerOpen(false)
+      if (!(target instanceof Node)) return
+      if (pickerRef.current?.contains(target)) return
+      setOpen(false)
       setDraft(sanitizeColor(value))
-      setIsEditing(false)
+      setEditing(false)
     }
-    window.addEventListener('pointerdown', onWindowPointerDown)
-    return () => window.removeEventListener('pointerdown', onWindowPointerDown)
-  }, [isPickerOpen, value])
+    window.addEventListener('pointerdown', handler)
+    return () => window.removeEventListener('pointerdown', handler)
+  }, [open, value])
 
-  const applyRgbDraft = useCallback(
-    (channel: 'red' | 'green' | 'blue', inputValue: string) => {
-      const parsed = parseFiniteInput(inputValue)
-      if (parsed === null) {
-        return
-      }
-      const nextChannel = clampRgbChannel(parsed)
+  const applyRgb = useCallback(
+    (channel: 'red' | 'green' | 'blue', input: string) => {
+      const parsed = parseFiniteInput(input)
+      if (parsed === null) return
+      const next = clampRgbChannel(parsed)
       const { red, green, blue } = activeRgb
-      const nextColor =
+      const color =
         channel === 'red'
-          ? rgbToHex(nextChannel, green, blue)
+          ? rgbToHex(next, green, blue)
           : channel === 'green'
-            ? rgbToHex(red, nextChannel, blue)
-            : rgbToHex(red, green, nextChannel)
-      setDraft(nextColor)
-      onCommit(nextColor)
+            ? rgbToHex(red, next, blue)
+            : rgbToHex(red, green, next)
+      setDraft(color)
+      onCommit(color)
     },
     [activeRgb, onCommit],
   )
@@ -981,15 +254,15 @@ function ColorInput({ value, onCommit }: ColorInputProps) {
           className="color-trigger"
           onClick={() => {
             setDraft(sanitizeColor(value))
-            setIsEditing(false)
-            setIsPickerOpen((previous) => !previous)
+            setEditing(false)
+            setOpen((p) => !p)
           }}
         >
           <span className="color-trigger-swatch" style={{ backgroundColor: activeColor }} />
           <span>{activeColor.toUpperCase()}</span>
         </button>
 
-        {isPickerOpen && (
+        {open && (
           <div className="color-popover" role="dialog" aria-label="Farbenauswahl">
             <div className="color-swatch-grid">
               {COLOR_SWATCHES.map((swatch) => (
@@ -1001,9 +274,9 @@ function ColorInput({ value, onCommit }: ColorInputProps) {
                   aria-label={`Farbe ${swatch}`}
                   onClick={() => {
                     setDraft(swatch)
-                    setIsEditing(false)
+                    setEditing(false)
                     onCommit(swatch)
-                    setIsPickerOpen(false)
+                    setOpen(false)
                   }}
                 />
               ))}
@@ -1016,8 +289,7 @@ function ColorInput({ value, onCommit }: ColorInputProps) {
                   type="text"
                   inputMode="numeric"
                   value={String(activeRgb.red)}
-                  onChange={(event) => applyRgbDraft('red', event.target.value)}
-                  aria-label="Rotkanal"
+                  onChange={(event) => applyRgb('red', event.target.value)}
                 />
               </label>
               <label>
@@ -1026,8 +298,7 @@ function ColorInput({ value, onCommit }: ColorInputProps) {
                   type="text"
                   inputMode="numeric"
                   value={String(activeRgb.green)}
-                  onChange={(event) => applyRgbDraft('green', event.target.value)}
-                  aria-label="Gruenkanal"
+                  onChange={(event) => applyRgb('green', event.target.value)}
                 />
               </label>
               <label>
@@ -1036,8 +307,7 @@ function ColorInput({ value, onCommit }: ColorInputProps) {
                   type="text"
                   inputMode="numeric"
                   value={String(activeRgb.blue)}
-                  onChange={(event) => applyRgbDraft('blue', event.target.value)}
-                  aria-label="Blaukanal"
+                  onChange={(event) => applyRgb('blue', event.target.value)}
                 />
               </label>
             </div>
@@ -1046,24 +316,21 @@ function ColorInput({ value, onCommit }: ColorInputProps) {
               Hex
               <input
                 type="text"
-                value={isEditing ? draft : sanitizeColor(value)}
+                value={editing ? draft : sanitizeColor(value)}
                 onFocus={() => {
                   setDraft(sanitizeColor(value))
-                  setIsEditing(true)
+                  setEditing(true)
                 }}
                 onChange={(event) => setDraft(event.target.value)}
                 onBlur={commitDraft}
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    commitDraft()
-                  }
+                  if (event.key === 'Enter') commitDraft()
                   if (event.key === 'Escape') {
                     setDraft(sanitizeColor(value))
-                    setIsEditing(false)
+                    setEditing(false)
                   }
                 }}
                 placeholder="#RRGGBB"
-                aria-label="Hex-Farbwert"
               />
             </label>
           </div>
@@ -1073,30 +340,43 @@ function ColorInput({ value, onCommit }: ColorInputProps) {
   )
 }
 
-function AssetMesh({
+// --- Transform gizmos
+
+interface SingleTransformGizmoProps {
+  asset: Asset
+  mode: TransformMode
+  isCtrlPressed: boolean
+  orbitRef: RefObject<OrbitControlsImpl | null>
+  onCommit: (id: string, patch: Partial<Asset>) => void
+  children?: React.ReactNode
+}
+
+function SingleTransformGizmo({
   asset,
-  definition,
-  isSelected,
-  isPlacementMode,
-  useTransformGizmo,
-  transformMode,
+  mode,
   isCtrlPressed,
   orbitRef,
-  onSelect,
-  onTransformCommit,
-}: AssetMeshProps) {
+  onCommit,
+  children,
+}: SingleTransformGizmoProps) {
   const groupRef = useRef<Group>(null!)
-  const isDraggingRef = useRef(false)
+  const draggingRef = useRef(false)
 
-  const finishDragging = useCallback(() => {
-    if (!isDraggingRef.current) {
-      return
-    }
-    isDraggingRef.current = false
-    if (orbitRef.current) {
-      orbitRef.current.enabled = true
-    }
+  useEffect(() => {
     const group = groupRef.current
+    if (!group || draggingRef.current) return
+    group.position.set(...asset.position)
+    group.rotation.set(asset.rotation[0], asset.rotation[1], asset.rotation[2])
+    group.scale.set(asset.scale[0], asset.scale[1], asset.scale[2])
+  }, [asset.position, asset.rotation, asset.scale])
+
+  const finishDrag = useCallback(() => {
+    if (!draggingRef.current) return
+    draggingRef.current = false
+    if (orbitRef.current) orbitRef.current.enabled = true
+
+    const group = groupRef.current
+    if (!group) return
     const nextPosition: Vector3Tuple = [
       round2(group.position.x),
       round2(group.position.y),
@@ -1107,19 +387,24 @@ function AssetMesh({
       round2(group.rotation.y),
       round2(group.rotation.z),
     ]
-    onTransformCommit(asset.id, nextPosition, nextRotation)
-  }, [asset.id, onTransformCommit, orbitRef])
+    const nextScale: Vector3Tuple = [
+      Math.max(round2(group.scale.x), 0.02),
+      Math.max(round2(group.scale.y), 0.02),
+      Math.max(round2(group.scale.z), 0.02),
+    ]
+    onCommit(asset.id, { position: nextPosition, rotation: nextRotation, scale: nextScale })
+  }, [asset.id, onCommit, orbitRef])
 
   useEffect(() => {
-    const onWindowPointerUp = () => finishDragging()
-    const onWindowBlur = () => finishDragging()
-    window.addEventListener('pointerup', onWindowPointerUp)
+    const onPointerUp = () => finishDrag()
+    const onWindowBlur = () => finishDrag()
+    window.addEventListener('pointerup', onPointerUp)
     window.addEventListener('blur', onWindowBlur)
     return () => {
-      window.removeEventListener('pointerup', onWindowPointerUp)
+      window.removeEventListener('pointerup', onPointerUp)
       window.removeEventListener('blur', onWindowBlur)
     }
-  }, [finishDragging])
+  }, [finishDrag])
 
   return (
     <group>
@@ -1127,39 +412,31 @@ function AssetMesh({
         ref={groupRef}
         position={asset.position}
         rotation={asset.rotation}
-        onClick={(event: ThreeEvent<MouseEvent>) => {
-          event.stopPropagation()
-          if (isPlacementMode) {
-            return
-          }
-          onSelect(asset.id, event.ctrlKey || event.metaKey)
-        }}
+        scale={asset.scale}
       >
-        <AssetVisual
-          definition={definition}
-          dimensions={asset.dimensions}
-          color={asset.color}
-          isSelected={isSelected}
-        />
+        {children}
       </group>
-
-      {useTransformGizmo && (
-        <TransformControls
-          object={groupRef}
-          mode={transformMode}
-          translationSnap={transformMode === 'translate' && !isCtrlPressed ? SNAP_UNIT : undefined}
-          rotationSnap={transformMode === 'rotate' && !isCtrlPressed ? Math.PI / 8 : undefined}
-          onMouseDown={() => {
-            isDraggingRef.current = true
-            if (orbitRef.current) {
-              orbitRef.current.enabled = false
-            }
-          }}
-          onMouseUp={finishDragging}
-        />
-      )}
+      <TransformControls
+        object={groupRef}
+        mode={mode}
+        translationSnap={mode === 'translate' && !isCtrlPressed ? SNAP_UNIT : undefined}
+        rotationSnap={mode === 'rotate' && !isCtrlPressed ? Math.PI / 8 : undefined}
+        onMouseDown={() => {
+          draggingRef.current = true
+          if (orbitRef.current) orbitRef.current.enabled = false
+        }}
+        onMouseUp={finishDrag}
+      />
     </group>
   )
+}
+
+interface MultiTransformGizmoProps {
+  selectedAssets: Asset[]
+  mode: TransformMode
+  isCtrlPressed: boolean
+  orbitRef: RefObject<OrbitControlsImpl | null>
+  onCommit: (updates: Array<{ id: string; patch: Partial<Asset> }>) => void
 }
 
 function MultiTransformGizmo({
@@ -1170,27 +447,28 @@ function MultiTransformGizmo({
   onCommit,
 }: MultiTransformGizmoProps) {
   const pivotRef = useRef<Group>(null!)
-  const isDraggingRef = useRef(false)
+  const draggingRef = useRef(false)
   const dragStartRef = useRef<{
     pivotPosition: Vector3
     pivotQuaternion: Quaternion
+    pivotScale: Vector3
     assets: Array<{
       id: string
       position: Vector3
       quaternion: Quaternion
+      scale: Vector3
     }>
   } | null>(null)
 
   const center = useMemo(() => {
-    const sum = selectedAssets.reduce(
-      (accumulator, asset) => {
-        return [
-          accumulator[0] + asset.position[0],
-          accumulator[1] + asset.position[1],
-          accumulator[2] + asset.position[2],
-        ] as Vector3Tuple
-      },
-      [0, 0, 0] as Vector3Tuple,
+    if (selectedAssets.length === 0) return [0, 0, 0] as Vector3Tuple
+    const sum = selectedAssets.reduce<Vector3Tuple>(
+      (acc, asset) => [
+        acc[0] + asset.position[0],
+        acc[1] + asset.position[1],
+        acc[2] + asset.position[2],
+      ],
+      [0, 0, 0],
     )
     return [
       round2(sum[0] / selectedAssets.length),
@@ -1201,57 +479,53 @@ function MultiTransformGizmo({
 
   useEffect(() => {
     const pivot = pivotRef.current
-    if (!pivot || isDraggingRef.current) {
-      return
-    }
+    if (!pivot || draggingRef.current) return
     pivot.position.set(...center)
     pivot.rotation.set(0, 0, 0)
+    pivot.scale.set(1, 1, 1)
   }, [center])
 
-  const finishDragging = useCallback(() => {
-    if (!isDraggingRef.current) {
-      return
-    }
-    isDraggingRef.current = false
-    if (orbitRef.current) {
-      orbitRef.current.enabled = true
-    }
+  const finishDrag = useCallback(() => {
+    if (!draggingRef.current) return
+    draggingRef.current = false
+    if (orbitRef.current) orbitRef.current.enabled = true
 
     const pivot = pivotRef.current
-    const dragStart = dragStartRef.current
-    if (!pivot || !dragStart) {
-      return
-    }
+    const start = dragStartRef.current
+    if (!pivot || !start) return
 
-    const deltaPosition = pivot.position.clone().sub(dragStart.pivotPosition)
-    const deltaQuaternion = pivot.quaternion
-      .clone()
-      .multiply(dragStart.pivotQuaternion.clone().invert())
+    const deltaPosition = pivot.position.clone().sub(start.pivotPosition)
+    const deltaQuaternion = pivot.quaternion.clone().multiply(start.pivotQuaternion.clone().invert())
+    const scaleRatio = new Vector3(
+      pivot.scale.x / start.pivotScale.x,
+      pivot.scale.y / start.pivotScale.y,
+      pivot.scale.z / start.pivotScale.z,
+    )
 
-    const updates = dragStart.assets.map((assetStart) => {
+    const updates = start.assets.map((assetStart) => {
       const rotatedOffset = assetStart.position
         .clone()
-        .sub(dragStart.pivotPosition)
+        .sub(start.pivotPosition)
         .applyQuaternion(deltaQuaternion)
-      const nextPositionVector = dragStart.pivotPosition
-        .clone()
-        .add(rotatedOffset)
-        .add(deltaPosition)
-      const nextQuaternion = deltaQuaternion.clone().multiply(assetStart.quaternion)
-      const nextRotationEuler = new Euler().setFromQuaternion(nextQuaternion, 'XYZ')
-
+      const nextPos = start.pivotPosition.clone().add(rotatedOffset).add(deltaPosition)
+      const nextQuat = deltaQuaternion.clone().multiply(assetStart.quaternion)
+      const nextEuler = new Euler().setFromQuaternion(nextQuat, 'XYZ')
+      const nextScale = new Vector3(
+        assetStart.scale.x * scaleRatio.x,
+        assetStart.scale.y * scaleRatio.y,
+        assetStart.scale.z * scaleRatio.z,
+      )
       return {
         id: assetStart.id,
-        position: [
-          round2(nextPositionVector.x),
-          round2(nextPositionVector.y),
-          round2(nextPositionVector.z),
-        ] as Vector3Tuple,
-        rotation: [
-          round2(nextRotationEuler.x),
-          round2(nextRotationEuler.y),
-          round2(nextRotationEuler.z),
-        ] as Vector3Tuple,
+        patch: {
+          position: [round2(nextPos.x), round2(nextPos.y), round2(nextPos.z)] as Vector3Tuple,
+          rotation: [round2(nextEuler.x), round2(nextEuler.y), round2(nextEuler.z)] as Vector3Tuple,
+          scale: [
+            Math.max(round2(nextScale.x), 0.02),
+            Math.max(round2(nextScale.y), 0.02),
+            Math.max(round2(nextScale.z), 0.02),
+          ] as Vector3Tuple,
+        } satisfies Partial<Asset>,
       }
     })
 
@@ -1260,15 +534,15 @@ function MultiTransformGizmo({
   }, [onCommit, orbitRef])
 
   useEffect(() => {
-    const onWindowPointerUp = () => finishDragging()
-    const onWindowBlur = () => finishDragging()
-    window.addEventListener('pointerup', onWindowPointerUp)
-    window.addEventListener('blur', onWindowBlur)
+    const onPointerUp = () => finishDrag()
+    const onBlur = () => finishDrag()
+    window.addEventListener('pointerup', onPointerUp)
+    window.addEventListener('blur', onBlur)
     return () => {
-      window.removeEventListener('pointerup', onWindowPointerUp)
-      window.removeEventListener('blur', onWindowBlur)
+      window.removeEventListener('pointerup', onPointerUp)
+      window.removeEventListener('blur', onBlur)
     }
-  }, [finishDragging])
+  }, [finishDrag])
 
   return (
     <group>
@@ -1280,240 +554,239 @@ function MultiTransformGizmo({
         rotationSnap={mode === 'rotate' && !isCtrlPressed ? Math.PI / 8 : undefined}
         onMouseDown={() => {
           const pivot = pivotRef.current
-          isDraggingRef.current = true
-          if (orbitRef.current) {
-            orbitRef.current.enabled = false
-          }
+          draggingRef.current = true
+          if (orbitRef.current) orbitRef.current.enabled = false
           dragStartRef.current = {
             pivotPosition: pivot.position.clone(),
             pivotQuaternion: pivot.quaternion.clone(),
+            pivotScale: pivot.scale.clone(),
             assets: selectedAssets.map((asset) => ({
               id: asset.id,
               position: new Vector3(...asset.position),
               quaternion: new Quaternion().setFromEuler(new Euler(...asset.rotation, 'XYZ')),
+              scale: new Vector3(...asset.scale),
             })),
           }
         }}
-        onMouseUp={finishDragging}
+        onMouseUp={finishDrag}
       />
     </group>
   )
 }
 
-async function readFileAsDataUrl(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(String(reader.result ?? ''))
-    reader.onerror = () => reject(new Error('Datei konnte nicht gelesen werden.'))
-    reader.readAsDataURL(file)
-  })
-}
+// --- Main PlannerApp
 
 export default function PlannerApp() {
   const orbitRef = useRef<OrbitControlsImpl | null>(null)
+  const store = useAssetsStore()
 
-  const [assetDefinitions, setAssetDefinitions] = useState<AssetDefinition[]>(() =>
-    cloneDefinitions(DEFAULT_ASSET_DEFINITIONS),
-  )
-  const [assets, setAssets] = useState<PlacedAsset[]>(() => createDemoLayout())
-  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [mode, setMode] = useState<PlannerMode>('edit')
   const [tool, setTool] = useState<PlannerTool>('select')
   const [transformMode, setTransformMode] = useState<TransformMode>('translate')
   const [cameraPreset, setCameraPreset] = useState<CameraPreset>('perspective')
-  const [activeDefinitionId, setActiveDefinitionId] = useState<string>(DEFAULT_ASSET_DEFINITIONS[0].id)
+  const [selectedTemplateType, setSelectedTemplateType] = useState<string | null>(null)
   const [previewPosition, setPreviewPosition] = useState<Vector3Tuple | null>(null)
   const [isCtrlPressed, setIsCtrlPressed] = useState(false)
+  const [hoveredId, setHoveredId] = useState<string | null>(null)
+  const [infoAssetId, setInfoAssetId] = useState<string | null>(null)
+  const [saveFeedback, setSaveFeedback] = useState<string | null>(null)
 
-  const [historyPast, setHistoryPast] = useState<HistorySnapshot[]>([])
-  const [historyFuture, setHistoryFuture] = useState<HistorySnapshot[]>([])
-  const [clipboardAssets, setClipboardAssets] = useState<PlacedAsset[]>([])
+  const {
+    assets,
+    templates,
+    selectedIds,
+    setSelectedIds,
+    addAsset,
+    removeAssets,
+    updateAsset,
+    updateAssets,
+    addCustomModelTemplate,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+    copy,
+    paste,
+    canPaste,
+    save,
+    load,
+  } = store
 
-  const assetsRef = useRef(assets)
-  const selectedIdsRef = useRef(selectedIds)
-  const historyPastRef = useRef(historyPast)
-  const historyFutureRef = useRef(historyFuture)
-  const pasteStepRef = useRef(0)
-
-  useEffect(() => {
-    assetsRef.current = assets
-  }, [assets])
-  useEffect(() => {
-    selectedIdsRef.current = selectedIds
-  }, [selectedIds])
-  useEffect(() => {
-    historyPastRef.current = historyPast
-  }, [historyPast])
-  useEffect(() => {
-    historyFutureRef.current = historyFuture
-  }, [historyFuture])
-
-  const activeDefinition = useMemo(
-    () => assetDefinitions.find((definition) => definition.id === activeDefinitionId) ?? null,
-    [activeDefinitionId, assetDefinitions],
+  const activeTemplateType = selectedTemplateType ?? templates[0]?.type ?? null
+  const activeTemplate = useMemo(
+    () => templates.find((template) => template.type === activeTemplateType) ?? null,
+    [activeTemplateType, templates],
   )
 
-  const definitionById = useMemo(
-    () => new Map(assetDefinitions.map((definition) => [definition.id, definition])),
-    [assetDefinitions],
-  )
-
-  const groupedDefinitions = useMemo(
-    () =>
-      assetDefinitions.reduce<Record<string, AssetDefinition[]>>((grouped, definition) => {
-        const list = grouped[definition.category] ?? []
-        list.push(definition)
-        grouped[definition.category] = list
-        return grouped
-      }, {}),
-    [assetDefinitions],
-  )
+  const groupedTemplates = useMemo(() => getTemplatesByCategory(templates), [templates])
 
   const selectedAssets = useMemo(
     () => assets.filter((asset) => selectedIds.includes(asset.id)),
     [assets, selectedIds],
   )
-  const singleSelectedAsset = selectedAssets.length === 1 ? selectedAssets[0] : null
-  const singleSelectedDefinition = singleSelectedAsset
-    ? definitionById.get(singleSelectedAsset.definitionId) ?? null
-    : null
+  const singleSelected = selectedAssets.length === 1 ? selectedAssets[0] : null
 
-  const createSnapshot = useCallback((): HistorySnapshot => {
-    return {
-      assets: cloneAssets(assetsRef.current),
-      selectedIds: [...selectedIdsRef.current],
-    }
-  }, [])
-
-  const applySceneChange = useCallback(
-    (nextAssets: PlacedAsset[], nextSelectedIds: string[], recordHistory: boolean) => {
-      if (recordHistory) {
-        const snapshot = createSnapshot()
-        setHistoryPast((current) => [...current.slice(-(MAX_HISTORY - 1)), snapshot])
-        setHistoryFuture([])
-      }
-      setAssets(nextAssets)
-      setSelectedIds(nextSelectedIds)
-    },
-    [createSnapshot],
+  const infoAsset = useMemo(
+    () => (infoAssetId ? assets.find((asset) => asset.id === infoAssetId) ?? null : null),
+    [assets, infoAssetId],
   )
 
-  const undo = useCallback(() => {
-    const past = historyPastRef.current
-    if (past.length === 0) {
-      return
+  const changeMode = useCallback((nextMode: PlannerMode) => {
+    setMode(nextMode)
+    if (nextMode === 'view') {
+      setTool('select')
+      setPreviewPosition(null)
     }
-    const previous = past[past.length - 1]
-    const currentSnapshot = createSnapshot()
-
-    setHistoryPast(past.slice(0, -1))
-    setHistoryFuture((current) => [currentSnapshot, ...current].slice(0, MAX_HISTORY))
-    setAssets(cloneAssets(previous.assets))
-    setSelectedIds([...previous.selectedIds])
-  }, [createSnapshot])
-
-  const redo = useCallback(() => {
-    const future = historyFutureRef.current
-    if (future.length === 0) {
-      return
-    }
-    const [next, ...remaining] = future
-    const currentSnapshot = createSnapshot()
-
-    setHistoryFuture(remaining)
-    setHistoryPast((current) => [...current.slice(-(MAX_HISTORY - 1)), currentSnapshot])
-    setAssets(cloneAssets(next.assets))
-    setSelectedIds([...next.selectedIds])
-  }, [createSnapshot])
-
-  const removeSelectedAssets = useCallback(() => {
-    if (selectedIdsRef.current.length === 0) {
-      return
-    }
-    const nextAssets = assetsRef.current.filter((asset) => !selectedIdsRef.current.includes(asset.id))
-    applySceneChange(nextAssets, [], true)
-  }, [applySceneChange])
-
-  const copySelection = useCallback(() => {
-    if (selectedIdsRef.current.length === 0) {
-      return
-    }
-    const copied = assetsRef.current
-      .filter((asset) => selectedIdsRef.current.includes(asset.id))
-      .map(clonePlacedAsset)
-    setClipboardAssets(copied)
-    pasteStepRef.current = 0
+    setHoveredId(null)
+    setInfoAssetId(null)
   }, [])
 
-  const pasteSelection = useCallback(() => {
-    if (clipboardAssets.length === 0) {
-      return
+  const changeTool = useCallback((nextTool: PlannerTool) => {
+    setTool(nextTool)
+    setHoveredId(null)
+    if (nextTool !== 'place') {
+      setPreviewPosition(null)
     }
-    pasteStepRef.current += 1
-    const offset = pasteStepRef.current
+  }, [])
 
-    const pasted = clipboardAssets.map((asset) => ({
-      ...clonePlacedAsset(asset),
-      id: newAssetId(),
-      position: [
-        round2(asset.position[0] + offset),
-        asset.position[1],
-        round2(asset.position[2] + offset),
-      ] as Vector3Tuple,
-    }))
-    const nextAssets = [...assetsRef.current, ...pasted]
-    applySceneChange(
-      nextAssets,
-      pasted.map((asset) => asset.id),
-      true,
-    )
-    setTool('select')
-  }, [applySceneChange, clipboardAssets])
+  const onAssetClick = useCallback(
+    (event: ThreeEvent<MouseEvent>, asset: Asset) => {
+      event.stopPropagation()
+      if (mode === 'view') {
+        setInfoAssetId(asset.id)
+        return
+      }
+      if (tool === 'place') return
+      const addToSelection = event.ctrlKey || event.metaKey || isCtrlPressed
+      setSelectedIds(
+        selectedIds.includes(asset.id)
+          ? addToSelection
+            ? selectedIds.filter((id) => id !== asset.id)
+            : [asset.id]
+          : addToSelection
+            ? [...selectedIds, asset.id]
+            : [asset.id],
+      )
+    },
+    [isCtrlPressed, mode, selectedIds, setSelectedIds, tool],
+  )
 
+  const onAssetPointerOver = useCallback(
+    (_event: ThreeEvent<PointerEvent>, asset: Asset) => {
+      setHoveredId(asset.id)
+    },
+    [],
+  )
+  const onAssetPointerOut = useCallback((_event: ThreeEvent<PointerEvent>, asset: Asset) => {
+    setHoveredId((current) => (current === asset.id ? null : current))
+  }, [])
+
+  const onFloorHover = useCallback(
+    (point: Vector3Tuple) => {
+      if (mode !== 'edit' || tool !== 'place' || !activeTemplate) return
+      const position = resolvePlacementPosition(point, isCtrlPressed, activeTemplate)
+      setPreviewPosition(position)
+    },
+    [activeTemplate, isCtrlPressed, mode, tool],
+  )
+
+  const onFloorAction = useCallback(
+    (point: Vector3Tuple) => {
+      if (mode !== 'edit') {
+        return
+      }
+      if (tool === 'place' && activeTemplate) {
+        const position = resolvePlacementPosition(point, isCtrlPressed, activeTemplate)
+        const asset = createAssetFromTemplate(activeTemplate, { position })
+        addAsset(asset)
+        return
+      }
+      setSelectedIds([])
+    },
+    [activeTemplate, addAsset, isCtrlPressed, mode, setSelectedIds, tool],
+  )
+
+  const onRemoveSelected = useCallback(() => {
+    if (selectedIds.length === 0) return
+    removeAssets(selectedIds)
+  }, [removeAssets, selectedIds])
+
+  const onSaveLayout = useCallback(() => {
+    save()
+    setSaveFeedback('Gespeichert')
+    window.setTimeout(() => setSaveFeedback(null), 2000)
+  }, [save])
+
+  const onLoadLayout = useCallback(() => {
+    const ok = load()
+    setSaveFeedback(ok ? 'Geladen' : 'Kein gespeichertes Layout gefunden')
+    window.setTimeout(() => setSaveFeedback(null), 2200)
+  }, [load])
+
+  const onUploadAsset = useCallback(
+    async (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0]
+      if (!file) return
+      try {
+        const modelUrl = await readFileAsDataUrl(file)
+        const label = file.name.replace(/\.[^/.]+$/, '') || 'Custom Asset'
+        const template = addCustomModelTemplate(label, modelUrl)
+        setSelectedTemplateType(template.type)
+        changeTool('place')
+      } finally {
+        event.target.value = ''
+      }
+    },
+    [addCustomModelTemplate, changeTool],
+  )
+
+  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const key = event.key.toLowerCase()
       const editable = isEditableTarget(event.target)
-      const hasPrimaryModifier = event.ctrlKey || event.metaKey
+      const hasModifier = event.ctrlKey || event.metaKey
 
       if (event.key === 'Control' || event.key === 'Meta') {
         setIsCtrlPressed(true)
       }
 
-      if (hasPrimaryModifier && !editable && key === 'z' && !event.shiftKey) {
+      if (mode === 'view') {
+        if (!editable && event.key === 'Escape') {
+          setInfoAssetId(null)
+        }
+        return
+      }
+
+      if (hasModifier && !editable && key === 'z' && !event.shiftKey) {
         event.preventDefault()
         undo()
         return
       }
-      if (
-        hasPrimaryModifier &&
-        !editable &&
-        ((key === 'z' && event.shiftKey) || key === 'y')
-      ) {
+      if (hasModifier && !editable && ((key === 'z' && event.shiftKey) || key === 'y')) {
         event.preventDefault()
         redo()
         return
       }
-      if (hasPrimaryModifier && !editable && key === 'c') {
+      if (hasModifier && !editable && key === 'c') {
         event.preventDefault()
-        copySelection()
+        copy()
         return
       }
-      if (hasPrimaryModifier && !editable && key === 'v') {
+      if (hasModifier && !editable && key === 'v') {
         event.preventDefault()
-        pasteSelection()
+        paste()
         return
       }
 
-      if (editable) {
-        return
-      }
+      if (editable) return
       if (event.key === 'Delete' || event.key === 'Backspace') {
         event.preventDefault()
-        removeSelectedAssets()
+        onRemoveSelected()
       }
       if (event.key === 'Escape') {
-        setTool('select')
-        setPreviewPosition(null)
+        changeTool('select')
+        setInfoAssetId(null)
       }
     }
 
@@ -1523,284 +796,168 @@ export default function PlannerApp() {
       }
     }
 
-    const handleWindowBlur = () => {
-      setIsCtrlPressed(false)
-    }
+    const handleBlur = () => setIsCtrlPressed(false)
 
     window.addEventListener('keydown', handleKeyDown)
     window.addEventListener('keyup', handleKeyUp)
-    window.addEventListener('blur', handleWindowBlur)
+    window.addEventListener('blur', handleBlur)
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
-      window.removeEventListener('blur', handleWindowBlur)
+      window.removeEventListener('blur', handleBlur)
     }
-  }, [copySelection, pasteSelection, redo, removeSelectedAssets, undo])
+  }, [changeTool, copy, mode, onRemoveSelected, paste, redo, undo])
 
-  const onAssetClick = useCallback(
-    (id: string, addToSelection: boolean) => {
-      setTool('select')
-      setPreviewPosition(null)
-      setSelectedIds((currentIds) => {
-        if (!addToSelection && !isCtrlPressed) {
-          return [id]
-        }
-        if (currentIds.includes(id)) {
-          return currentIds.filter((currentId) => currentId !== id)
-        }
-        return [...currentIds, id]
-      })
-    },
-    [isCtrlPressed],
-  )
-
-  const onFloorHover = useCallback(
-    (point: Vector3Tuple) => {
-      if (tool !== 'place' || !activeDefinition) {
-        return
-      }
-      const position = resolvePlacementPosition(point, isCtrlPressed, activeDefinition.size[1])
-      setPreviewPosition(position)
-    },
-    [activeDefinition, isCtrlPressed, tool],
-  )
-
-  const onFloorAction = useCallback(
-    (point: Vector3Tuple) => {
-      if (tool === 'place' && activeDefinition) {
-        const newAsset: PlacedAsset = {
-          id: newAssetId(),
-          definitionId: activeDefinition.id,
-          position: resolvePlacementPosition(point, isCtrlPressed, activeDefinition.size[1]),
-          rotation: [0, 0, 0],
-          dimensions: [...activeDefinition.size] as Vector3Tuple,
-          color: activeDefinition.color,
+  const updateSingleMetadata = useCallback(
+    (key: string, value: string, kind: 'name' | 'description' | 'zoneType' | 'custom') => {
+      if (!singleSelected) return
+      if (kind === 'custom') {
+        updateAsset(singleSelected.id, {
           metadata: {
-            ...activeDefinition.metadataTemplate,
+            customData: {
+              ...(singleSelected.metadata.customData ?? {}),
+              [key]: value,
+            },
           },
-        }
-        applySceneChange([...assetsRef.current, newAsset], [newAsset.id], true)
-        return
+        })
+      } else {
+        updateAsset(singleSelected.id, {
+          metadata: {
+            ...singleSelected.metadata,
+            [kind]: value,
+          },
+        })
       }
-      setSelectedIds([])
     },
-    [activeDefinition, applySceneChange, isCtrlPressed, tool],
+    [singleSelected, updateAsset],
   )
 
-  const updateAssetTransform = useCallback(
-    (id: string, position: Vector3Tuple, rotation: Vector3Tuple) => {
-      if (!isVector3Tuple(position) || !isVector3Tuple(rotation)) {
-        return
-      }
-      const nextAssets = assetsRef.current.map((asset) =>
-        asset.id === id
-          ? {
-              ...asset,
-              position,
-              rotation,
-            }
-          : asset,
-      )
-      applySceneChange(nextAssets, selectedIdsRef.current, true)
-    },
-    [applySceneChange],
-  )
-
-  const updateManyAssetTransforms = useCallback(
-    (updates: Array<{ id: string; position: Vector3Tuple; rotation: Vector3Tuple }>) => {
-      if (updates.length === 0) {
-        return
-      }
-      const updateById = new Map(updates.map((update) => [update.id, update]))
-      const nextAssets = assetsRef.current.map((asset) => {
-        const update = updateById.get(asset.id)
-        if (!update) {
-          return asset
-        }
-        return {
-          ...asset,
-          position: update.position,
-          rotation: update.rotation,
-        }
-      })
-      applySceneChange(nextAssets, selectedIdsRef.current, true)
-    },
-    [applySceneChange],
-  )
-
-  const updateSingleAssetMetadata = useCallback(
-    (key: string, value: string) => {
-      if (!singleSelectedAsset) {
-        return
-      }
-      const nextAssets = assetsRef.current.map((asset) =>
-        asset.id === singleSelectedAsset.id
-          ? {
-              ...asset,
-              metadata: {
-                ...asset.metadata,
-                [key]: value,
-              },
-            }
-          : asset,
-      )
-      applySceneChange(nextAssets, selectedIdsRef.current, true)
-    },
-    [applySceneChange, singleSelectedAsset],
-  )
-
-  const updateAssetDimensions = useCallback(
-    (id: string, dimensions: Vector3Tuple) => {
-      if (!isVector3Tuple(dimensions)) {
-        return
-      }
-      const normalizedDimensions: Vector3Tuple = [
-        Math.max(round2(dimensions[0]), 0.05),
-        Math.max(round2(dimensions[1]), 0.05),
-        Math.max(round2(dimensions[2]), 0.05),
-      ]
-      const nextAssets = assetsRef.current.map((asset) =>
-        asset.id === id
-          ? {
-              ...asset,
-              dimensions: normalizedDimensions,
-              position: [
-                asset.position[0],
-                Math.max(asset.position[1], normalizedDimensions[1] / 2),
-                asset.position[2],
-              ] as Vector3Tuple,
-            }
-          : asset,
-      )
-      applySceneChange(nextAssets, selectedIdsRef.current, true)
-    },
-    [applySceneChange],
-  )
-
-  const updateAssetColor = useCallback(
-    (id: string, color: string) => {
-      const normalizedColor = sanitizeColor(color)
-      const nextAssets = assetsRef.current.map((asset) =>
-        asset.id === id
-          ? {
-              ...asset,
-              color: normalizedColor,
-            }
-          : asset,
-      )
-      applySceneChange(nextAssets, selectedIdsRef.current, true)
-    },
-    [applySceneChange],
-  )
-
-  const saveLayout = useCallback(() => {
-    const payload: StoredLayoutPayload = {
-      assets,
-      assetDefinitions,
-    }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
-  }, [assetDefinitions, assets])
-
-  const loadLayout = useCallback(() => {
-    const rawLayout = localStorage.getItem(STORAGE_KEY)
-    if (!rawLayout) {
-      return
-    }
-    const parsedLayout = parseStoredLayout(rawLayout)
-    if (!parsedLayout) {
-      return
-    }
-
-    setAssets(parsedLayout.assets)
-    setAssetDefinitions(parsedLayout.assetDefinitions)
-    setSelectedIds([])
-    setHistoryPast([])
-    setHistoryFuture([])
-    if (!parsedLayout.assetDefinitions.some((definition) => definition.id === activeDefinitionId)) {
-      setActiveDefinitionId(parsedLayout.assetDefinitions[0]?.id ?? DEFAULT_ASSET_DEFINITIONS[0].id)
-    }
-  }, [activeDefinitionId])
-
-  const onUploadAsset = useCallback(async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) {
-      return
-    }
-
-    try {
-      const modelUrl = await readFileAsDataUrl(file)
-      const label = file.name.replace(/\.[^/.]+$/, '') || 'Custom Asset'
-      const definition: AssetDefinition = {
-        id: newDefinitionId(),
-        label,
-        category: 'Eigene Assets',
-        size: [2, 2, 2],
-        shape: 'box',
-        color: '#a5b4c4',
-        modelUrl,
-        metadataTemplate: {
-          Quelle: file.name,
-          Typ: 'Custom Upload',
+  const removeCustomMetadataKey = useCallback(
+    (key: string) => {
+      if (!singleSelected) return
+      const nextCustom = { ...(singleSelected.metadata.customData ?? {}) }
+      delete nextCustom[key]
+      updateAsset(singleSelected.id, {
+        metadata: {
+          ...singleSelected.metadata,
+          customData: nextCustom,
         },
-      }
-      setAssetDefinitions((current) => [...current, definition])
-      setActiveDefinitionId(definition.id)
-      setTool('place')
-    } finally {
-      event.target.value = ''
+      })
+    },
+    [singleSelected, updateAsset],
+  )
+
+  const addCustomMetadataField = useCallback(() => {
+    if (!singleSelected) return
+    const base = 'Feld'
+    const existing = Object.keys(singleSelected.metadata.customData ?? {})
+    let counter = existing.length + 1
+    let newKey = `${base} ${counter}`
+    while (existing.includes(newKey)) {
+      counter += 1
+      newKey = `${base} ${counter}`
     }
-  }, [])
+    updateAsset(singleSelected.id, {
+      metadata: {
+        ...singleSelected.metadata,
+        customData: {
+          ...(singleSelected.metadata.customData ?? {}),
+          [newKey]: '',
+        },
+      },
+    })
+  }, [singleSelected, updateAsset])
+
+  // Preview template for ghost placement
+  const ghostAsset: Asset | null = useMemo(() => {
+    if (mode !== 'edit' || tool !== 'place' || !activeTemplate || !previewPosition) return null
+    return createAssetFromTemplate(activeTemplate, { position: previewPosition })
+  }, [activeTemplate, mode, previewPosition, tool])
 
   return (
-    <div className="planner-shell">
+    <div className={`planner-shell mode-${mode}`}>
       <header className="top-bar">
         <div className="toolbar-group">
           <span className="toolbar-title">Factory Planning Studio</span>
-          <button
-            type="button"
-            className={tool === 'select' ? 'active' : ''}
-            onClick={() => setTool('select')}
-          >
-            Auswahl
-          </button>
-          <button
-            type="button"
-            className={tool === 'place' ? 'active' : ''}
-            onClick={() => setTool('place')}
-          >
-            Platzieren
-          </button>
-          <button
-            type="button"
-            className={transformMode === 'translate' ? 'active' : ''}
-            onClick={() => setTransformMode('translate')}
-            disabled={selectedIds.length === 0}
-          >
-            XYZ bewegen
-          </button>
-          <button
-            type="button"
-            className={transformMode === 'rotate' ? 'active' : ''}
-            onClick={() => setTransformMode('rotate')}
-            disabled={selectedIds.length === 0}
-          >
-            Drehen
-          </button>
+
+          <div className="mode-switch">
+            <button
+              type="button"
+              className={mode === 'edit' ? 'active' : ''}
+              onClick={() => changeMode('edit')}
+            >
+              Bearbeiten
+            </button>
+            <button
+              type="button"
+              className={mode === 'view' ? 'active' : ''}
+              onClick={() => changeMode('view')}
+            >
+              Praesentation
+            </button>
+          </div>
+
+          {mode === 'edit' && (
+            <>
+              <button
+                type="button"
+                className={tool === 'select' ? 'active' : ''}
+                onClick={() => changeTool('select')}
+              >
+                Auswahl
+              </button>
+              <button
+                type="button"
+                className={tool === 'place' ? 'active' : ''}
+                onClick={() => changeTool('place')}
+              >
+                Platzieren
+              </button>
+              <button
+                type="button"
+                className={transformMode === 'translate' ? 'active' : ''}
+                onClick={() => setTransformMode('translate')}
+                disabled={selectedIds.length === 0}
+              >
+                Bewegen
+              </button>
+              <button
+                type="button"
+                className={transformMode === 'rotate' ? 'active' : ''}
+                onClick={() => setTransformMode('rotate')}
+                disabled={selectedIds.length === 0}
+              >
+                Drehen
+              </button>
+              <button
+                type="button"
+                className={transformMode === 'scale' ? 'active' : ''}
+                onClick={() => setTransformMode('scale')}
+                disabled={selectedIds.length === 0}
+              >
+                Skalieren
+              </button>
+            </>
+          )}
         </div>
 
         <div className="toolbar-group">
-          <button type="button" onClick={undo} disabled={historyPast.length === 0}>
-            Undo
-          </button>
-          <button type="button" onClick={redo} disabled={historyFuture.length === 0}>
-            Redo
-          </button>
-          <button type="button" onClick={copySelection} disabled={selectedIds.length === 0}>
-            Copy
-          </button>
-          <button type="button" onClick={pasteSelection} disabled={clipboardAssets.length === 0}>
-            Paste
-          </button>
+          {mode === 'edit' && (
+            <>
+              <button type="button" onClick={undo} disabled={!canUndo}>
+                Undo
+              </button>
+              <button type="button" onClick={redo} disabled={!canRedo}>
+                Redo
+              </button>
+              <button type="button" onClick={copy} disabled={selectedIds.length === 0}>
+                Copy
+              </button>
+              <button type="button" onClick={paste} disabled={!canPaste}>
+                Paste
+              </button>
+            </>
+          )}
           {(['perspective', 'top', 'front', 'side'] as CameraPreset[]).map((preset) => (
             <button
               type="button"
@@ -1817,112 +974,142 @@ export default function PlannerApp() {
                     : 'Seite'}
             </button>
           ))}
-          <button type="button" onClick={saveLayout}>
+          <button type="button" onClick={onSaveLayout}>
             Speichern
           </button>
-          <button type="button" onClick={loadLayout}>
+          <button type="button" onClick={onLoadLayout}>
             Laden
           </button>
-          <button type="button" className="danger" onClick={removeSelectedAssets}>
-            Loeschen
-          </button>
+          {mode === 'edit' && (
+            <button type="button" className="danger" onClick={onRemoveSelected}>
+              Loeschen
+            </button>
+          )}
         </div>
       </header>
 
-      <div className="workspace">
-        <aside className="panel left">
-          <h2>Asset-Bibliothek</h2>
-          <p className="panel-hint">
-            Waehle einen Typ und platziere ihn per Klick auf die Flaeche.
-          </p>
-          <label className="upload-field">
-            Eigene Assets hochladen (GLB/GLTF)
-            <input type="file" accept=".glb,.gltf,model/gltf-binary,model/gltf+json" onChange={onUploadAsset} />
-          </label>
-          {Object.entries(groupedDefinitions).map(([category, definitions]) => (
-            <div key={category} className="asset-group">
-              <h3>{category}</h3>
-              {definitions.map((definition) => (
-                <button
-                  type="button"
-                  key={definition.id}
-                  className={tool === 'place' && activeDefinitionId === definition.id ? 'active' : ''}
-                  onClick={() => {
-                    setTool('place')
-                    setActiveDefinitionId(definition.id)
-                  }}
-                >
-                  <span>{definition.label}</span>
-                  <small>
-                    {definition.shape} | {definition.size.join(' x ')} m
-                  </small>
-                </button>
-              ))}
-            </div>
-          ))}
-        </aside>
+      <div className={`workspace${mode === 'view' ? ' view-mode' : ''}`}>
+        {mode === 'edit' && (
+          <aside className="panel left">
+            <h2>Asset-Bibliothek</h2>
+            <p className="panel-hint">Kategorie waehlen und per Klick in der Szene platzieren.</p>
+            <label className="upload-field">
+              Eigene Assets hochladen (GLB/GLTF)
+              <input
+                type="file"
+                accept=".glb,.gltf,model/gltf-binary,model/gltf+json"
+                onChange={onUploadAsset}
+              />
+            </label>
+            {Object.entries(groupedTemplates).map(([category, list]) => (
+              <div key={category} className="asset-group">
+                <h3>{category}</h3>
+                {list.map((template) => (
+                  <button
+                    type="button"
+                    key={template.type}
+                    className={
+                      tool === 'place' && activeTemplateType === template.type ? 'active' : ''
+                    }
+                    onClick={() => {
+                      setSelectedTemplateType(template.type)
+                      changeTool('place')
+                    }}
+                  >
+                    <span>{template.label}</span>
+                    <small>
+                      {template.geometry.kind} |{' '}
+                      {template.scale.map((v) => v.toFixed(1)).join(' x ')} m
+                    </small>
+                  </button>
+                ))}
+              </div>
+            ))}
+          </aside>
+        )}
 
         <main className="scene-wrapper">
-          <Canvas shadows camera={{ position: CAMERA_PRESETS.perspective.position, fov: 48 }}>
-            <color attach="background" args={['#d2dae3']} />
-            <fog attach="fog" args={['#d2dae3', 55, 135]} />
-            <Lighting />
+          {mode === 'view' && infoAsset && (
+            <AssetInfoModal asset={infoAsset} onClose={() => setInfoAssetId(null)} />
+          )}
+
+          <Canvas
+            shadows
+            camera={{ position: CAMERA_PRESETS.perspective.position, fov: 48 }}
+          >
+            <color attach="background" args={[mode === 'view' ? '#0f1b29' : '#d2dae3']} />
+            <fog
+              attach="fog"
+              args={[mode === 'view' ? '#0f1b29' : '#d2dae3', 55, 145]}
+            />
+            {mode === 'edit' ? <Lighting /> : <ViewModeOverlay mode="view" />}
             <CameraController preset={cameraPreset} orbitRef={orbitRef} />
             <FactoryFloor onHover={onFloorHover} onAction={onFloorAction} />
             <FactoryWalls />
 
             {assets.map((asset) => {
-              const definition = definitionById.get(asset.definitionId)
-              if (!definition) {
+              const isOnlySingleEditSelection =
+                mode === 'edit' && singleSelected?.id === asset.id
+              if (isOnlySingleEditSelection) {
                 return null
               }
               return (
-                <AssetMesh
+                <AssetRenderer
                   key={asset.id}
                   asset={asset}
-                  definition={definition}
                   isSelected={selectedIds.includes(asset.id)}
-                  useTransformGizmo={selectedIds.length === 1 && selectedIds.includes(asset.id)}
-                  isPlacementMode={tool === 'place'}
-                  isCtrlPressed={isCtrlPressed}
-                  transformMode={transformMode}
-                  orbitRef={orbitRef}
-                  onSelect={onAssetClick}
-                  onTransformCommit={updateAssetTransform}
+                  isHovered={hoveredId === asset.id}
+                  isEditMode={mode === 'edit'}
+                  onClick={onAssetClick}
+                  onPointerOver={onAssetPointerOver}
+                  onPointerOut={onAssetPointerOut}
                 />
               )
             })}
 
-            {selectedAssets.length > 1 && (
+            {mode === 'edit' && singleSelected && (
+              <SingleTransformGizmo
+                asset={singleSelected}
+                mode={transformMode}
+                isCtrlPressed={isCtrlPressed}
+                orbitRef={orbitRef}
+                onCommit={(id, patch) => updateAsset(id, patch)}
+              >
+                <AssetRenderer
+                  asset={singleSelected}
+                  isSelected
+                  isHovered={hoveredId === singleSelected.id}
+                  isEditMode
+                  skipTransform
+                  onClick={onAssetClick}
+                  onPointerOver={onAssetPointerOver}
+                  onPointerOut={onAssetPointerOut}
+                />
+              </SingleTransformGizmo>
+            )}
+
+            {mode === 'edit' && selectedAssets.length > 1 && (
               <MultiTransformGizmo
                 selectedAssets={selectedAssets}
                 mode={transformMode}
                 isCtrlPressed={isCtrlPressed}
                 orbitRef={orbitRef}
-                onCommit={updateManyAssetTransforms}
+                onCommit={(updates) => updateAssets(updates)}
               />
             )}
 
-            {tool === 'place' && activeDefinition && previewPosition && (
+            {ghostAsset && activeTemplate && (
               <group>
-                <group position={previewPosition}>
-                  <AssetPrimitive
-                    shape={activeDefinition.shape}
-                    dimensions={activeDefinition.size}
-                    color={activeDefinition.color}
-                    isSelected={false}
-                    ghost
-                  />
-                </group>
+                <GhostAssetRenderer asset={ghostAsset} />
                 <Html
                   position={[
-                    previewPosition[0],
-                    previewPosition[1] + Math.max(activeDefinition.size[1], 0.05) / 2 + 0.75,
-                    previewPosition[2],
+                    ghostAsset.position[0],
+                    ghostAsset.position[1] + Math.max(activeTemplate.scale[1], 0.2) / 2 + 0.75,
+                    ghostAsset.position[2],
                   ]}
                   center
                 >
-                  <div className="preview-badge">{activeDefinition.label}</div>
+                  <div className="preview-badge">{activeTemplate.label}</div>
                 </Html>
               </group>
             )}
@@ -1937,166 +1124,246 @@ export default function PlannerApp() {
               screenSpacePanning
               zoomToCursor
               minDistance={6}
-              maxDistance={75}
+              maxDistance={85}
               minPolarAngle={0.2}
               maxPolarAngle={Math.PI / 2 - 0.03}
             />
           </Canvas>
 
-          <div className="status-bar">
-            <span>STRG/CMD: freie Platzierung und freies Bewegen/Rotieren</span>
-            <span>STRG/CMD + Z: Undo | Shift+Z/Y: Redo</span>
-            <span>STRG/CMD + C/V: Copy/Paste</span>
-          </div>
-        </main>
-
-        <aside className="panel right">
-          <h2>Inspector</h2>
-          {singleSelectedAsset && singleSelectedDefinition ? (
-            <div className="inspector-content">
-              <p className="selected-title">{singleSelectedDefinition.label}</p>
-              <p className="panel-hint">
-                Form: {singleSelectedDefinition.shape} | Kategorie: {singleSelectedDefinition.category}
-              </p>
-              <p className="panel-hint">ID: {singleSelectedAsset.id.slice(0, 16)}...</p>
-              <div className="vector-grid" key={singleSelectedAsset.id}>
-                <NumericTransformInput
-                  label="X"
-                  value={singleSelectedAsset.position[0]}
-                  onCommit={(nextValue) =>
-                    updateAssetTransform(
-                      singleSelectedAsset.id,
-                      [nextValue, singleSelectedAsset.position[1], singleSelectedAsset.position[2]],
-                      singleSelectedAsset.rotation,
-                    )
-                  }
-                />
-                <NumericTransformInput
-                  label="Y"
-                  value={singleSelectedAsset.position[1]}
-                  onCommit={(nextValue) =>
-                    updateAssetTransform(
-                      singleSelectedAsset.id,
-                      [singleSelectedAsset.position[0], nextValue, singleSelectedAsset.position[2]],
-                      singleSelectedAsset.rotation,
-                    )
-                  }
-                />
-                <NumericTransformInput
-                  label="Z"
-                  value={singleSelectedAsset.position[2]}
-                  onCommit={(nextValue) =>
-                    updateAssetTransform(
-                      singleSelectedAsset.id,
-                      [singleSelectedAsset.position[0], singleSelectedAsset.position[1], nextValue],
-                      singleSelectedAsset.rotation,
-                    )
-                  }
-                />
-                <NumericTransformInput
-                  label="Rot X (deg)"
-                  step="1"
-                  value={radToDeg(singleSelectedAsset.rotation[0])}
-                  onCommit={(nextValue) =>
-                    updateAssetTransform(
-                      singleSelectedAsset.id,
-                      singleSelectedAsset.position,
-                      [degToRad(nextValue), singleSelectedAsset.rotation[1], singleSelectedAsset.rotation[2]],
-                    )
-                  }
-                />
-                <NumericTransformInput
-                  label="Rot Y (deg)"
-                  step="0.05"
-                  value={radToDeg(singleSelectedAsset.rotation[1])}
-                  onCommit={(nextValue) =>
-                    updateAssetTransform(
-                      singleSelectedAsset.id,
-                      singleSelectedAsset.position,
-                      [singleSelectedAsset.rotation[0], degToRad(nextValue), singleSelectedAsset.rotation[2]],
-                    )
-                  }
-                />
-                <NumericTransformInput
-                  label="Rot Z (deg)"
-                  step="1"
-                  value={radToDeg(singleSelectedAsset.rotation[2])}
-                  onCommit={(nextValue) =>
-                    updateAssetTransform(
-                      singleSelectedAsset.id,
-                      singleSelectedAsset.position,
-                      [singleSelectedAsset.rotation[0], singleSelectedAsset.rotation[1], degToRad(nextValue)],
-                    )
-                  }
-                />
-              </div>
-              <h3>Groesse (anpassbar)</h3>
-              <div className="vector-grid">
-                <NumericTransformInput
-                  label="Breite (X)"
-                  value={singleSelectedAsset.dimensions[0]}
-                  onCommit={(nextValue) =>
-                    updateAssetDimensions(singleSelectedAsset.id, [
-                      nextValue,
-                      singleSelectedAsset.dimensions[1],
-                      singleSelectedAsset.dimensions[2],
-                    ])
-                  }
-                />
-                <NumericTransformInput
-                  label="Hoehe (Y)"
-                  value={singleSelectedAsset.dimensions[1]}
-                  onCommit={(nextValue) =>
-                    updateAssetDimensions(singleSelectedAsset.id, [
-                      singleSelectedAsset.dimensions[0],
-                      nextValue,
-                      singleSelectedAsset.dimensions[2],
-                    ])
-                  }
-                />
-                <NumericTransformInput
-                  label="Laenge (Z)"
-                  value={singleSelectedAsset.dimensions[2]}
-                  onCommit={(nextValue) =>
-                    updateAssetDimensions(singleSelectedAsset.id, [
-                      singleSelectedAsset.dimensions[0],
-                      singleSelectedAsset.dimensions[1],
-                      nextValue,
-                    ])
-                  }
-                />
-              </div>
-              <ColorInput
-                value={singleSelectedAsset.color}
-                onCommit={(nextColor) => updateAssetColor(singleSelectedAsset.id, nextColor)}
-              />
-              <h3>Asset-Infos</h3>
-              {Object.entries(singleSelectedAsset.metadata).map(([key, value]) => (
-                <label key={key} className="metadata-field">
-                  {key}
-                  <input
-                    value={value}
-                    onChange={(event) => updateSingleAssetMetadata(key, event.target.value)}
-                  />
-                </label>
-              ))}
-            </div>
-          ) : selectedAssets.length > 1 ? (
-            <div className="inspector-content">
-              <p className="selected-title">{selectedAssets.length} Assets ausgewaehlt</p>
-              <p className="panel-hint">
-                Mehrfachauswahl kann direkt ueber den Transform-Gizmo bewegt/gedreht werden.
-              </p>
-            </div>
-          ) : (
-            <div className="inspector-content">
-              <p className="panel-hint">
-                Klicke ein platziertes Asset an, um Informationen und Position zu bearbeiten.
-              </p>
+          {mode === 'edit' && (
+            <div className="status-bar">
+              <span>STRG/CMD: freie Platzierung und freies Bewegen/Rotieren</span>
+              <span>STRG/CMD + Z: Undo | Shift+Z/Y: Redo</span>
+              <span>STRG/CMD + C/V: Copy/Paste</span>
+              {saveFeedback && <span className="save-feedback">{saveFeedback}</span>}
             </div>
           )}
-        </aside>
+
+          {mode === 'view' && (
+            <div className="view-hint-bar">
+              <span>Praesentationsmodus: Klicke ein Asset fuer Details.</span>
+              {saveFeedback && <span className="save-feedback">{saveFeedback}</span>}
+            </div>
+          )}
+        </main>
+
+        {mode === 'edit' && (
+          <aside className="panel right">
+            <h2>Inspector</h2>
+            {singleSelected ? (
+              <div className="inspector-content">
+                <p className="selected-title">
+                  {singleSelected.metadata.name ?? singleSelected.type}
+                </p>
+                <p className="panel-hint">
+                  Form: {singleSelected.geometry.kind} | Kategorie: {singleSelected.category}
+                </p>
+                <p className="panel-hint">ID: {singleSelected.id.slice(0, 20)}...</p>
+
+                <h3>Position</h3>
+                <div className="vector-grid" key={`${singleSelected.id}-pos`}>
+                  <NumericInput
+                    label="X"
+                    value={singleSelected.position[0]}
+                    onCommit={(value) =>
+                      updateAsset(singleSelected.id, {
+                        position: [value, singleSelected.position[1], singleSelected.position[2]],
+                      })
+                    }
+                  />
+                  <NumericInput
+                    label="Y"
+                    value={singleSelected.position[1]}
+                    onCommit={(value) =>
+                      updateAsset(singleSelected.id, {
+                        position: [singleSelected.position[0], value, singleSelected.position[2]],
+                      })
+                    }
+                  />
+                  <NumericInput
+                    label="Z"
+                    value={singleSelected.position[2]}
+                    onCommit={(value) =>
+                      updateAsset(singleSelected.id, {
+                        position: [singleSelected.position[0], singleSelected.position[1], value],
+                      })
+                    }
+                  />
+                </div>
+
+                <h3>Rotation (Grad)</h3>
+                <div className="vector-grid" key={`${singleSelected.id}-rot`}>
+                  <NumericInput
+                    label="X"
+                    value={radToDeg(singleSelected.rotation[0])}
+                    onCommit={(value) =>
+                      updateAsset(singleSelected.id, {
+                        rotation: [
+                          degToRad(value),
+                          singleSelected.rotation[1],
+                          singleSelected.rotation[2],
+                        ],
+                      })
+                    }
+                  />
+                  <NumericInput
+                    label="Y"
+                    value={radToDeg(singleSelected.rotation[1])}
+                    onCommit={(value) =>
+                      updateAsset(singleSelected.id, {
+                        rotation: [
+                          singleSelected.rotation[0],
+                          degToRad(value),
+                          singleSelected.rotation[2],
+                        ],
+                      })
+                    }
+                  />
+                  <NumericInput
+                    label="Z"
+                    value={radToDeg(singleSelected.rotation[2])}
+                    onCommit={(value) =>
+                      updateAsset(singleSelected.id, {
+                        rotation: [
+                          singleSelected.rotation[0],
+                          singleSelected.rotation[1],
+                          degToRad(value),
+                        ],
+                      })
+                    }
+                  />
+                </div>
+
+                <h3>Skalierung</h3>
+                <div className="vector-grid" key={`${singleSelected.id}-scale`}>
+                  <NumericInput
+                    label="Breite (X)"
+                    value={singleSelected.scale[0]}
+                    onCommit={(value) =>
+                      updateAsset(singleSelected.id, {
+                        scale: [
+                          Math.max(value, 0.05),
+                          singleSelected.scale[1],
+                          singleSelected.scale[2],
+                        ],
+                      })
+                    }
+                  />
+                  <NumericInput
+                    label="Hoehe (Y)"
+                    value={singleSelected.scale[1]}
+                    onCommit={(value) =>
+                      updateAsset(singleSelected.id, {
+                        scale: [
+                          singleSelected.scale[0],
+                          Math.max(value, 0.05),
+                          singleSelected.scale[2],
+                        ],
+                      })
+                    }
+                  />
+                  <NumericInput
+                    label="Laenge (Z)"
+                    value={singleSelected.scale[2]}
+                    onCommit={(value) =>
+                      updateAsset(singleSelected.id, {
+                        scale: [
+                          singleSelected.scale[0],
+                          singleSelected.scale[1],
+                          Math.max(value, 0.05),
+                        ],
+                      })
+                    }
+                  />
+                </div>
+
+                <ColorInput
+                  value={singleSelected.color}
+                  onCommit={(nextColor) =>
+                    updateAsset(singleSelected.id, { color: sanitizeColor(nextColor) })
+                  }
+                />
+
+                <h3>Info</h3>
+                <label className="metadata-field">
+                  Name
+                  <input
+                    value={singleSelected.metadata.name ?? ''}
+                    onChange={(event) =>
+                      updateSingleMetadata('name', event.target.value, 'name')
+                    }
+                  />
+                </label>
+                <label className="metadata-field">
+                  Beschreibung
+                  <textarea
+                    rows={2}
+                    value={singleSelected.metadata.description ?? ''}
+                    onChange={(event) =>
+                      updateSingleMetadata('description', event.target.value, 'description')
+                    }
+                  />
+                </label>
+                <label className="metadata-field">
+                  Zonen-/Typ-Hinweis
+                  <input
+                    value={singleSelected.metadata.zoneType ?? ''}
+                    onChange={(event) =>
+                      updateSingleMetadata('zoneType', event.target.value, 'zoneType')
+                    }
+                  />
+                </label>
+
+                <h3>Custom Metadata</h3>
+                {Object.entries(singleSelected.metadata.customData ?? {}).map(([key, value]) => (
+                  <div key={key} className="custom-field-row">
+                    <label className="metadata-field">
+                      {key}
+                      <input
+                        value={value}
+                        onChange={(event) =>
+                          updateSingleMetadata(key, event.target.value, 'custom')
+                        }
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="subtle-delete"
+                      onClick={() => removeCustomMetadataKey(key)}
+                      aria-label={`${key} entfernen`}
+                    >
+                      -
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  className="add-field-button"
+                  onClick={addCustomMetadataField}
+                >
+                  + Feld hinzufuegen
+                </button>
+              </div>
+            ) : selectedAssets.length > 1 ? (
+              <div className="inspector-content">
+                <p className="selected-title">{selectedAssets.length} Assets ausgewaehlt</p>
+                <p className="panel-hint">
+                  Mehrfachauswahl kann direkt ueber den Transform-Gizmo bewegt, gedreht und
+                  skaliert werden.
+                </p>
+              </div>
+            ) : (
+              <div className="inspector-content">
+                <p className="panel-hint">
+                  Klicke ein platziertes Asset an, um Informationen und Position zu bearbeiten.
+                </p>
+              </div>
+            )}
+          </aside>
+        )}
       </div>
     </div>
   )
 }
+
+export { FALLBACK_ASSET_COLOR }
