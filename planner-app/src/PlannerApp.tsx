@@ -120,6 +120,25 @@ function readFileAsDataUrl(file: File) {
   })
 }
 
+const ALLOWED_MODEL_EXTENSIONS = ['glb', 'gltf', 'stl'] as const
+type AllowedModelExtension = (typeof ALLOWED_MODEL_EXTENSIONS)[number]
+const MAX_MODEL_SIZE_BYTES = 20 * 1024 * 1024
+
+function getExtension(filename: string): string {
+  const match = /\.([^./\\]+)$/.exec(filename)
+  return match ? match[1].toLowerCase() : ''
+}
+
+function isAllowedModelExtension(ext: string): ext is AllowedModelExtension {
+  return (ALLOWED_MODEL_EXTENSIONS as readonly string[]).includes(ext)
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
 function CameraController({
   preset,
   orbitRef,
@@ -759,18 +778,37 @@ export default function PlannerApp() {
   const onUploadAsset = useCallback(
     async (event: ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0]
-      if (!file) return
       try {
+        if (!file) return
+
+        const ext = getExtension(file.name)
+        if (!isAllowedModelExtension(ext)) {
+          flashFeedback(
+            `Format nicht unterstuetzt (${ext || 'unbekannt'}). Erlaubt: ${ALLOWED_MODEL_EXTENSIONS.join(', ')}`,
+          )
+          return
+        }
+        if (file.size > MAX_MODEL_SIZE_BYTES) {
+          flashFeedback(
+            `Datei zu gross (${formatBytes(file.size)}). Limit: ${formatBytes(MAX_MODEL_SIZE_BYTES)}`,
+          )
+          return
+        }
+
         const modelUrl = await readFileAsDataUrl(file)
         const label = file.name.replace(/\.[^/.]+$/, '') || 'Custom Asset'
-        const template = addCustomModelTemplate(label, modelUrl)
+        const template = addCustomModelTemplate(label, modelUrl, { modelFormat: ext })
         setSelectedTemplateType(template.type)
         changeTool('place')
+        flashFeedback(`${ext.toUpperCase()} importiert: ${label}`)
+      } catch (error) {
+        console.error('Upload failed', error)
+        flashFeedback('Upload fehlgeschlagen')
       } finally {
         event.target.value = ''
       }
     },
-    [addCustomModelTemplate, changeTool],
+    [addCustomModelTemplate, changeTool, flashFeedback],
   )
 
   // Keyboard shortcuts
@@ -1052,10 +1090,10 @@ export default function PlannerApp() {
           <h2>Asset-Bibliothek</h2>
           <p className="panel-hint">Kategorie waehlen und per Klick in der Szene platzieren.</p>
           <label className="upload-field">
-            Eigene Assets hochladen (GLB/GLTF)
+            Eigene Assets hochladen (GLB/GLTF/STL, max. 20 MB)
             <input
               type="file"
-              accept=".glb,.gltf,model/gltf-binary,model/gltf+json"
+              accept=".glb,.gltf,.stl,model/gltf-binary,model/gltf+json,model/stl"
               onChange={onUploadAsset}
             />
           </label>
@@ -1386,6 +1424,44 @@ export default function PlannerApp() {
                     }
                   />
                 </label>
+
+                {singleSelected.geometry.kind === 'custom' && (
+                  <>
+                    <h3>Modell-Optik</h3>
+                    <label className="checkbox-field">
+                      <input
+                        type="checkbox"
+                        checked={singleSelected.visual?.wireframe ?? false}
+                        onChange={(event) =>
+                          updateAsset(singleSelected.id, {
+                            visual: {
+                              ...(singleSelected.visual ?? {}),
+                              wireframe: event.target.checked,
+                            },
+                          })
+                        }
+                      />
+                      <span>Wireframe</span>
+                    </label>
+                    {singleSelected.geometry.params.modelFormat === 'stl' && (
+                      <label className="checkbox-field">
+                        <input
+                          type="checkbox"
+                          checked={singleSelected.visual?.flatShading ?? true}
+                          onChange={(event) =>
+                            updateAsset(singleSelected.id, {
+                              visual: {
+                                ...(singleSelected.visual ?? {}),
+                                flatShading: event.target.checked,
+                              },
+                            })
+                          }
+                        />
+                        <span>Flat Shading (CAD-Look)</span>
+                      </label>
+                    )}
+                  </>
+                )}
 
                 <h3>Custom Metadata</h3>
                 {Object.entries(singleSelected.metadata.customData ?? {}).map(([key, value]) => (
