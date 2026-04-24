@@ -252,6 +252,27 @@ button.danger {
   color: #a8bfd8;
 }
 
+.color-picker {
+  margin-top: 0.75rem;
+}
+
+.color-row {
+  margin-top: 0.45rem;
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.color-row input[type='color'] {
+  width: 48px;
+  height: 36px;
+  border-radius: 0.45rem;
+  border: 1px solid #2c4058;
+  background: #0f1b29;
+  padding: 0.15rem;
+}
+
 input {
   border: 1px solid #2c4058;
   border-radius: 0.45rem;

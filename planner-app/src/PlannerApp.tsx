@@ -32,12 +32,14 @@ import './App.css'
 type PlannerTool = 'select' | 'place'
 type CameraPreset = 'perspective' | 'top' | 'front' | 'side'
 type TransformMode = 'translate' | 'rotate'
+type AssetShape = 'box' | 'rhombus' | 'cylinder' | 'cone' | 'sphere' | 'hex'
 
 interface AssetDefinition {
   id: string
   label: string
   category: string
   size: Vector3Tuple
+  shape: AssetShape
   color: string
   metadataTemplate: Record<string, string>
   modelUrl?: string
@@ -48,6 +50,8 @@ interface PlacedAsset {
   definitionId: string
   position: Vector3Tuple
   rotation: Vector3Tuple
+  dimensions: Vector3Tuple
+  color: string
   metadata: Record<string, string>
 }
 
@@ -77,6 +81,11 @@ interface NumericTransformInputProps {
   onCommit: (value: number) => void
 }
 
+interface ColorInputProps {
+  value: string
+  onCommit: (value: string) => void
+}
+
 interface MultiTransformGizmoProps {
   selectedAssets: PlacedAsset[]
   mode: TransformMode
@@ -94,6 +103,8 @@ interface StoredLayoutPayload {
 const STORAGE_KEY = 'layout-planner-v2'
 const SNAP_UNIT = 1
 const MAX_HISTORY = 80
+const FALLBACK_ASSET_COLOR = '#8ca0b6'
+const FALLBACK_ASSET_DIMENSIONS: Vector3Tuple = [1, 1, 1]
 
 const DEFAULT_ASSET_DEFINITIONS: AssetDefinition[] = [
   {
@@ -101,6 +112,7 @@ const DEFAULT_ASSET_DEFINITIONS: AssetDefinition[] = [
     label: 'Montage-Linie',
     category: 'Produktion',
     size: [4, 1.4, 1.6],
+    shape: 'box',
     color: '#3d8bfd',
     metadataTemplate: {
       Bereich: 'FA1-Montage',
@@ -113,6 +125,7 @@ const DEFAULT_ASSET_DEFINITIONS: AssetDefinition[] = [
     label: 'Regalblock',
     category: 'Logistik',
     size: [1.8, 2.4, 0.8],
+    shape: 'box',
     color: '#2f9e44',
     metadataTemplate: {
       Bereich: 'Logistik',
@@ -125,6 +138,7 @@ const DEFAULT_ASSET_DEFINITIONS: AssetDefinition[] = [
     label: 'Arbeitsplatz',
     category: 'Produktion',
     size: [1.2, 1, 1.2],
+    shape: 'cylinder',
     color: '#f08c00',
     metadataTemplate: {
       Bereich: 'FA2-Montage',
@@ -137,6 +151,7 @@ const DEFAULT_ASSET_DEFINITIONS: AssetDefinition[] = [
     label: 'Buero',
     category: 'Verwaltung',
     size: [2.8, 2.1, 2],
+    shape: 'box',
     color: '#7048e8',
     metadataTemplate: {
       Bereich: 'Buero',
@@ -149,11 +164,51 @@ const DEFAULT_ASSET_DEFINITIONS: AssetDefinition[] = [
     label: 'Service/TPM',
     category: 'Support',
     size: [2.2, 1.6, 2.2],
+    shape: 'rhombus',
     color: '#e03131',
     metadataTemplate: {
       Bereich: 'TPM',
       Status: 'Aktiv',
       Letzte_Wartung: '2026-04-20',
+    },
+  },
+  {
+    id: 'cone-marker',
+    label: 'Kegel-Markierung',
+    category: 'Formen',
+    size: [1.4, 2, 1.4],
+    shape: 'cone',
+    color: '#ff6b6b',
+    metadataTemplate: {
+      Bereich: 'Formen',
+      Hinweis: 'Kegel',
+      Status: 'Neu',
+    },
+  },
+  {
+    id: 'sphere-buffer',
+    label: 'Kugel-Puffer',
+    category: 'Formen',
+    size: [1.8, 1.8, 1.8],
+    shape: 'sphere',
+    color: '#38d9a9',
+    metadataTemplate: {
+      Bereich: 'Formen',
+      Hinweis: 'Kugel',
+      Status: 'Neu',
+    },
+  },
+  {
+    id: 'hex-station',
+    label: 'Hex-Station',
+    category: 'Formen',
+    size: [2.2, 1.6, 2.2],
+    shape: 'hex',
+    color: '#74c0fc',
+    metadataTemplate: {
+      Bereich: 'Formen',
+      Hinweis: 'Hexagon',
+      Status: 'Neu',
     },
   },
 ]
@@ -180,6 +235,15 @@ const CAMERA_PRESETS: Record<CameraPreset, { position: Vector3Tuple; target: Vec
 const round2 = (value: number) => Number(value.toFixed(2))
 const isFiniteNumber = (value: number) => Number.isFinite(value)
 const formatNumber = (value: number) => String(round2(value))
+const radToDeg = (value: number) => round2((value * 180) / Math.PI)
+const degToRad = (value: number) => round2((value * Math.PI) / 180)
+
+function sanitizeColor(value: string) {
+  if (/^#[\da-fA-F]{6}$/.test(value)) {
+    return value
+  }
+  return FALLBACK_ASSET_COLOR
+}
 
 function newAssetId() {
   return `asset-${crypto.randomUUID()}`
@@ -194,6 +258,8 @@ function clonePlacedAsset(asset: PlacedAsset): PlacedAsset {
     ...asset,
     position: [...asset.position] as Vector3Tuple,
     rotation: [...asset.rotation] as Vector3Tuple,
+    dimensions: [...asset.dimensions] as Vector3Tuple,
+    color: asset.color,
     metadata: { ...asset.metadata },
   }
 }
@@ -206,6 +272,7 @@ function cloneDefinition(definition: AssetDefinition): AssetDefinition {
   return {
     ...definition,
     size: [...definition.size] as Vector3Tuple,
+    shape: definition.shape,
     metadataTemplate: { ...definition.metadataTemplate },
   }
 }
@@ -238,6 +305,17 @@ function parseFiniteInput(rawValue: string): number | null {
   return isFiniteNumber(parsedValue) ? parsedValue : null
 }
 
+function isAssetShape(value: unknown): value is AssetShape {
+  return (
+    value === 'box' ||
+    value === 'rhombus' ||
+    value === 'cylinder' ||
+    value === 'cone' ||
+    value === 'sphere' ||
+    value === 'hex'
+  )
+}
+
 function isEditableTarget(target: EventTarget | null) {
   if (!target || !(target instanceof HTMLElement)) {
     return false
@@ -256,6 +334,7 @@ function normalizeDefinition(input: unknown): AssetDefinition | null {
     typeof entry.label !== 'string' ||
     typeof entry.category !== 'string' ||
     !isVector3Tuple(entry.size) ||
+    !isAssetShape(entry.shape) ||
     typeof entry.color !== 'string' ||
     typeof entry.metadataTemplate !== 'object' ||
     entry.metadataTemplate === null
@@ -268,6 +347,7 @@ function normalizeDefinition(input: unknown): AssetDefinition | null {
     label: entry.label,
     category: entry.category,
     size: entry.size,
+    shape: entry.shape,
     color: entry.color,
     metadataTemplate: Object.fromEntries(
       Object.entries(entry.metadataTemplate).map(([key, value]) => [key, String(value)]),
@@ -300,6 +380,8 @@ function parseStoredAssets(raw: unknown) {
       definitionId: string
       position: Vector3Tuple
       rotation: Vector3Tuple
+      dimensions?: Vector3Tuple
+      color?: string
       metadata: Record<string, unknown>
     }
     safeAssets.push({
@@ -307,6 +389,13 @@ function parseStoredAssets(raw: unknown) {
       definitionId: casted.definitionId,
       position: casted.position,
       rotation: casted.rotation,
+      dimensions: isVector3Tuple(casted.dimensions)
+        ? casted.dimensions
+        : [...FALLBACK_ASSET_DIMENSIONS],
+      color:
+        typeof casted.color === 'string' && casted.color.trim().length > 0
+          ? casted.color
+          : FALLBACK_ASSET_COLOR,
       metadata: Object.fromEntries(
         Object.entries(casted.metadata).map(([key, value]) => [key, String(value)]),
       ),
@@ -337,9 +426,28 @@ function parseStoredLayout(rawLayout: string): StoredLayoutPayload | null {
       .map((entry) => normalizeDefinition(entry))
       .filter((definition): definition is AssetDefinition => definition !== null)
 
+    const resolvedDefinitions =
+      definitions.length > 0 ? definitions : cloneDefinitions(DEFAULT_ASSET_DEFINITIONS)
+    const definitionById = new Map(resolvedDefinitions.map((definition) => [definition.id, definition]))
+    const hydratedAssets = assets.map((asset) => {
+      const definition = definitionById.get(asset.definitionId)
+      return {
+        ...asset,
+        dimensions: (
+          isVector3Tuple(asset.dimensions)
+            ? asset.dimensions
+            : definition?.size ?? [...FALLBACK_ASSET_DIMENSIONS]
+        ) as Vector3Tuple,
+        color:
+          typeof asset.color === 'string' && asset.color.trim().length > 0
+            ? asset.color
+            : definition?.color ?? FALLBACK_ASSET_COLOR,
+      }
+    })
+
     return {
-      assets,
-      assetDefinitions: definitions.length > 0 ? definitions : cloneDefinitions(DEFAULT_ASSET_DEFINITIONS),
+      assets: hydratedAssets,
+      assetDefinitions: resolvedDefinitions,
     }
   } catch {
     return null
@@ -353,6 +461,8 @@ function createDemoLayout(): PlacedAsset[] {
       definitionId: 'assembly-line',
       position: [0, 0.7, 0],
       rotation: [0, 0, 0],
+      dimensions: [4, 1.4, 1.6],
+      color: '#3d8bfd',
       metadata: {
         Bereich: 'FA1-Montage',
         Kapazitaet: '60 Teile/h',
@@ -364,6 +474,8 @@ function createDemoLayout(): PlacedAsset[] {
       definitionId: 'assembly-line',
       position: [0, 0.7, 4],
       rotation: [0, 0, 0],
+      dimensions: [4, 1.4, 1.6],
+      color: '#3d8bfd',
       metadata: {
         Bereich: 'FA2-Montage',
         Kapazitaet: '55 Teile/h',
@@ -375,6 +487,8 @@ function createDemoLayout(): PlacedAsset[] {
       definitionId: 'shelf-block',
       position: [-6, 1.2, -6],
       rotation: [0, Math.PI / 4, 0],
+      dimensions: [1.8, 2.4, 0.8],
+      color: '#2f9e44',
       metadata: {
         Bereich: 'Logistik',
         Inhalt: 'Bauteile',
@@ -443,39 +557,101 @@ function UploadedAssetModel({ url, targetSize }: { url: string; targetSize: Vect
   return <primitive object={normalizedScene} />
 }
 
-function AssetVisual({ definition, isSelected }: { definition: AssetDefinition; isSelected: boolean }) {
-  if (definition.modelUrl) {
+function AssetPrimitive({
+  shape,
+  dimensions,
+  color,
+  isSelected,
+}: {
+  shape: AssetShape
+  dimensions: Vector3Tuple
+  color: string
+  isSelected: boolean
+}) {
+  const x = Math.max(dimensions[0], 0.05)
+  const y = Math.max(dimensions[1], 0.05)
+  const z = Math.max(dimensions[2], 0.05)
+
+  if (shape === 'rhombus') {
     return (
-      <group>
-        <Suspense
-          fallback={
-            <mesh castShadow receiveShadow>
-              <boxGeometry args={definition.size} />
-              <meshStandardMaterial
-                color={isSelected ? '#74c0fc' : definition.color}
-                roughness={0.55}
-                metalness={0.2}
-              />
-            </mesh>
-          }
-        >
-          <UploadedAssetModel url={definition.modelUrl} targetSize={definition.size} />
-        </Suspense>
-        {isSelected && (
-          <mesh>
-            <boxGeometry args={definition.size} />
-            <meshBasicMaterial color="#74c0fc" wireframe />
-          </mesh>
-        )}
-      </group>
+      <mesh castShadow receiveShadow rotation={[0, Math.PI / 4, 0]}>
+        <boxGeometry args={[x / Math.SQRT2, y, z / Math.SQRT2]} />
+        <meshStandardMaterial
+          color={isSelected ? '#74c0fc' : color}
+          roughness={0.55}
+          metalness={0.25}
+          emissive={isSelected ? '#0b7285' : '#000000'}
+          emissiveIntensity={isSelected ? 0.15 : 0}
+        />
+      </mesh>
+    )
+  }
+
+  if (shape === 'cylinder') {
+    return (
+      <mesh castShadow receiveShadow>
+        <cylinderGeometry args={[x / 2, z / 2, y, 24]} />
+        <meshStandardMaterial
+          color={isSelected ? '#74c0fc' : color}
+          roughness={0.55}
+          metalness={0.25}
+          emissive={isSelected ? '#0b7285' : '#000000'}
+          emissiveIntensity={isSelected ? 0.15 : 0}
+        />
+      </mesh>
+    )
+  }
+
+  if (shape === 'cone') {
+    return (
+      <mesh castShadow receiveShadow>
+        <coneGeometry args={[Math.max(x, z) / 2, y, 24]} />
+        <meshStandardMaterial
+          color={isSelected ? '#74c0fc' : color}
+          roughness={0.55}
+          metalness={0.25}
+          emissive={isSelected ? '#0b7285' : '#000000'}
+          emissiveIntensity={isSelected ? 0.15 : 0}
+        />
+      </mesh>
+    )
+  }
+
+  if (shape === 'sphere') {
+    return (
+      <mesh castShadow receiveShadow scale={[x, y, z]}>
+        <sphereGeometry args={[0.5, 24, 16]} />
+        <meshStandardMaterial
+          color={isSelected ? '#74c0fc' : color}
+          roughness={0.55}
+          metalness={0.25}
+          emissive={isSelected ? '#0b7285' : '#000000'}
+          emissiveIntensity={isSelected ? 0.15 : 0}
+        />
+      </mesh>
+    )
+  }
+
+  if (shape === 'hex') {
+    return (
+      <mesh castShadow receiveShadow>
+        <cylinderGeometry args={[x / 2, z / 2, y, 6]} />
+        <meshStandardMaterial
+          color={isSelected ? '#74c0fc' : color}
+          roughness={0.55}
+          metalness={0.25}
+          emissive={isSelected ? '#0b7285' : '#000000'}
+          emissiveIntensity={isSelected ? 0.15 : 0}
+        />
+      </mesh>
     )
   }
 
   return (
     <mesh castShadow receiveShadow>
-      <boxGeometry args={definition.size} />
+      <boxGeometry args={[x, y, z]} />
       <meshStandardMaterial
-        color={isSelected ? '#74c0fc' : definition.color}
+        color={isSelected ? '#74c0fc' : color}
         roughness={0.55}
         metalness={0.25}
         emissive={isSelected ? '#0b7285' : '#000000'}
@@ -483,6 +659,45 @@ function AssetVisual({ definition, isSelected }: { definition: AssetDefinition; 
       />
     </mesh>
   )
+}
+
+function AssetVisual({
+  definition,
+  dimensions,
+  color,
+  isSelected,
+}: {
+  definition: AssetDefinition
+  dimensions: Vector3Tuple
+  color: string
+  isSelected: boolean
+}) {
+  if (definition.modelUrl) {
+    return (
+      <group>
+        <Suspense
+          fallback={
+            <AssetPrimitive
+              shape={definition.shape}
+              dimensions={dimensions}
+              color={color}
+              isSelected={isSelected}
+            />
+          }
+        >
+          <UploadedAssetModel url={definition.modelUrl} targetSize={dimensions} />
+        </Suspense>
+        {isSelected && (
+          <mesh>
+            <boxGeometry args={dimensions} />
+            <meshBasicMaterial color="#74c0fc" wireframe />
+          </mesh>
+        )}
+      </group>
+    )
+  }
+
+  return <AssetPrimitive shape={definition.shape} dimensions={dimensions} color={color} isSelected={isSelected} />
 }
 
 function NumericTransformInput({ label, value, step = '0.1', onCommit }: NumericTransformInputProps) {
@@ -530,12 +745,65 @@ function NumericTransformInput({ label, value, step = '0.1', onCommit }: Numeric
   )
 }
 
+function ColorInput({ value, onCommit }: ColorInputProps) {
+  const [draft, setDraft] = useState(sanitizeColor(value))
+  const [isEditing, setIsEditing] = useState(false)
+
+  const commitDraft = useCallback(() => {
+    const normalized = sanitizeColor(draft)
+    onCommit(normalized)
+    setDraft(normalized)
+    setIsEditing(false)
+  }, [draft, onCommit])
+
+  return (
+    <label className="color-field">
+      Farbe
+      <div className="color-row">
+        <input
+          type="color"
+          value={sanitizeColor(isEditing ? draft : value)}
+          onChange={(event) => {
+            setDraft(event.target.value)
+            onCommit(sanitizeColor(event.target.value))
+          }}
+          aria-label="Asset-Farbe waehlen"
+        />
+        <input
+          type="text"
+          value={isEditing ? draft : sanitizeColor(value)}
+          onFocus={() => {
+            setDraft(sanitizeColor(value))
+            setIsEditing(true)
+          }}
+          onChange={(event) => setDraft(event.target.value)}
+          onBlur={commitDraft}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              commitDraft()
+            }
+            if (event.key === 'Escape') {
+              setDraft(sanitizeColor(value))
+              setIsEditing(false)
+            }
+          }}
+          placeholder="#RRGGBB"
+          aria-label="Hex-Farbwert"
+        />
+      </div>
+    </label>
+  )
+}
+
 function AssetMesh({
   asset,
   definition,
   isSelected,
+  isPlacementMode,
   useTransformGizmo,
   transformMode,
+  isAltPressed,
+  isCtrlPressed,
   orbitRef,
   onSelect,
   onTransformCommit,
@@ -584,16 +852,26 @@ function AssetMesh({
         rotation={asset.rotation}
         onClick={(event: ThreeEvent<MouseEvent>) => {
           event.stopPropagation()
+          if (isPlacementMode) {
+            return
+          }
           onSelect(asset.id, event.ctrlKey || event.metaKey)
         }}
       >
-        <AssetVisual definition={definition} isSelected={isSelected} />
+        <AssetVisual
+          definition={definition}
+          dimensions={asset.dimensions}
+          color={asset.color}
+          isSelected={isSelected}
+        />
       </group>
 
       {useTransformGizmo && (
         <TransformControls
           object={groupRef}
           mode={transformMode}
+          translationSnap={transformMode === 'translate' && !isAltPressed ? SNAP_UNIT : undefined}
+          rotationSnap={transformMode === 'rotate' && !isCtrlPressed ? Math.PI / 8 : undefined}
           onMouseDown={() => {
             isDraggingRef.current = true
             if (orbitRef.current) {
@@ -1018,6 +1296,8 @@ export default function PlannerApp() {
           definitionId: activeDefinition.id,
           position: resolvePlacementPosition(point, isAltPressed, activeDefinition.size[1]),
           rotation: [0, 0, 0],
+          dimensions: [...activeDefinition.size] as Vector3Tuple,
+          color: activeDefinition.color,
           metadata: {
             ...activeDefinition.metadataTemplate,
           },
@@ -1092,6 +1372,50 @@ export default function PlannerApp() {
     [applySceneChange, singleSelectedAsset],
   )
 
+  const updateAssetDimensions = useCallback(
+    (id: string, dimensions: Vector3Tuple) => {
+      if (!isVector3Tuple(dimensions)) {
+        return
+      }
+      const normalizedDimensions: Vector3Tuple = [
+        Math.max(round2(dimensions[0]), 0.05),
+        Math.max(round2(dimensions[1]), 0.05),
+        Math.max(round2(dimensions[2]), 0.05),
+      ]
+      const nextAssets = assetsRef.current.map((asset) =>
+        asset.id === id
+          ? {
+              ...asset,
+              dimensions: normalizedDimensions,
+              position: [
+                asset.position[0],
+                Math.max(asset.position[1], normalizedDimensions[1] / 2),
+                asset.position[2],
+              ] as Vector3Tuple,
+            }
+          : asset,
+      )
+      applySceneChange(nextAssets, selectedIdsRef.current, true)
+    },
+    [applySceneChange],
+  )
+
+  const updateAssetColor = useCallback(
+    (id: string, color: string) => {
+      const normalizedColor = sanitizeColor(color)
+      const nextAssets = assetsRef.current.map((asset) =>
+        asset.id === id
+          ? {
+              ...asset,
+              color: normalizedColor,
+            }
+          : asset,
+      )
+      applySceneChange(nextAssets, selectedIdsRef.current, true)
+    },
+    [applySceneChange],
+  )
+
   const saveLayout = useCallback(() => {
     const payload: StoredLayoutPayload = {
       assets,
@@ -1134,6 +1458,7 @@ export default function PlannerApp() {
         label,
         category: 'Eigene Assets',
         size: [2, 2, 2],
+        shape: 'box',
         color: '#a5b4c4',
         modelUrl,
         metadataTemplate: {
@@ -1251,7 +1576,9 @@ export default function PlannerApp() {
                   }}
                 >
                   <span>{definition.label}</span>
-                  <small>{definition.size.join(' x ')} m</small>
+                  <small>
+                    {definition.shape} | {definition.size.join(' x ')} m
+                  </small>
                 </button>
               ))}
             </div>
@@ -1337,12 +1664,17 @@ export default function PlannerApp() {
             {tool === 'place' && activeDefinition && previewPosition && (
               <group>
                 <group position={previewPosition}>
-                  <AssetVisual definition={activeDefinition} isSelected={false} />
+                  <AssetVisual
+                    definition={activeDefinition}
+                    dimensions={activeDefinition.size}
+                    color={activeDefinition.color}
+                    isSelected={false}
+                  />
                 </group>
                 <Html
                   position={[
                     previewPosition[0],
-                    previewPosition[1] + activeDefinition.size[1] / 2 + 0.75,
+                    previewPosition[1] + Math.max(activeDefinition.size[1], 0.05) / 2 + 0.75,
                     previewPosition[2],
                   ]}
                   center
@@ -1375,6 +1707,9 @@ export default function PlannerApp() {
           {singleSelectedAsset && singleSelectedDefinition ? (
             <div className="inspector-content">
               <p className="selected-title">{singleSelectedDefinition.label}</p>
+              <p className="panel-hint">
+                Form: {singleSelectedDefinition.shape} | Kategorie: {singleSelectedDefinition.category}
+              </p>
               <p className="panel-hint">ID: {singleSelectedAsset.id.slice(0, 16)}...</p>
               <div className="vector-grid" key={singleSelectedAsset.id}>
                 <NumericTransformInput
@@ -1411,18 +1746,82 @@ export default function PlannerApp() {
                   }
                 />
                 <NumericTransformInput
-                  label="Rot Y"
-                  step="0.05"
-                  value={singleSelectedAsset.rotation[1]}
+                  label="Rot X (deg)"
+                  step="1"
+                  value={radToDeg(singleSelectedAsset.rotation[0])}
                   onCommit={(nextValue) =>
                     updateAssetTransform(
                       singleSelectedAsset.id,
                       singleSelectedAsset.position,
-                      [singleSelectedAsset.rotation[0], nextValue, singleSelectedAsset.rotation[2]],
+                      [degToRad(nextValue), singleSelectedAsset.rotation[1], singleSelectedAsset.rotation[2]],
+                    )
+                  }
+                />
+                <NumericTransformInput
+                  label="Rot Y (deg)"
+                  step="0.05"
+                  value={radToDeg(singleSelectedAsset.rotation[1])}
+                  onCommit={(nextValue) =>
+                    updateAssetTransform(
+                      singleSelectedAsset.id,
+                      singleSelectedAsset.position,
+                      [singleSelectedAsset.rotation[0], degToRad(nextValue), singleSelectedAsset.rotation[2]],
+                    )
+                  }
+                />
+                <NumericTransformInput
+                  label="Rot Z (deg)"
+                  step="1"
+                  value={radToDeg(singleSelectedAsset.rotation[2])}
+                  onCommit={(nextValue) =>
+                    updateAssetTransform(
+                      singleSelectedAsset.id,
+                      singleSelectedAsset.position,
+                      [singleSelectedAsset.rotation[0], singleSelectedAsset.rotation[1], degToRad(nextValue)],
                     )
                   }
                 />
               </div>
+              <h3>Groesse (anpassbar)</h3>
+              <div className="vector-grid">
+                <NumericTransformInput
+                  label="Breite (X)"
+                  value={singleSelectedAsset.dimensions[0]}
+                  onCommit={(nextValue) =>
+                    updateAssetDimensions(singleSelectedAsset.id, [
+                      nextValue,
+                      singleSelectedAsset.dimensions[1],
+                      singleSelectedAsset.dimensions[2],
+                    ])
+                  }
+                />
+                <NumericTransformInput
+                  label="Hoehe (Y)"
+                  value={singleSelectedAsset.dimensions[1]}
+                  onCommit={(nextValue) =>
+                    updateAssetDimensions(singleSelectedAsset.id, [
+                      singleSelectedAsset.dimensions[0],
+                      nextValue,
+                      singleSelectedAsset.dimensions[2],
+                    ])
+                  }
+                />
+                <NumericTransformInput
+                  label="Laenge (Z)"
+                  value={singleSelectedAsset.dimensions[2]}
+                  onCommit={(nextValue) =>
+                    updateAssetDimensions(singleSelectedAsset.id, [
+                      singleSelectedAsset.dimensions[0],
+                      singleSelectedAsset.dimensions[1],
+                      nextValue,
+                    ])
+                  }
+                />
+              </div>
+              <ColorInput
+                value={singleSelectedAsset.color}
+                onCommit={(nextColor) => updateAssetColor(singleSelectedAsset.id, nextColor)}
+              />
               <h3>Asset-Infos</h3>
               {Object.entries(singleSelectedAsset.metadata).map(([key, value]) => (
                 <label key={key} className="metadata-field">
