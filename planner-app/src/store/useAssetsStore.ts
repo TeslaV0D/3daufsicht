@@ -9,6 +9,7 @@ import type { Asset, AssetTemplate } from '../types/asset'
 import { cloneAsset, cloneAssets, sanitizeAsset } from '../types/asset'
 
 export const STORAGE_KEY = 'factory-layout'
+export const STORAGE_SLOTS_KEY = 'factory-layout-slots'
 export const STORAGE_VERSION = 2
 const MAX_HISTORY = 80
 
@@ -16,6 +17,14 @@ interface StoredPayload {
   version: number
   assets: Asset[]
   customTemplates?: AssetTemplate[]
+}
+
+export interface LayoutSlot {
+  id: string
+  name: string
+  savedAt: number
+  assetCount: number
+  payload: StoredPayload
 }
 
 interface HistorySnapshot {
@@ -47,6 +56,14 @@ export interface AssetsStore {
   save: () => void
   load: () => boolean
   reset: () => void
+  slots: LayoutSlot[]
+  saveSlot: (name: string) => LayoutSlot
+  loadSlot: (id: string) => boolean
+  deleteSlot: (id: string) => void
+  renameSlot: (id: string, name: string) => void
+  exportLayout: (suggestedName?: string) => void
+  importLayoutFromFile: (file: File) => Promise<boolean>
+  importLayoutFromData: (data: unknown) => boolean
 }
 
 function parseStoredPayload(raw: string | null): StoredPayload | null {
@@ -87,6 +104,63 @@ function parseStoredPayload(raw: string | null): StoredPayload | null {
   }
 }
 
+function loadSlots(): LayoutSlot[] {
+  if (typeof localStorage === 'undefined') return []
+  try {
+    const raw = localStorage.getItem(STORAGE_SLOTS_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .map((entry): LayoutSlot | null => {
+        if (!entry || typeof entry !== 'object') return null
+        const e = entry as Record<string, unknown>
+        if (typeof e.id !== 'string' || typeof e.name !== 'string') return null
+        if (!e.payload || typeof e.payload !== 'object') return null
+        const payloadEntry = e.payload as Record<string, unknown>
+        const rawAssets = Array.isArray(payloadEntry.assets) ? payloadEntry.assets : []
+        const sanitizedAssets = rawAssets
+          .map((a) => sanitizeAsset(a))
+          .filter((a): a is Asset => a !== null)
+        const customTemplates = Array.isArray(payloadEntry.customTemplates)
+          ? (payloadEntry.customTemplates as AssetTemplate[])
+          : undefined
+        const payload: StoredPayload = {
+          version: typeof payloadEntry.version === 'number' ? payloadEntry.version : STORAGE_VERSION,
+          assets: sanitizedAssets,
+          customTemplates,
+        }
+        return {
+          id: e.id,
+          name: e.name,
+          savedAt: typeof e.savedAt === 'number' ? e.savedAt : Date.now(),
+          assetCount:
+            typeof e.assetCount === 'number' ? e.assetCount : sanitizedAssets.length,
+          payload,
+        }
+      })
+      .filter((s): s is LayoutSlot => s !== null)
+  } catch {
+    return []
+  }
+}
+
+function persistSlots(slots: LayoutSlot[]) {
+  if (typeof localStorage === 'undefined') return
+  try {
+    localStorage.setItem(STORAGE_SLOTS_KEY, JSON.stringify(slots))
+  } catch (error) {
+    console.error('Failed to persist slots', error)
+  }
+}
+
+function newSlotId() {
+  if (typeof globalThis.crypto?.randomUUID === 'function') {
+    return `slot-${globalThis.crypto.randomUUID()}`
+  }
+  return `slot-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+}
+
 export function loadInitialAssets(): { assets: Asset[]; customTemplates: AssetTemplate[] } {
   if (typeof localStorage === 'undefined') {
     return { assets: createDefaultDemoLayout(), customTemplates: [] }
@@ -111,6 +185,7 @@ export function useAssetsStore(): AssetsStore {
   const [historyPast, setHistoryPast] = useState<HistorySnapshot[]>([])
   const [historyFuture, setHistoryFuture] = useState<HistorySnapshot[]>([])
   const [clipboard, setClipboard] = useState<Asset[]>([])
+  const [slots, setSlots] = useState<LayoutSlot[]>(() => loadSlots())
 
   const assetsRef = useRef(assets)
   const selectedIdsRef = useRef(selectedIds)
@@ -334,6 +409,170 @@ export function useAssetsStore(): AssetsStore {
     applyChange(createDefaultDemoLayout(), [], true)
   }, [applyChange])
 
+  const buildPayload = useCallback((): StoredPayload => {
+    return {
+      version: STORAGE_VERSION,
+      assets: cloneAssets(assetsRef.current),
+      customTemplates: customTemplates.map((template) => ({
+        ...template,
+        scale: [...template.scale] as Vector3Tuple,
+        geometry: {
+          kind: template.geometry.kind,
+          params: { ...template.geometry.params },
+        },
+        metadata: template.metadata
+          ? {
+              ...template.metadata,
+              customData: { ...(template.metadata.customData ?? {}) },
+            }
+          : undefined,
+        visual: template.visual ? { ...template.visual } : undefined,
+      })),
+    }
+  }, [customTemplates])
+
+  const applyPayload = useCallback((payload: StoredPayload) => {
+    setAssetsState(payload.assets)
+    setSelectedIdsState([])
+    setHistoryPast([])
+    setHistoryFuture([])
+    if (payload.customTemplates && payload.customTemplates.length > 0) {
+      setCustomTemplates(payload.customTemplates)
+    }
+  }, [])
+
+  const saveSlot = useCallback(
+    (name: string): LayoutSlot => {
+      const trimmed = name.trim() || `Layout ${new Date().toLocaleString()}`
+      const payload = buildPayload()
+      const slot: LayoutSlot = {
+        id: newSlotId(),
+        name: trimmed,
+        savedAt: Date.now(),
+        assetCount: payload.assets.length,
+        payload,
+      }
+      setSlots((current) => {
+        const next = [slot, ...current].slice(0, 50)
+        persistSlots(next)
+        return next
+      })
+      return slot
+    },
+    [buildPayload],
+  )
+
+  const loadSlot = useCallback(
+    (id: string): boolean => {
+      const slot = slots.find((s) => s.id === id)
+      if (!slot) return false
+      applyPayload(slot.payload)
+      return true
+    },
+    [applyPayload, slots],
+  )
+
+  const deleteSlot = useCallback((id: string) => {
+    setSlots((current) => {
+      const next = current.filter((slot) => slot.id !== id)
+      persistSlots(next)
+      return next
+    })
+  }, [])
+
+  const renameSlot = useCallback((id: string, name: string) => {
+    const trimmed = name.trim()
+    if (!trimmed) return
+    setSlots((current) => {
+      const next = current.map((slot) =>
+        slot.id === id ? { ...slot, name: trimmed } : slot,
+      )
+      persistSlots(next)
+      return next
+    })
+  }, [])
+
+  const exportLayout = useCallback(
+    (suggestedName?: string) => {
+      try {
+        const payload = buildPayload()
+        const data = JSON.stringify(payload, null, 2)
+        const blob = new Blob([data], { type: 'application/json' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        const filename = `${(suggestedName ?? 'factory-layout').replace(
+          /[^a-z0-9_-]+/gi,
+          '-',
+        )}.json`
+        a.href = url
+        a.download = filename
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+      } catch (error) {
+        console.error('Failed to export layout', error)
+      }
+    },
+    [buildPayload],
+  )
+
+  const importLayoutFromData = useCallback(
+    (data: unknown): boolean => {
+      try {
+        let payload: StoredPayload | null = null
+        if (Array.isArray(data)) {
+          const assets = data
+            .map((a) => sanitizeAsset(a))
+            .filter((a): a is Asset => a !== null)
+          payload = { version: 1, assets }
+        } else if (data && typeof data === 'object') {
+          const entry = data as Record<string, unknown>
+          const rawAssets = Array.isArray(entry.assets) ? entry.assets : []
+          const assets = rawAssets
+            .map((a) => sanitizeAsset(a))
+            .filter((a): a is Asset => a !== null)
+          const customTemplates = Array.isArray(entry.customTemplates)
+            ? (entry.customTemplates as AssetTemplate[])
+            : undefined
+          payload = {
+            version: typeof entry.version === 'number' ? entry.version : STORAGE_VERSION,
+            assets,
+            customTemplates,
+          }
+        }
+        if (!payload || payload.assets.length === 0) return false
+        applyPayload(payload)
+        return true
+      } catch (error) {
+        console.error('Failed to import layout', error)
+        return false
+      }
+    },
+    [applyPayload],
+  )
+
+  const importLayoutFromFile = useCallback(
+    (file: File): Promise<boolean> => {
+      return new Promise((resolve) => {
+        const reader = new FileReader()
+        reader.onload = () => {
+          try {
+            const text = String(reader.result ?? '')
+            const data = JSON.parse(text) as unknown
+            resolve(importLayoutFromData(data))
+          } catch (error) {
+            console.error('Failed to parse imported layout', error)
+            resolve(false)
+          }
+        }
+        reader.onerror = () => resolve(false)
+        reader.readAsText(file)
+      })
+    },
+    [importLayoutFromData],
+  )
+
   return {
     assets,
     templates,
@@ -356,5 +595,13 @@ export function useAssetsStore(): AssetsStore {
     save,
     load,
     reset,
+    slots,
+    saveSlot,
+    loadSlot,
+    deleteSlot,
+    renameSlot,
+    exportLayout,
+    importLayoutFromFile,
+    importLayoutFromData,
   }
 }
