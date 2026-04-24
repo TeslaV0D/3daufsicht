@@ -102,7 +102,7 @@ npm run lint
 
 - Kategorien in der linken Asset-Bibliothek sind anklappbar (Chevron dreht sich, Hohe animiert).
 - Expandierter Zustand pro Kategorie wird in `localStorage` unter `factory-template-group-expanded` gespeichert.
-- Platzierte Assets erhalten optional `groupId` (entspricht der Template-Kategorie) fuer Zuordnung zur Bibliotheksgruppe.
+- Platzierte Assets erhalten optional `groupId` (Template-Kategorie) zur Zuordnung zur Bibliotheksgruppe; siehe `IMPLEMENTATION_PROGRESS.md` Abschnitt Stand 10.
 
 ### Hover-Feedback (Bugfix)
 
