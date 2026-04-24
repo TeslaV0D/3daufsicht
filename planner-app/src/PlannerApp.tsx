@@ -60,8 +60,11 @@ interface AssetMeshProps {
   asset: PlacedAsset
   definition: AssetDefinition
   isSelected: boolean
+  isPlacementMode: boolean
   useTransformGizmo: boolean
   transformMode: TransformMode
+  isAltPressed: boolean
+  isCtrlPressed: boolean
   orbitRef: RefObject<OrbitControlsImpl | null>
   onSelect: (id: string, addToSelection: boolean) => void
   onTransformCommit: (id: string, position: Vector3Tuple, rotation: Vector3Tuple) => void
@@ -77,6 +80,8 @@ interface NumericTransformInputProps {
 interface MultiTransformGizmoProps {
   selectedAssets: PlacedAsset[]
   mode: TransformMode
+  isAltPressed: boolean
+  isCtrlPressed: boolean
   orbitRef: RefObject<OrbitControlsImpl | null>
   onCommit: (updates: Array<{ id: string; position: Vector3Tuple; rotation: Vector3Tuple }>) => void
 }
@@ -1307,6 +1312,9 @@ export default function PlannerApp() {
                   definition={definition}
                   isSelected={selectedIds.includes(asset.id)}
                   useTransformGizmo={selectedIds.length === 1 && selectedIds.includes(asset.id)}
+                  isPlacementMode={tool === 'place'}
+                  isAltPressed={isAltPressed}
+                  isCtrlPressed={isCtrlPressed}
                   transformMode={transformMode}
                   orbitRef={orbitRef}
                   onSelect={onAssetClick}
@@ -1319,6 +1327,8 @@ export default function PlannerApp() {
               <MultiTransformGizmo
                 selectedAssets={selectedAssets}
                 mode={transformMode}
+                isAltPressed={isAltPressed}
+                isCtrlPressed={isCtrlPressed}
                 orbitRef={orbitRef}
                 onCommit={updateManyAssetTransforms}
               />
