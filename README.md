@@ -1,4 +1,4 @@
-# 3daufsicht
+# 3D Interior Editor
 
 Interaktive 3D-Planungsapplikation im Stil von City-Skylines/SIMS für Hallen- und Layoutplanung.
 
