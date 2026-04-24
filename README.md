@@ -52,7 +52,7 @@ npm run lint
   - **Zonen**: Produktion, Lager, Sicherheit (als Plane-Assets mit Opacity)
   - **Wege**: Gehweg, Fahrweg (als schmale Plane-Assets)
   - **Labels**: frei editierbare 3D-Texte
-  - **Eigene Assets**: GLB/GLTF-Upload
+  - **Eigene Assets**: GLB/GLTF/STL-Upload
 
 ### Edit-Features
 
@@ -69,6 +69,17 @@ npm run lint
 - Undo/Redo (`STRG/CMD + Z`, `STRG/CMD + Y`, `STRG/CMD + Shift + Z`).
 - Copy/Paste (`STRG/CMD + C`, `STRG/CMD + V`).
 - Loeschen per Button oder `Entf`/`Backspace`.
+
+### 3D-Modell-Upload
+
+- Formate: `.glb`, `.gltf`, **`.stl`** (max. 20 MB pro Datei).
+- STL-Import nutzt den three.js `STLLoader`:
+  - Geometrie wird zentriert (`computeBoundingBox` + `center`), normalisiert und auf den Boden gestellt.
+  - Standard-Material (grau) mit Farbe aus dem Asset, weil STL keine Materialien enthält.
+  - Vertex-Normals werden bei Bedarf berechnet.
+- Im Inspector stehen für Modelle folgende Optik-Toggles bereit:
+  - **Wireframe** (hilfreich für CAD-Modelle)
+  - **Flat Shading** (nur STL, CAD-Look mit erkennbaren Facetten)
 
 ### Persistenz
 

@@ -1,14 +1,16 @@
 import { Suspense, useMemo } from 'react'
 import { Text, useGLTF } from '@react-three/drei'
-import type { ThreeEvent } from '@react-three/fiber'
+import { useLoader, type ThreeEvent } from '@react-three/fiber'
 import {
   Box3,
+  BufferGeometry,
   DoubleSide,
   Group,
   Mesh,
   Vector3,
   type Object3D,
 } from 'three'
+import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
 import type { Asset, GeometryParams } from '../types/asset'
 
 export interface AssetRendererProps {
@@ -95,6 +97,60 @@ function UploadedModel({ url, targetScale }: { url: string; targetScale: [number
   }, [gltf.scene, targetScale])
 
   return <primitive object={normalized} />
+}
+
+function STLModel({
+  url,
+  targetScale,
+  material,
+  flatShading,
+}: {
+  url: string
+  targetScale: [number, number, number]
+  material: MaterialConfig
+  flatShading: boolean
+}) {
+  const rawGeometry = useLoader(STLLoader, url) as BufferGeometry
+
+  const geometry = useMemo(() => {
+    const cloned = rawGeometry.clone()
+    if (flatShading) {
+      cloned.computeVertexNormals()
+    } else {
+      if (!cloned.getAttribute('normal')) {
+        cloned.computeVertexNormals()
+      }
+    }
+    cloned.computeBoundingBox()
+    const size = new Vector3()
+    cloned.boundingBox?.getSize(size)
+    const maxDim = Math.max(size.x, size.y, size.z, 0.001)
+    const targetMax = Math.max(targetScale[0], targetScale[1], targetScale[2], 0.001)
+    const normalizedScale = targetMax / maxDim
+    cloned.center()
+    cloned.scale(normalizedScale, normalizedScale, normalizedScale)
+    cloned.computeBoundingBox()
+    const halfHeight = (cloned.boundingBox?.max.y ?? 0) - (cloned.boundingBox?.min.y ?? 0)
+    cloned.translate(0, (halfHeight / 2) - (cloned.boundingBox?.max.y ?? 0), 0)
+    return cloned
+  }, [rawGeometry, flatShading, targetScale])
+
+  return (
+    <mesh geometry={geometry} castShadow receiveShadow>
+      <meshStandardMaterial
+        color={material.color}
+        opacity={material.opacity}
+        transparent={material.transparent}
+        emissive={material.emissive}
+        emissiveIntensity={material.emissiveIntensity}
+        wireframe={material.wireframe}
+        roughness={material.roughness}
+        metalness={material.metalness}
+        flatShading={flatShading}
+        side={material.doubleSided ? DoubleSide : undefined}
+      />
+    </mesh>
+  )
 }
 
 function GeometryMesh({
@@ -216,6 +272,7 @@ function GeometryMesh({
     }
     case 'custom': {
       const modelUrl = params.modelUrl
+      const modelFormat = params.modelFormat ?? 'glb'
       if (!modelUrl) {
         return (
           <mesh castShadow receiveShadow>
@@ -224,15 +281,26 @@ function GeometryMesh({
           </mesh>
         )
       }
+      const fallback = (
+        <mesh castShadow receiveShadow>
+          <boxGeometry args={[1, 1, 1]} />
+          {stdMaterial}
+        </mesh>
+      )
+      if (modelFormat === 'stl') {
+        return (
+          <Suspense fallback={fallback}>
+            <STLModel
+              url={modelUrl}
+              targetScale={asset.scale}
+              material={material}
+              flatShading={asset.visual?.flatShading ?? true}
+            />
+          </Suspense>
+        )
+      }
       return (
-        <Suspense
-          fallback={
-            <mesh castShadow receiveShadow>
-              <boxGeometry args={[1, 1, 1]} />
-              {stdMaterial}
-            </mesh>
-          }
-        >
+        <Suspense fallback={fallback}>
           <UploadedModel url={modelUrl} targetScale={asset.scale} />
         </Suspense>
       )

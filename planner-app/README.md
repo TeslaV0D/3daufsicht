@@ -28,7 +28,7 @@ Interaktive 3D-Planungsapplikation im Stil von City-Skylines/SIMS fuer Hallen- u
   - **Zonen** (Plane-Assets mit Opacity): Produktion, Lager, Sicherheit
   - **Wege**: Gehweg, Fahrweg
   - **Labels**: editierbare 3D-Texte
-  - **Eigene Assets**: GLB/GLTF Upload
+  - **Eigene Assets**: GLB/GLTF/STL Upload
 
 ### Editieren
 
@@ -67,13 +67,15 @@ App oeffnen unter: `http://localhost:5173`
 
 ## Eigene Assets hochladen und benutzen
 
-1. In der linken Asset-Bibliothek auf **"Eigene Assets hochladen (GLB/GLTF)"** klicken.
-2. Datei vom Typ `.glb` oder `.gltf` auswaehlen.
+1. In der linken Asset-Bibliothek auf **"Eigene Assets hochladen (GLB/GLTF/STL)"** klicken.
+2. Datei vom Typ `.glb`, `.gltf` oder `.stl` auswaehlen (max. 20 MB).
 3. Das neue Asset-Template erscheint in der Kategorie **Eigene Assets** und ist direkt platzierbar.
 
-Hinweis:
+Hinweise:
 - Upload ist lokal im Browser (kein Server-Upload).
 - GLTF kann externe Dateien referenzieren; fuer den einfachsten Ablauf `.glb` nutzen.
+- STL-Dateien enthalten nur Geometrie — Material/Farbe werden ueber den Inspector gesteuert.
+- Im Inspector sind **Wireframe** und (nur STL) **Flat Shading** aktivierbar.
 
 ## Wichtige Shortcuts
 
