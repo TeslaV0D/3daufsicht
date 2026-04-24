@@ -29,7 +29,10 @@ export interface GeometryParams {
   text?: string
   fontSize?: number
   modelUrl?: string
+  modelFormat?: ModelFormat
 }
+
+export type ModelFormat = 'gltf' | 'glb' | 'stl'
 
 export interface AssetGeometry {
   kind: GeometryKind
@@ -55,6 +58,7 @@ export interface AssetVisual {
   doubleSided?: boolean
   wireframe?: boolean
   transparent?: boolean
+  flatShading?: boolean
 }
 
 export interface Asset {
@@ -190,6 +194,7 @@ export function sanitizeVisual(value: unknown): AssetVisual | undefined {
   if (typeof entry.doubleSided === 'boolean') visual.doubleSided = entry.doubleSided
   if (typeof entry.wireframe === 'boolean') visual.wireframe = entry.wireframe
   if (typeof entry.transparent === 'boolean') visual.transparent = entry.transparent
+  if (typeof entry.flatShading === 'boolean') visual.flatShading = entry.flatShading
   return visual
 }
 

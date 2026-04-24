@@ -1,4 +1,4 @@
-import type { Asset, AssetTemplate, GeometryKind } from './types/asset'
+import type { Asset, AssetTemplate, GeometryKind, ModelFormat } from './types/asset'
 import { cloneAsset, FALLBACK_COLOR } from './types/asset'
 
 export const CATEGORY_PRIMITIVE_3D = 'Primitive 3D'
@@ -359,8 +359,14 @@ export function createAssetFromTemplate(template: AssetTemplate, overrides?: Par
 export function createCustomModelTemplate(
   name: string,
   modelUrl: string,
-  scale: Asset['scale'] = [2, 2, 2],
+  options: { scale?: Asset['scale']; modelFormat?: ModelFormat } = {},
 ): AssetTemplate {
+  const modelFormat: ModelFormat = options.modelFormat ?? 'glb'
+  const scale = options.scale ?? [2, 2, 2]
+  const description =
+    modelFormat === 'stl'
+      ? 'Benutzerdefiniertes STL Modell (CAD/Mesh).'
+      : 'Benutzerdefiniertes GLB/GLTF Modell.'
   return {
     type: `custom-${generateId('model')}`,
     label: name,
@@ -369,13 +375,14 @@ export function createCustomModelTemplate(
     scale,
     geometry: {
       kind: 'custom',
-      params: { modelUrl },
+      params: { modelUrl, modelFormat },
     },
     metadata: {
       name,
-      description: 'Benutzerdefiniertes GLB/GLTF Modell.',
+      description,
       customData: {
         Typ: 'Custom Upload',
+        Format: modelFormat.toUpperCase(),
       },
     },
   }

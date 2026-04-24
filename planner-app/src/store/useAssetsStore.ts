@@ -5,7 +5,7 @@ import {
   createDefaultDemoLayout,
   createCustomModelTemplate,
 } from '../AssetFactory'
-import type { Asset, AssetTemplate } from '../types/asset'
+import type { Asset, AssetTemplate, ModelFormat } from '../types/asset'
 import { cloneAsset, cloneAssets, sanitizeAsset } from '../types/asset'
 
 export const STORAGE_KEY = 'factory-layout'
@@ -45,7 +45,11 @@ export interface AssetsStore {
     updates: Array<{ id: string; patch: Partial<Asset> }>,
   ) => void
   addTemplate: (template: AssetTemplate) => void
-  addCustomModelTemplate: (name: string, modelUrl: string) => AssetTemplate
+  addCustomModelTemplate: (
+    name: string,
+    modelUrl: string,
+    options?: { modelFormat?: ModelFormat },
+  ) => AssetTemplate
   undo: () => void
   redo: () => void
   canUndo: boolean
@@ -315,11 +319,14 @@ export function useAssetsStore(): AssetsStore {
     setCustomTemplates((current) => [...current, template])
   }, [])
 
-  const addCustomModelTemplate = useCallback((name: string, modelUrl: string) => {
-    const template = createCustomModelTemplate(name, modelUrl)
-    setCustomTemplates((current) => [...current, template])
-    return template
-  }, [])
+  const addCustomModelTemplate = useCallback(
+    (name: string, modelUrl: string, options?: { modelFormat?: ModelFormat }) => {
+      const template = createCustomModelTemplate(name, modelUrl, options)
+      setCustomTemplates((current) => [...current, template])
+      return template
+    },
+    [],
+  )
 
   const undo = useCallback(() => {
     const past = historyPastRef.current
