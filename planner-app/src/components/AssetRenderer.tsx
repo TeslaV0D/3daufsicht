@@ -1,23 +1,31 @@
-import { Suspense, useMemo } from 'react'
+import { Suspense, useLayoutEffect, useMemo } from 'react'
 import { Text, useGLTF } from '@react-three/drei'
 import { useLoader, type ThreeEvent } from '@react-three/fiber'
 import {
   Box3,
   BufferGeometry,
+  Color,
   DoubleSide,
   Group,
   Mesh,
   Vector3,
+  type Material,
   type Object3D,
 } from 'three'
+import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js'
+import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
+import { CATEGORY_ZONES } from '../AssetFactory'
 import type { Asset, GeometryParams } from '../types/asset'
+import { resolveAssetOpacity } from '../types/asset'
 
 export interface AssetRendererProps {
   asset: Asset
   isSelected: boolean
   isHovered: boolean
   isEditMode: boolean
+  /** Kategorie-Akzent bei Auswahl (Outline/Emissive) */
+  selectionAccent?: string
   onPointerDown?: (event: ThreeEvent<PointerEvent>, asset: Asset) => void
   onClick?: (event: ThreeEvent<MouseEvent>, asset: Asset) => void
   onPointerOver?: (event: ThreeEvent<PointerEvent>, asset: Asset) => void
@@ -27,6 +35,124 @@ export interface AssetRendererProps {
 const HOVER_SCALE = 1.02
 const SELECT_EMISSIVE = '#74c0fc'
 const HOVER_EMISSIVE = '#ffd43b'
+const EMISSIVE_IDLE_OVERRIDE = new Color(0, 0, 0)
+
+interface GltfMaterialSnapshot {
+  baseColor: Color
+  baseOpacity: number
+  baseTransparent: boolean
+  baseEmissive: Color
+  baseEmissiveIntensity: number
+}
+
+const gltfMaterialSnapshots = new WeakMap<Material, GltfMaterialSnapshot>()
+
+function snapshotGltfMaterial(material: Material): GltfMaterialSnapshot | null {
+  if (!('color' in material)) return null
+  const m = material as Material & {
+    color: Color
+    opacity: number
+    transparent: boolean
+    emissive: Color
+    emissiveIntensity: number
+  }
+  if (!m.color) return null
+  return {
+    baseColor: m.color.clone(),
+    baseOpacity: 'opacity' in m && typeof m.opacity === 'number' ? m.opacity : 1,
+    baseTransparent: 'transparent' in m && typeof m.transparent === 'boolean' ? m.transparent : false,
+    baseEmissive: 'emissive' in m && m.emissive ? m.emissive.clone() : new Color(0, 0, 0),
+    baseEmissiveIntensity:
+      'emissiveIntensity' in m && typeof m.emissiveIntensity === 'number' ? m.emissiveIntensity : 0,
+  }
+}
+
+function cloneMaterialsDeep(root: Object3D) {
+  root.traverse((child) => {
+    const mesh = child as Mesh
+    if (!mesh.isMesh || !mesh.material) return
+    const cloneOne = (mat: Material) => {
+      const c = mat.clone()
+      const snap = snapshotGltfMaterial(c)
+      if (snap) gltfMaterialSnapshots.set(c, snap)
+      return c
+    }
+    if (Array.isArray(mesh.material)) {
+      mesh.material = mesh.material.map(cloneOne)
+    } else {
+      mesh.material = cloneOne(mesh.material)
+    }
+  })
+}
+
+function applyGltfMaterialState(
+  root: Object3D,
+  asset: Asset,
+  isSelected: boolean,
+  isHovered: boolean,
+) {
+  const mode = asset.materialMode ?? 'original'
+  const overrideColor = asset.color
+  const opacity = resolveAssetOpacity(asset)
+  const transparentExtra = asset.visual?.transparent ?? false
+  const locked = asset.isLocked === true
+
+  root.traverse((child) => {
+    const mesh = child as Mesh
+    if (!mesh.isMesh || !mesh.material) return
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+    for (const mat of mats) {
+      const snap = gltfMaterialSnapshots.get(mat)
+      if (!snap || !('color' in mat)) continue
+      const m = mat as Material & {
+        color: Color
+        opacity: number
+        transparent: boolean
+        emissive: Color
+        emissiveIntensity: number
+        needsUpdate: boolean
+      }
+
+      let nextOpacity: number
+      if (mode === 'override') {
+        m.color.set(overrideColor)
+        nextOpacity = opacity
+        m.transparent = nextOpacity < 1 || transparentExtra
+      } else {
+        m.color.copy(snap.baseColor)
+        nextOpacity = snap.baseOpacity * opacity
+        m.transparent = nextOpacity < 1 || snap.baseTransparent || transparentExtra
+      }
+      m.opacity = nextOpacity
+
+      if (locked) {
+        m.color.multiplyScalar(1.18)
+        m.opacity *= 0.97
+      }
+
+      const idleEmissive = mode === 'override' ? EMISSIVE_IDLE_OVERRIDE : snap.baseEmissive
+      const idleIntensity = mode === 'override' ? 0 : snap.baseEmissiveIntensity
+
+      if ('emissive' in m && m.emissive) {
+        if (isSelected) {
+          m.emissive.set(SELECT_EMISSIVE)
+          m.emissiveIntensity = locked ? 0.2 : 0.32
+        } else if (isHovered) {
+          m.emissive.set(HOVER_EMISSIVE)
+          m.emissiveIntensity = locked ? 0.12 : 0.18
+        } else if (locked) {
+          m.emissive.copy(m.color).multiplyScalar(0.4)
+          m.emissiveIntensity = 0.26
+        } else {
+          m.emissive.copy(idleEmissive)
+          m.emissiveIntensity = idleIntensity
+        }
+      }
+
+      m.needsUpdate = true
+    }
+  })
+}
 
 interface MaterialConfig {
   color: string
@@ -45,32 +171,73 @@ function buildMaterialConfig(
   isSelected: boolean,
   isHovered: boolean,
   ghost: boolean,
+  selectionAccent?: string,
 ): MaterialConfig {
-  const baseOpacity = asset.visual?.opacity ?? 1
+  const baseOpacity = resolveAssetOpacity(asset)
   const explicitTransparent = asset.visual?.transparent ?? baseOpacity < 1
-  const emissive = isSelected
-    ? SELECT_EMISSIVE
-    : isHovered
-      ? HOVER_EMISSIVE
-      : asset.visual?.emissive ?? '#000000'
-  const emissiveIntensity = ghost ? 0.22 : isSelected ? 0.3 : isHovered ? 0.18 : 0
+  const locked = asset.isLocked === true && !ghost
+  let surfaceColor = asset.color
+  if (ghost) {
+    const c = new Color(asset.color)
+    c.multiplyScalar(0.88)
+    surfaceColor = `#${c.getHexString()}`
+  } else if (locked && !isSelected && !isHovered) {
+    const c = new Color(surfaceColor)
+    c.multiplyScalar(1.22)
+    surfaceColor = `#${c.getHexString()}`
+  }
+  const emissive = ghost
+    ? asset.color
+    : isSelected
+      ? selectionAccent ?? SELECT_EMISSIVE
+      : isHovered
+        ? HOVER_EMISSIVE
+        : locked
+          ? asset.color
+          : (asset.visual?.emissive ?? '#000000')
+  const emissiveIntensity = ghost
+    ? 0.42
+    : isSelected
+      ? locked
+        ? 0.2
+        : 0.3
+      : isHovered
+        ? locked
+          ? 0.12
+          : 0.18
+        : locked
+          ? 0.22
+          : 0
   return {
-    color: ghost ? '#7ce9a4' : asset.color,
-    opacity: ghost ? 0.45 : baseOpacity,
+    color: surfaceColor,
+    opacity: ghost ? 0.74 : baseOpacity,
     transparent: ghost ? true : explicitTransparent,
     emissive,
     emissiveIntensity,
     doubleSided: asset.visual?.doubleSided ?? false,
     wireframe: asset.visual?.wireframe ?? false,
-    roughness: ghost ? 0.35 : 0.62,
-    metalness: ghost ? 0.06 : 0.18,
+    roughness: ghost ? 0.42 : 0.62,
+    metalness: ghost ? 0.12 : 0.18,
   }
 }
 
-function UploadedModel({ url, targetScale }: { url: string; targetScale: [number, number, number] }) {
+function UploadedModel({
+  url,
+  targetScale,
+  asset,
+  isSelected,
+  isHovered,
+}: {
+  url: string
+  targetScale: [number, number, number]
+  asset: Asset
+  isSelected: boolean
+  isHovered: boolean
+}) {
   const gltf = useGLTF(url) as { scene: Group }
   const normalized = useMemo(() => {
     const cloned = gltf.scene.clone(true)
+    cloneMaterialsDeep(cloned)
     const box = new Box3().setFromObject(cloned)
     const size = new Vector3()
     box.getSize(size)
@@ -95,6 +262,21 @@ function UploadedModel({ url, targetScale }: { url: string; targetScale: [number
     })
     return cloned
   }, [gltf.scene, targetScale])
+
+  useLayoutEffect(() => {
+    applyGltfMaterialState(normalized, asset, isSelected, isHovered)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- volles `asset` würde bei jedem Transform traversieren
+  }, [
+    normalized,
+    asset.materialMode,
+    asset.color,
+    asset.opacity,
+    asset.visual?.opacity,
+    asset.visual?.transparent,
+    asset.isLocked,
+    isSelected,
+    isHovered,
+  ])
 
   return <primitive object={normalized} />
 }
@@ -153,12 +335,75 @@ function STLModel({
   )
 }
 
+function NormalizedObjectRoot({
+  root,
+  targetScale,
+}: {
+  root: Object3D
+  targetScale: [number, number, number]
+}) {
+  const normalized = useMemo(() => {
+    const obj = root.clone(true)
+    obj.traverse((child) => {
+      const m = child as Mesh
+      if (m.isMesh) {
+        m.castShadow = true
+        m.receiveShadow = true
+      }
+    })
+    obj.updateMatrixWorld(true)
+    const box = new Box3().setFromObject(obj)
+    const size = new Vector3()
+    box.getSize(size)
+    const maxDim = Math.max(size.x, size.y, size.z, 0.001)
+    const targetMax = Math.max(targetScale[0], targetScale[1], targetScale[2], 0.001)
+    const s = targetMax / maxDim
+    obj.scale.setScalar(s)
+    obj.updateMatrixWorld(true)
+    const box2 = new Box3().setFromObject(obj)
+    const center = new Vector3()
+    box2.getCenter(center)
+    obj.position.sub(center)
+    obj.updateMatrixWorld(true)
+    const box3 = new Box3().setFromObject(obj)
+    obj.position.y -= box3.min.y
+    return obj
+  }, [root, targetScale])
+  return <primitive object={normalized} />
+}
+
+function ObjSceneModel({
+  url,
+  targetScale,
+}: {
+  url: string
+  targetScale: [number, number, number]
+}) {
+  const root = useLoader(OBJLoader, url) as Group
+  return <NormalizedObjectRoot root={root} targetScale={targetScale} />
+}
+
+function FbxSceneModel({
+  url,
+  targetScale,
+}: {
+  url: string
+  targetScale: [number, number, number]
+}) {
+  const root = useLoader(FBXLoader, url) as Group
+  return <NormalizedObjectRoot root={root} targetScale={targetScale} />
+}
+
 function GeometryMesh({
   asset,
   material,
+  isSelected,
+  isHovered,
 }: {
   asset: Asset
   material: MaterialConfig
+  isSelected: boolean
+  isHovered: boolean
 }) {
   const params: GeometryParams = asset.geometry.params ?? {}
   const side = material.doubleSided ? DoubleSide : undefined
@@ -299,9 +544,29 @@ function GeometryMesh({
           </Suspense>
         )
       }
+      if (modelFormat === 'obj') {
+        return (
+          <Suspense fallback={fallback}>
+            <ObjSceneModel url={modelUrl} targetScale={asset.scale} />
+          </Suspense>
+        )
+      }
+      if (modelFormat === 'fbx') {
+        return (
+          <Suspense fallback={fallback}>
+            <FbxSceneModel url={modelUrl} targetScale={asset.scale} />
+          </Suspense>
+        )
+      }
       return (
         <Suspense fallback={fallback}>
-          <UploadedModel url={modelUrl} targetScale={asset.scale} />
+          <UploadedModel
+            url={modelUrl}
+            targetScale={asset.scale}
+            asset={asset}
+            isSelected={isSelected}
+            isHovered={isHovered}
+          />
         </Suspense>
       )
     }
@@ -323,25 +588,38 @@ export interface AssetBodyProps {
   isSelected: boolean
   isHovered: boolean
   isEditMode: boolean
+  selectionAccent?: string
 }
 
-export function AssetBody({ asset, isSelected, isHovered, isEditMode }: AssetBodyProps) {
-  const material = buildMaterialConfig(asset, isSelected, isHovered, false)
+export function AssetBody({
+  asset,
+  isSelected,
+  isHovered,
+  isEditMode,
+  selectionAccent,
+}: AssetBodyProps) {
+  const accent = selectionAccent ?? SELECT_EMISSIVE
+  const material = buildMaterialConfig(asset, isSelected, isHovered, false, selectionAccent)
   const showWireOutline =
     isSelected && asset.geometry.kind === 'custom' && asset.geometry.params.modelUrl
 
   return (
     <group>
-      <GeometryMesh asset={asset} material={material} />
+      <GeometryMesh
+        asset={asset}
+        material={material}
+        isSelected={isSelected}
+        isHovered={isHovered}
+      />
       {showWireOutline && (
         <mesh>
           <boxGeometry args={[1.02, 1.02, 1.02]} />
           <meshStandardMaterial
-            color={SELECT_EMISSIVE}
+            color={accent}
             wireframe
             transparent
             opacity={0.6}
-            emissive={SELECT_EMISSIVE}
+            emissive={accent}
             emissiveIntensity={0.35}
           />
         </mesh>
@@ -358,6 +636,7 @@ export default function AssetRenderer({
   isSelected,
   isHovered,
   isEditMode,
+  selectionAccent,
   onPointerDown,
   onClick,
   onPointerOver,
@@ -370,6 +649,11 @@ export default function AssetRenderer({
     asset.scale[1] * hoverScale,
     asset.scale[2] * hoverScale,
   ]
+
+  const zoneUserData = useMemo(
+    () => ({ isZone: asset.category === CATEGORY_ZONES }),
+    [asset.category],
+  )
 
   const eventProps = {
     onClick: (event: ThreeEvent<MouseEvent>) => onClick?.(event, asset),
@@ -386,12 +670,13 @@ export default function AssetRenderer({
 
   if (skipTransform) {
     return (
-      <group {...eventProps}>
+      <group userData={zoneUserData} {...eventProps}>
         <AssetBody
           asset={asset}
           isSelected={isSelected}
           isHovered={isHovered}
           isEditMode={isEditMode}
+          selectionAccent={selectionAccent}
         />
       </group>
     )
@@ -399,6 +684,7 @@ export default function AssetRenderer({
 
   return (
     <group
+      userData={zoneUserData}
       position={asset.position}
       rotation={asset.rotation}
       scale={finalScale}
@@ -409,6 +695,7 @@ export default function AssetRenderer({
         isSelected={isSelected}
         isHovered={isHovered}
         isEditMode={isEditMode}
+        selectionAccent={selectionAccent}
       />
     </group>
   )
@@ -459,10 +746,15 @@ function HoverOutline({ asset }: { asset: Asset }) {
 }
 
 export function GhostAssetRenderer({ asset }: { asset: Asset }) {
-  const material = buildMaterialConfig(asset, false, false, true)
+  const material = buildMaterialConfig(asset, false, false, true, undefined)
   return (
     <group position={asset.position} rotation={asset.rotation} scale={asset.scale}>
-      <GeometryMesh asset={asset} material={material} />
+      <GeometryMesh
+        asset={asset}
+        material={material}
+        isSelected={false}
+        isHovered={false}
+      />
     </group>
   )
 }

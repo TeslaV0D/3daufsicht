@@ -32,7 +32,7 @@ export interface GeometryParams {
   modelFormat?: ModelFormat
 }
 
-export type ModelFormat = 'gltf' | 'glb' | 'stl'
+export type ModelFormat = 'gltf' | 'glb' | 'stl' | 'obj' | 'fbx'
 
 export type MaterialMode = 'original' | 'override'
 
@@ -94,6 +94,10 @@ export interface AssetTemplate {
   geometry: AssetGeometry
   metadata?: AssetMetadata
   visual?: AssetVisual
+  /** True for assets created via Bibliotheks-Import (Batch). */
+  isUserAsset?: boolean
+  /** Unix ms when the template was created (Import). */
+  createdAt?: number
 }
 
 export const FALLBACK_COLOR = '#8ca0b6'

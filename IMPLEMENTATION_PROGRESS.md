@@ -193,6 +193,83 @@ Ergebnis: beide Checks erfolgreich.
 - Gruppen expandierbar/kollabierbar; nur expanded zeigen die Template-Buttons.
 - Shortcuts ausschliesslich im Modal (bestehende `ShortcutsModal`-Daten, keine Duplikation der Listen-Logik).
 
+## Stand 11: Bibliothek-Defaults, Custom-Delete, Ghost, Umlaute, Lock-Glow, Lighting-Panel
+
+### Abgeschlossen
+
+- **Gruppen standardmäßig aufgeklappt**: `localStorage` unter `factory-template-group-expanded` speichert nur noch **eingeklappte** Kategorien (`true`); fehlender Key = aufgeklappt. Migration: alte Einträge mit Wert `false` (eingeklappt) werden übernommen.
+- **Eigene Vorlagen löschen**: Pro Eintrag in „Eigene Assets“ (und andere Custom-Templates) ein **×**-Button; Bestätigungsdialog; `removeCustomTemplate` entfernt Vorlage und **alle** Szene-Instanzen dieses `type`; persistiert über Save/Export wie bisher.
+- **Placement-Ghost**: höhere Opazität, Asset-Farbe leicht abgedunkelt, **Emissive** aus Template-Farbe (sichtbarer „Glow“).
+- **Umlaute**: UI-Strings und `lang="de"` in `index.html`; Kategorie „Wände“ und Beschreibungstexte mit **ä/ö/ü/ß** wo sinnvoll.
+- **Gesperrte Assets heller**: Primitive + GLTF: Aufhellung statt Abdunklung; dezentes Dauer-Emissive im Idle-Zustand.
+- **Beleuchtung**: `LightingSettings` im Store, **STORAGE_VERSION 5**, Save/Load/Slots/Export; Toolbar **„Beleuchtung“** mit Popover (Typ Directional/Point/Spot, Intensitäten, Farben, Position, Schatten, HDRI-Stärke, Presets). `Lighting.tsx` steuert Edit- und Präsentationsmodus (letzterer behält Zusatz-Fill-Lights).
+
+## Stand 12: Bibliothek-Organisation (User-Gruppen, Favoriten, DnD) + Lighting-Z-Index
+
+### Abgeschlossen
+
+- **Beleuchtungs-Popover**: `.top-bar` und `.toolbar-popover.lighting-popover` mit höherem `z-index` über der Workspace-/Canvas-Ebene; Modals (`layout-modal`, Shortcuts, „Neue Gruppe“-Dialog) mit noch höherem `z-index`, damit sie sichtbar bleiben.
+- **`libraryOrganization`**: User-definierte Gruppen (`userGroups`), Zuordnung `templateTypeToUserGroup`, Favoriten-Liste `favoriteTemplateTypes`; **STORAGE_VERSION 6** inkl. Save/Load/Slots/Import/Export/Reset.
+- **`buildLibrarySections`** (`src/types/libraryOrganization.ts`): Reihenfolge **Favoriten** → User-Gruppen → eingebaute Kategorien (ohne an User-Gruppen vergebene Types).
+- **UI** (`PlannerApp.tsx`): „+ Neue Gruppe“, Modal, Stern-Toggle, Gruppen-Dropdown, Drag & Drop auf Gruppen (Favoriten ohne Drop-Zuweisung), Löschen von User-Gruppen mit Bestätigung bei zugeordneten Vorlagen.
+- **Styles**: Bibliothek-Toolbar, Favoriten-Button, Gruppen-Select, Drop-Highlight, Gruppen-Dialog in `App.css`.
+
+## Stand 13: Präsentations-Toolbar, Bibliotheks-Kontextmenü, kompakte Liste
+
+### Abgeschlossen
+
+- **Präsentation**: Top-Bar zeigt nur `VIEW MODE`, **Präsentation beenden (ESC)** und die vier Ansichten (ohne Cabinet); Speichern/Laden/Export/Beleuchtung/Edit-Aktionen ausgeblendet; Shortcuts-FAB nur im Edit-Modus. Bei Wechsel in die Präsentation wird eine aktive **Cabinet**-Ansicht auf **Perspektive** gesetzt.
+- **ESC in View**: schließt zuerst das Asset-Info-Popup, sonst Rückkehr in den Bearbeiten-Modus.
+- **Bibliothek**: Stern-Icon entfernt; **⋮**-Menü (fixed, z-index 2400) mit Favorit, Meta-Bearbeitung, Gruppen-Dialog, 3D-Vorschau (`TemplatePreviewDialog`), Duplikat in die Szene, Details-Dialog, Löschen nur für eigene Uploads.
+- **`templateDisplayOverrides`** in `libraryOrganization` für Anzeige/Meta eingebauter Vorlagen; eigene Vorlagen werden direkt in `customTemplates` geändert (`updateTemplateLibraryMeta` im Store).
+- **Liste**: keine Maßangaben mehr in der Zeile; Styles für Kontextmenü, Meta-/Gruppen-/Details-Dialoge, Vorschau in `App.css`.
+
+## Stand 14: Kontextmenü-Layout, Batch-Import, OBJ/FBX, Gruppe „Eigene Assets“
+
+### Abgeschlossen
+
+- **Kontextmenü**: Icon-Spalte 24px, 12px Abstand zum Label, Padding 10×12px, Hover-Zeile `#2a2a2a`, Danger-Hover dunkelrot; Gruppierungs-Divider zwischen Favorit / Organisation / Aktionen / Löschen.
+- **„+ Importieren“**: Mehrfach-Dateiauswahl; `importCustomModelTemplatesBatch` im Store; Loading-State; Toasts bei Erfolg/Fehler; Formate **OBJ** und **FBX** zusätzlich (Renderer: `OBJLoader` / `FBXLoader`, Normierung wie STL).
+- **Bibliotheks-Gruppe**: feste ID `ug-eigene-assets-import`, `isSpecial`, nicht löschbar; Reservierung des Namens für „Neue Gruppe“; `mergeLibraryOrgWithUserTemplates` / Migration für `isUserAsset`-Vorlagen ohne Zuordnung.
+- **`AssetTemplate`**: optionale Felder `isUserAsset`, `createdAt`; Gruppen-Dialog listet „Eigene Assets“ explizit; Details-Dialog zeigt Import-Datum.
+
+## Stand 15: Import neben „Eigene Assets“, Start-Zustand Bibliothek, Export-Modi
+
+### Abgeschlossen
+
+- **Import-Button**: `+` nur bei der Gruppe **Eigene Assets** (Tooltip „Asset importieren“), Dateiauswahl GLTF/GLB/OBJ/FBX/STL; Mehrfach-Import; kein separater Import in der Toolbar.
+- **Gruppe „Eigene Assets“**: feste Position **unten**; `ensureEigeneAssetsUserGroup` / Sortierung in `buildLibrarySections` angepasst; eingebaute Kategorien in fester Reihenfolge (`BUILTIN_LIBRARY_SECTION_ORDER`).
+- **Startup**: alle Bibliotheks-Sektionen **zu**; Persistenz `factory-library-section-expanded-v2` (nur `true` = ausgeklappt); Favoriten oeffnen sich nicht automatisch beim Hinzufuegen.
+- **Entfernt**: Checkbox „Import unter Wände kategorisieren“.
+- **Export** (`ExportLayoutModal` + Store): **Nur Workspace** vs. **Komplette Konfiguration** (`exportKind`, Timestamp-Dateinamen); Complete inkl. `shellMode`, `librarySectionExpanded`; Workspace-Import (`applyWorkspacePayload`) laesst Bibliothek bestehen und merged nur noetige `customTemplates`.
+- **Kontextmenü**: Eintrag „Aus Bibliothek löschen“ → Label **Löschen** (weiterhin nur fuer eigene Uploads).
+
+### Optionale Erweiterungen (priorisierte Ideen)
+
+1. Tastaturkuerzel erweitern (Lock, Favorit, Color Picker) + Shortcuts-Modal.
+2. Asset-Suche in der Bibliothek.
+3. Undo/Redo fuer Nicht-Transform-Aktionen.
+4. Multi-Select & Batch-Ops.
+5. Alignment-Tools.
+6. Snap-to-Grid konfigurierbar.
+7. Live-Messungen / Koordinaten.
+8. Kategorie-Farben.
+9. „Zuletzt verwendet“-Gruppe.
+
+## Stand 16: Toolbar-Popovers, Bibliothek klonen, globales ESC, UI-Feinschliff
+
+- **Stacking / Z-Index**: `.top-bar` mit `z-index: 1000` über `.workspace` (`0`); `scene-wrapper` / Canvas `0`; `.panel` `500`; Modals `2000`; Shortcuts-Overlay `2500`; Shortcuts-FAB `2490`; Bibliotheks-Kontextmenü `1000` — Werkzeuge- & Beleuchtungsmenüs nicht mehr hinter dem Canvas. **Ursache** war die DOM-Reihenfolge (Workspace nach Top-Bar ohne eigene Stapelreihenfolge).
+- **Menü-Animation (⋮ Werkzeuge / Beleuchtung)**: Flackern und horizontaler Sprung beim Öffnen behoben — Positions-Layout **synchron** in `useLayoutEffect` (Reflow `offsetHeight`, Höhe-Fallback `scrollHeight`, zweiter Layout-Durchlauf), Fade-In nur über **`opacity` 0→1** (`0.15s ease-out`, danach `pointer-events: auto`); kein verschachteltes `requestAnimationFrame` mehr für die Position.
+- **⋮ Werkzeuge / Beleuchtung**: Popover am Button verankert (`getBoundingClientRect`, viewport-aware, max. Höhe mit Scroll); Klasse `toolbar-popover--anchored`.
+- **Cabinet-Ansicht** entfernt; alte `cameraView: cabinet` in Saves → Perspektive (`normalizeCameraViewPreset`).
+- **User-Gruppe**: Zuordnen per DnD/Dialog erzeugt **Kopie** (`cloneTemplateToUserGroup`, Label „… (Kopie)“); Standard-Kategorie ohne Duplikat (`assignTemplateToUserGroup(…, null)`).
+- **Leere User-Gruppen** bleiben; „(leer)“ im Titel; Gruppe löschen immer mit Bestätigung.
+- **ESC**: zentral im Planner (`keydown`, `capture: true`); Farbwähler-Stack `planner-app/src/colorPickerEscapeStack.ts`; schichtweise: Picker → Vorschau → Laden/Export → Bibliotheksdialoge → Shortcuts → View-Info → Kontextmenü → Toolbar-Menüs → Boden-Inspector → Suche → Modus; redundante ESC-Listener in mehreren Modals entfernt.
+
+### Dokumentation
+
+- Projekt-Chronik nur noch in dieser Datei **`IMPLEMENTATION_PROGRESS.md`** (Root). Der Ordner **`docs/`** wurde entfernt.
+
 ## Offene optionale Erweiterungen
 
 - Box-Selection fuer Mehrfachauswahl.

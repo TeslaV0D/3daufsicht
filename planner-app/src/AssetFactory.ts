@@ -125,7 +125,7 @@ export const ASSET_TEMPLATES: AssetTemplate[] = [
     geometry: { kind: 'box', params: { width: 1, height: 1, depth: 1 } },
     metadata: {
       name: 'Regalblock',
-      description: 'Standard Regal fuer Bauteile.',
+      description: 'Standard Regal für Bauteile.',
       customData: {
         Bereich: 'Logistik',
         Inhalt: 'Bauteile',
@@ -142,7 +142,7 @@ export const ASSET_TEMPLATES: AssetTemplate[] = [
     geometry: { kind: 'box', params: { width: 1, height: 1, depth: 1 } },
     metadata: {
       name: 'Hubwagen',
-      description: 'Mobiler Hubwagen fuer den Materialfluss.',
+      description: 'Mobiler Hubwagen für den Materialfluss.',
       customData: {
         Bereich: 'Materialfluss',
         Status: 'Bereit',
@@ -178,10 +178,10 @@ export const ASSET_TEMPLATES: AssetTemplate[] = [
     geometry: { kind: 'box', params: { width: 1, height: 1, depth: 1 } },
     metadata: {
       name: 'Produktionslinie',
-      description: 'Hauptproduktionslinie fuer Montage.',
+      description: 'Hauptproduktionslinie für Montage.',
       customData: {
         Bereich: 'FA1-Montage',
-        Kapazitaet: '60 Teile/h',
+        Kapazität: '60 Teile/h',
         Verantwortlich: 'Team Alpha',
       },
     },
@@ -198,10 +198,10 @@ export const ASSET_TEMPLATES: AssetTemplate[] = [
     },
     metadata: {
       name: 'Arbeitsplatz',
-      description: 'Einzel-Arbeitsplatz fuer Montageaufgaben.',
+      description: 'Einzel-Arbeitsplatz für Montageaufgaben.',
       customData: {
         Bereich: 'FA2-Montage',
-        Schicht: 'Frueh',
+        Schicht: 'Früh',
         Personal: '2',
       },
     },
@@ -221,7 +221,7 @@ export const ASSET_TEMPLATES: AssetTemplate[] = [
       description: 'Mitarbeiter/in.',
       customData: {
         Bereich: 'Montage',
-        Schicht: 'Frueh',
+        Schicht: 'Früh',
         Anzahl: '1',
       },
     },
@@ -251,7 +251,7 @@ export const ASSET_TEMPLATES: AssetTemplate[] = [
     geometry: { kind: 'plane', params: { width: 1, height: 1 } },
     metadata: {
       name: 'Produktionszone',
-      description: 'Bereich fuer Produktionsaktivitaeten.',
+      description: 'Bereich für Produktionsaktivitäten.',
       zoneType: 'production',
     },
     visual: { opacity: 0.35, transparent: true, doubleSided: true, hoverEffect: true },
@@ -265,7 +265,7 @@ export const ASSET_TEMPLATES: AssetTemplate[] = [
     geometry: { kind: 'plane', params: { width: 1, height: 1 } },
     metadata: {
       name: 'Lagerzone',
-      description: 'Bereich fuer Lagerung.',
+      description: 'Bereich für Lagerung.',
       zoneType: 'storage',
     },
     visual: { opacity: 0.35, transparent: true, doubleSided: true, hoverEffect: true },
@@ -295,7 +295,7 @@ export const ASSET_TEMPLATES: AssetTemplate[] = [
     geometry: { kind: 'plane', params: { width: 1, height: 1 } },
     metadata: {
       name: 'Gehweg',
-      description: 'Markierter Fussweg.',
+      description: 'Markierter Fußweg.',
       zoneType: 'walkway',
     },
     visual: { opacity: 0.85, transparent: true, doubleSided: true },
@@ -309,7 +309,7 @@ export const ASSET_TEMPLATES: AssetTemplate[] = [
     geometry: { kind: 'plane', params: { width: 1, height: 1 } },
     metadata: {
       name: 'Fahrweg',
-      description: 'Markierter Weg fuer Fahrzeuge.',
+      description: 'Markierter Weg für Fahrzeuge.',
       zoneType: 'vehicle-path',
     },
     visual: { opacity: 0.8, transparent: true, doubleSided: true },
@@ -384,15 +384,33 @@ export function createCustomModelTemplate(
     scale?: Asset['scale']
     modelFormat?: ModelFormat
     category?: string
+    description?: string
+    isUserAsset?: boolean
+    createdAt?: number
   } = {},
 ): AssetTemplate {
   const modelFormat: ModelFormat = options.modelFormat ?? 'glb'
   const scale = options.scale ?? [2, 2, 2]
   const category = options.category ?? CATEGORY_CUSTOM
-  const description =
+  const defaultDescription =
     modelFormat === 'stl'
       ? 'Benutzerdefiniertes STL Modell (CAD/Mesh).'
-      : 'Benutzerdefiniertes GLB/GLTF Modell.'
+      : modelFormat === 'obj'
+        ? 'Importiertes OBJ-Modell.'
+        : modelFormat === 'fbx'
+          ? 'Importiertes FBX-Modell.'
+          : 'Benutzerdefiniertes GLB/GLTF Modell.'
+  const description =
+    options.description ??
+    (options.isUserAsset ? 'Importiertes Asset' : defaultDescription)
+  const createdAt = options.createdAt ?? (options.isUserAsset ? Date.now() : undefined)
+  const customData: Record<string, string> = {
+    Typ: options.isUserAsset ? 'Import' : 'Custom Upload',
+    Format: modelFormat.toUpperCase(),
+  }
+  if (createdAt !== undefined) {
+    customData['Importiert am'] = new Date(createdAt).toLocaleString('de-DE')
+  }
   return {
     type: `custom-${generateId('model')}`,
     label: name,
@@ -406,11 +424,9 @@ export function createCustomModelTemplate(
     metadata: {
       name,
       description,
-      customData: {
-        Typ: 'Custom Upload',
-        Format: modelFormat.toUpperCase(),
-      },
+      customData,
     },
+    ...(options.isUserAsset ? { isUserAsset: true as const, createdAt } : {}),
   }
 }
 
@@ -477,10 +493,10 @@ export function createDefaultDemoLayout(): Asset[] {
       position: [0, 0.6, 4],
       metadata: {
         name: 'Produktionslinie 2',
-        description: 'Hauptproduktionslinie fuer Montage.',
+        description: 'Hauptproduktionslinie für Montage.',
         customData: {
           Bereich: 'FA2-Montage',
-          Kapazitaet: '55 Teile/h',
+          Kapazität: '55 Teile/h',
           Verantwortlich: 'Team Beta',
         },
       },

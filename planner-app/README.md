@@ -33,8 +33,10 @@ Interaktive 3D-Planungsapplikation im Stil von City-Skylines/SIMS fuer Hallen- u
 ### Editieren
 
 - Mehrere Formtypen, alle ueber Inspector anpassbar (Groesse, Farbe, Metadaten).
-- Einzel- und Mehrfachauswahl (`STRG/CMD + Klick`).
-- Transform-Gizmo: Bewegen / Drehen / Skalieren.
+- Einzel- und Mehrfachauswahl: normaler Klick ersetzt die Auswahl; **`STRG/CMD + Klick`** fuegt ein Asset hinzu oder entfernt es aus der Mehrfachauswahl.
+- Transform-Gizmo: Bewegen / Drehen / Skalieren. **Skalieren** am Gizmo ist **stufenlos** (`scaleSnap` aus); im Inspector: Slider „Alle Achsen gleich“ (feine Schritte) und drei Felder mit bis zu **vier Nachkommastellen**.
+- Toolbar-Menue **„⋮ Werkzeuge“**: Ausrichten (Links/Rechts/Mitte, Oben/Unten), Verteilen auf X/Z, Auswahl an Platzierungs-Raster ausrichten — oeffnet als schwebendes Panel, die Leiste bleibt kompakt.
+- **Beleuchtung**-Popover ebenfalls **fix positioniert** unterhalb der Toolbar, verschiebt die Button-Reihe nicht.
 - Inspector: Position, Rotation (Grad), Skalierung, Farbe, Name, Beschreibung, Zone-Typ, Custom Metadata, **Textinhalt** fuer Label-Assets.
 - Ghost-Placement, Snap-Toggle mit `STRG/CMD`.
 - Undo/Redo, Copy/Paste.
@@ -47,7 +49,10 @@ Interaktive 3D-Planungsapplikation im Stil von City-Skylines/SIMS fuer Hallen- u
   - Auto-Slot laden.
   - Liste gespeicherter Slots (Laden, Umbenennen, Loeschen).
   - Externe `.json` Datei auswaehlen und importieren.
-- **Export** (`Export`): aktuelles Layout als `.json` Datei herunterladen.
+- **Export** (`Export`): Dialog mit zwei Modi:
+  - **Nur Workspace**: nur die platzierte Szene, Boden, Beleuchtung, Kamera; benötigte **eigene** Modelle minimal mit dabei; Dateiname z. B. `layout_2026-04-24-12-30-00.json`.
+  - **Komplette Konfiguration**: volles Projekt inkl. Bibliothek, Gruppen, Favoriten, Meta, Präsentationsmodus-Zustand (`shellMode`) und aufgeklappte Bibliotheks-Sektionen; Dateiname z. B. `factory_layout_complete_2026-04-24-12-30-00.json`.
+- Workspace-Dateien beim **Laden** erkennen den Modus (`exportKind`) und überschreiben nur Szene + Boden + Licht (Bibliothek bleibt erhalten).
 - **Import**: robuste Validierung (Position/Rotation/Scale als finite Zahlen, Fallbacks).
 
 ### UI
@@ -67,9 +72,15 @@ App oeffnen unter: `http://localhost:5173`
 
 ## Eigene Assets hochladen und benutzen
 
-1. In der linken Asset-Bibliothek auf **"Eigene Assets hochladen (GLB/GLTF/STL)"** klicken.
-2. Datei vom Typ `.glb`, `.gltf` oder `.stl` auswaehlen (max. 20 MB).
-3. Das neue Asset-Template erscheint in der Kategorie **Eigene Assets** und ist direkt platzierbar.
+1. In der Bibliothek die Gruppe **Eigene Assets** (ganz unten) aufklappen und auf das **+** rechts neben dem Gruppennamen klicken — **Asset importieren** (Tooltip).
+2. Dateien vom Typ `.glb`, `.gltf`, `.stl`, `.obj`, `.fbx` auswaehlen (max. 20 MB pro Datei, mehrere moeglich).
+3. Die Vorlagen erscheinen sofort unter **Eigene Assets** und sind platzierbar.
+
+### Bibliothek: Gruppen beim Start
+
+- Alle Gruppen starten **zugeklappt**; Klick klappt auf oder zu. Der Zustand der aufgeklappten Sektionen wird unter `factory-library-section-expanded-v2` im Browser gespeichert.
+- Reihenfolge: **Favoriten** → eingebaute Kategorien (Primitive 3D/2D, Produktion, Logistik, Zonen, Waende, Wege, Labels) → **eigene Gruppen** alphabetisch → **Eigene Assets** immer zuletzt.
+- Ein neuer Favorit **oeffnet** die Favoriten-Gruppe nicht automatisch.
 
 Hinweise:
 - Upload ist lokal im Browser (kein Server-Upload).
@@ -102,3 +113,15 @@ npm run build
 - three.js
 - @react-three/fiber
 - @react-three/drei
+
+## Optionale Verbesserungen (Backlog)
+
+- Erweiterte Tastaturkuerzel (z. B. Lock, Favorit, Farbe) und Dokumentation im Shortcuts-Dialog; optional konfigurierbar.
+- Asset-Suche / Filter in der Bibliothek.
+- Undo/Redo fuer Bibliotheks-Aktionen (Favorit, Gruppe, Farbe, Lock).
+- Mehrfachauswahl und Batch-Operationen (Transform, Farbe, Lock, Loeschen).
+- Ausrichtungs-Werkzeuge (links/rechts/oben/unten, gleicher Abstand, Raster).
+- Snap-to-Grid mit einstellbarer Rasterweite.
+- Live-Masse / Koordinaten beim Verschieben.
+- Kategorie-Farben in Liste und optional in der Szene.
+- Gruppe **Zuletzt verwendet** (letzte platzierten Asset-Typen).

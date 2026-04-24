@@ -1,6 +1,6 @@
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
-import { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { Suspense, useLayoutEffect, useMemo, useRef } from 'react'
 
 import { createAssetFromTemplate } from '../AssetFactory'
 import type { AssetTemplate } from '../types/asset'
@@ -20,18 +20,6 @@ export default function TemplatePreviewDialog({
     if (!template) return null
     return createAssetFromTemplate(template)
   }, [template])
-
-  useEffect(() => {
-    if (!open) return
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return
-      event.preventDefault()
-      event.stopPropagation()
-      onClose()
-    }
-    window.addEventListener('keydown', onKey, true)
-    return () => window.removeEventListener('keydown', onKey, true)
-  }, [open, onClose])
 
   useLayoutEffect(() => {
     if (!open) return

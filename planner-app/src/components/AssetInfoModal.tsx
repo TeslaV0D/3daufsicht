@@ -17,17 +17,9 @@ export default function AssetInfoModal({ asset, onClose }: AssetInfoModalProps) 
       onClose()
     }
 
-    const handleKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onClose()
-      }
-    }
-
     document.addEventListener('mousedown', handlePointerDown)
-    window.addEventListener('keydown', handleKey)
     return () => {
       document.removeEventListener('mousedown', handlePointerDown)
-      window.removeEventListener('keydown', handleKey)
     }
   }, [onClose])
 

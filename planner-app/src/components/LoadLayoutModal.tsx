@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react'
+import { useCallback, useRef, useState, type ChangeEvent } from 'react'
 import type { LayoutSlot } from '../store/useAssetsStore'
 
 export interface LoadLayoutModalProps {
@@ -33,14 +33,6 @@ export default function LoadLayoutModal({
   const [feedback, setFeedback] = useState<{ kind: 'ok' | 'error'; message: string } | null>(null)
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameDraft, setRenameDraft] = useState('')
-
-  useEffect(() => {
-    const handleKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', handleKey)
-    return () => window.removeEventListener('keydown', handleKey)
-  }, [onClose])
 
   const showFeedback = useCallback((kind: 'ok' | 'error', message: string) => {
     setFeedback({ kind, message })
@@ -120,7 +112,7 @@ export default function LoadLayoutModal({
           <button
             type="button"
             className="asset-info-close"
-            aria-label="Schliessen"
+            aria-label="Schließen"
             onClick={onClose}
           >
             x
@@ -187,9 +179,9 @@ export default function LoadLayoutModal({
                       type="button"
                       className="danger"
                       onClick={() => onDeleteSlot(slot.id)}
-                      aria-label="Loeschen"
+                      aria-label="Löschen"
                     >
-                      Loeschen
+                      Löschen
                     </button>
                   </div>
                 </li>
@@ -202,7 +194,7 @@ export default function LoadLayoutModal({
           <div className="layout-modal-section-header">
             <h4>Externe Datei laden</h4>
             <button type="button" onClick={() => fileInputRef.current?.click()}>
-              Datei auswaehlen
+              Datei auswählen
             </button>
           </div>
           <p className="panel-hint">

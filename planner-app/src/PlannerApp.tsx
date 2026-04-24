@@ -3,10 +3,13 @@ import { Html, OrbitControls, TransformControls } from '@react-three/drei'
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type ChangeEvent,
+  type DragEvent,
+  type MouseEvent as ReactMouseEvent,
   type ReactNode,
   type RefObject,
 } from 'react'
@@ -24,51 +27,195 @@ import AnimatedCameraRig, { CAMERA_PRESETS } from './components/AnimatedCameraRi
 import AssetInfoModal from './components/AssetInfoModal'
 import AssetRenderer, { GhostAssetRenderer } from './components/AssetRenderer'
 import ColorPickerPopover from './components/ColorPickerPopover'
+import ExportLayoutModal from './components/ExportLayoutModal'
 import FactoryFloor from './components/FactoryFloor'
 import Lighting from './components/Lighting'
+import LightingToolbarPanel from './components/LightingToolbarPanel'
 import LoadLayoutModal from './components/LoadLayoutModal'
 import ScenePlacementRaycast from './components/ScenePlacementRaycast'
 import ShortcutsModal from './components/ShortcutsModal'
-import ViewModeOverlay from './components/ViewModeOverlay'
+import TemplatePreviewDialog from './components/TemplatePreviewDialog'
 
-import {
-  CATEGORY_WALLS,
-  getTemplatesByCategory,
-  createAssetFromTemplate,
-  geometryKindSupports2D,
-} from './AssetFactory'
-import { useAssetsStore } from './store/useAssetsStore'
-import type { Asset, AssetTemplate, MaterialMode } from './types/asset'
+import { dismissTopColorPickerEscape } from './colorPickerEscapeStack'
+import { createAssetFromTemplate, geometryKindSupports2D } from './AssetFactory'
+import { useAssetsStore, type LayoutExportKind } from './store/useAssetsStore'
+import type { Asset, AssetTemplate, MaterialMode, ModelFormat } from './types/asset'
 import { resolveAssetOpacity, sanitizeColor } from './types/asset'
 import type { CameraViewPreset } from './types/plannerUi'
+import {
+  alignAssetsXZ,
+  distributeCentersX,
+  distributeCentersZ,
+  snapAssetsToGrid,
+} from './scene/assetAlignment'
+import {
+  applyTemplateDisplayOverrides,
+  buildLibrarySections,
+  EIGENE_ASSETS_USER_GROUP_ID,
+  EIGENE_ASSETS_USER_GROUP_LABEL,
+  RECENTS_SECTION_ID,
+  type LibraryOrganizationState,
+  type LibrarySection,
+} from './types/libraryOrganization'
+import { libraryAccentForSectionTitle } from './types/libraryCategoryAccent'
+import { type FloorSettings, sanitizePlacementSnapStep } from './types/floor'
 
 type PlannerTool = 'select' | 'place'
 type PlannerMode = 'edit' | 'view'
 type TransformMode = 'translate' | 'rotate' | 'scale'
 
-const SNAP_UNIT = 1
 const FALLBACK_ASSET_COLOR = '#8ca0b6'
-const TEMPLATE_GROUP_EXPANDED_STORAGE_KEY = 'factory-template-group-expanded'
+const LIBRARY_SECTION_EXPANDED_STORAGE_KEY = 'factory-library-section-expanded-v2'
+const TEMPLATE_DRAG_MIME = 'application/x-factory-template-type'
 const HOVER_POINTER_OUT_DEBOUNCE_MS = 50
+const TOOLBAR_POPOVER_GAP = 8
+const TOOLBAR_POPOVER_MAX_H = 480
 
-function readTemplateGroupExpanded(): Record<string, boolean> {
+function computeToolbarPopoverPosition(
+  anchor: DOMRect,
+  floating: HTMLElement,
+  preferredWidth: number,
+): { top: number; left: number; width: number; maxHeight: number } {
+  const margin = TOOLBAR_POPOVER_GAP
+  const vw = window.innerWidth
+  const vh = window.innerHeight
+  const width = Math.min(preferredWidth, vw * 0.8, vw - 2 * margin)
+  floating.style.width = `${width}px`
+  void floating.offsetHeight
+  let ph = floating.getBoundingClientRect().height
+  if (ph < 1) ph = floating.scrollHeight
+  let left = anchor.right - width
+  if (left < margin) left = margin
+  const maxLeft = vw - margin - width
+  if (left > maxLeft) left = Math.max(margin, maxLeft)
+  let top = anchor.bottom + margin
+  let maxHeight = TOOLBAR_POPOVER_MAX_H
+  if (top + ph > vh - margin) {
+    const aboveTop = anchor.top - margin - ph
+    if (aboveTop >= margin) {
+      top = aboveTop
+    } else {
+      top = margin
+      maxHeight = Math.min(TOOLBAR_POPOVER_MAX_H, vh - top - margin)
+    }
+  }
+  return { top, left, width, maxHeight }
+}
+
+function applyToolbarPopoverLayout(
+  buttonEl: HTMLButtonElement | null,
+  popEl: HTMLDivElement | null,
+  preferredWidth: number,
+): boolean {
+  if (!buttonEl || !popEl) return false
+  const pos = computeToolbarPopoverPosition(buttonEl.getBoundingClientRect(), popEl, preferredWidth)
+  popEl.style.top = `${pos.top}px`
+  popEl.style.left = `${pos.left}px`
+  popEl.style.maxHeight = `${pos.maxHeight}px`
+  return true
+}
+
+function getTagsFromTemplate(template: AssetTemplate, org: LibraryOrganizationState): string[] {
+  const fromOverride = org.templateDisplayOverrides?.[template.type]?.tags
+  if (fromOverride?.length) return fromOverride
+  const raw = template.metadata?.customData?.Tags
+  if (typeof raw === 'string' && raw.trim()) {
+    return raw.split(',').map((s) => s.trim()).filter(Boolean)
+  }
+  return []
+}
+
+function formatTemplateDimensions(template: AssetTemplate): string {
+  const sx = template.scale[0]
+  const sy = template.scale[1]
+  const sz = template.scale[2]
+  const p = template.geometry.params
+  switch (template.geometry.kind) {
+    case 'box':
+      return `${((p.width ?? 1) * sx).toFixed(2)} × ${((p.height ?? 1) * sy).toFixed(2)} × ${((p.depth ?? 1) * sz).toFixed(2)} m`
+    case 'sphere':
+      return `R ≈ ${((p.radius ?? 0.5) * Math.max(sx, sy, sz)).toFixed(2)} m`
+    case 'cylinder':
+    case 'cone':
+      return `R ${((p.radiusBottom ?? p.radius ?? 0.5) * Math.max(sx, sz)).toFixed(2)} m, H ${((p.height ?? 1) * sy).toFixed(2)} m`
+    case 'torus':
+      return `R ${((p.radius ?? 0.5) * sx).toFixed(2)} m, Tube ${((p.tube ?? 0.15) * sy).toFixed(2)} m`
+    case 'plane':
+      return `${((p.width ?? 1) * sx).toFixed(2)} × ${((p.height ?? 1) * sz).toFixed(2)} m`
+    case 'circle':
+    case 'ring':
+      return `R ${((p.radius ?? 0.5) * Math.max(sx, sz)).toFixed(2)} m`
+    case 'text':
+      return `Schrift ${(p.fontSize ?? 1) * sy} m`
+    case 'custom':
+      return `Skalierung ${sx.toFixed(1)} × ${sy.toFixed(1)} × ${sz.toFixed(1)}`
+    default:
+      return `${sx.toFixed(1)} × ${sy.toFixed(1)} × ${sz.toFixed(1)}`
+  }
+}
+
+function formatTemplateDimensionsMm(template: AssetTemplate): string {
+  const sx = template.scale[0]
+  const sy = template.scale[1]
+  const sz = template.scale[2]
+  const p = template.geometry.params
+  switch (template.geometry.kind) {
+    case 'box':
+      return `${Math.round((p.width ?? 1) * sx * 1000)} × ${Math.round((p.height ?? 1) * sy * 1000)} × ${Math.round((p.depth ?? 1) * sz * 1000)} mm`
+    case 'sphere':
+      return `R ≈ ${Math.round((p.radius ?? 0.5) * Math.max(sx, sy, sz) * 1000)} mm`
+    case 'cylinder':
+    case 'cone':
+      return `R ${Math.round((p.radiusBottom ?? p.radius ?? 0.5) * Math.max(sx, sz) * 1000)} mm · H ${Math.round((p.height ?? 1) * sy * 1000)} mm`
+    case 'torus':
+      return `R ${Math.round((p.radius ?? 0.5) * sx * 1000)} mm · Tube ${Math.round((p.tube ?? 0.15) * sy * 1000)} mm`
+    case 'plane':
+      return `${Math.round((p.width ?? 1) * sx * 1000)} × ${Math.round((p.height ?? 1) * sz * 1000)} mm`
+    case 'circle':
+    case 'ring':
+      return `R ${Math.round((p.radius ?? 0.5) * Math.max(sx, sz) * 1000)} mm`
+    case 'text':
+      return `Schrift ${Math.round((p.fontSize ?? 1) * sy * 1000)} mm`
+    case 'custom':
+      return `Skalierung ${sx.toFixed(2)} × ${sy.toFixed(2)} × ${sz.toFixed(2)} (Template)`
+    default:
+      return `${Math.round(sx * 1000)} × ${Math.round(sy * 1000)} × ${Math.round(sz * 1000)} mm`
+  }
+}
+
+/** Nur explizit `true` = Gruppe ausgeklappt; fehlender Key = zugeklappt. „Zuletzt“ standardmäßig offen. */
+function readLibrarySectionExpandedMap(): Record<string, boolean> {
+  const defaults: Record<string, boolean> = { [RECENTS_SECTION_ID]: true }
   try {
-    const raw = localStorage.getItem(TEMPLATE_GROUP_EXPANDED_STORAGE_KEY)
-    if (!raw) return {}
+    const raw = localStorage.getItem(LIBRARY_SECTION_EXPANDED_STORAGE_KEY)
+    if (!raw) return { ...defaults }
     const data = JSON.parse(raw) as unknown
-    if (!data || typeof data !== 'object') return {}
+    if (!data || typeof data !== 'object') return { ...defaults }
     const out: Record<string, boolean> = {}
     for (const [k, v] of Object.entries(data as Record<string, unknown>)) {
-      if (typeof v === 'boolean') out[k] = v
+      if (v === true) out[k] = true
     }
-    return out
+    return { ...defaults, ...out }
   } catch {
-    return {}
+    return { ...defaults }
   }
 }
 
 const round2 = (value: number) => Number(value.toFixed(2))
 const formatNumber = (value: number) => String(round2(value))
+
+function roundToDecimals(value: number, digits: number): number {
+  if (!Number.isFinite(value)) return 0
+  const m = 10 ** digits
+  return Math.round(value * m) / m
+}
+
+function formatNumeric(value: number, digits: number): string {
+  return String(roundToDecimals(value, digits))
+}
+
+/** Skalierung: feinere Auflösung als round2 */
+const roundScaleVal = (value: number) => roundToDecimals(value, 4)
 const radToDeg = (value: number) => round2((value * 180) / Math.PI)
 const degToRad = (value: number) => round2((value * Math.PI) / 180)
 const isFiniteNumber = (value: number) => Number.isFinite(value)
@@ -87,12 +234,34 @@ function resolvePlacementPosition(
   point: Vector3Tuple,
   freePlacement: boolean,
   template: AssetTemplate,
+  floorSnap: Pick<FloorSettings, 'placementSnapEnabled' | 'placementSnapStep'>,
 ): Vector3Tuple {
-  const x = freePlacement ? point[0] : Math.round(point[0] / SNAP_UNIT) * SNAP_UNIT
-  const z = freePlacement ? point[2] : Math.round(point[2] / SNAP_UNIT) * SNAP_UNIT
+  const step = freePlacement
+    ? null
+    : floorSnap.placementSnapEnabled
+      ? floorSnap.placementSnapStep
+      : null
+  const x =
+    step != null && step > 0 ? Math.round(point[0] / step) * step : round2(point[0])
+  const z =
+    step != null && step > 0 ? Math.round(point[2] / step) * step : round2(point[2])
   const isFlat = geometryKindSupports2D(template.geometry.kind)
   const y = isFlat ? 0.02 : template.scale[1] / 2
   return [round2(x), round2(y), round2(z)]
+}
+
+function templateMatchesSearch(
+  template: AssetTemplate,
+  org: LibraryOrganizationState,
+  query: string,
+): boolean {
+  const q = query.trim().toLowerCase()
+  if (!q) return true
+  if (template.label.toLowerCase().includes(q)) return true
+  if (template.metadata?.description?.toLowerCase().includes(q)) return true
+  const tags = getTagsFromTemplate(template, org)
+  if (tags.some((t) => t.toLowerCase().includes(q))) return true
+  return false
 }
 
 function readFileAsDataUrl(file: File) {
@@ -104,7 +273,7 @@ function readFileAsDataUrl(file: File) {
   })
 }
 
-const ALLOWED_MODEL_EXTENSIONS = ['glb', 'gltf', 'stl'] as const
+const ALLOWED_MODEL_EXTENSIONS = ['glb', 'gltf', 'stl', 'obj', 'fbx'] as const
 type AllowedModelExtension = (typeof ALLOWED_MODEL_EXTENSIONS)[number]
 const MAX_MODEL_SIZE_BYTES = 20 * 1024 * 1024
 
@@ -136,27 +305,34 @@ function ToolbarSeparator() {
 interface NumericInputProps {
   label: string
   value: number
-  step?: string
+  /** Nachkommastellen bei Anzeige/Commit (Skalierung z. B. 4) */
+  fractionDigits?: number
   onCommit: (value: number) => void
   disabled?: boolean
 }
 
-function NumericInput({ label, value, onCommit, disabled }: NumericInputProps) {
-  const [draft, setDraft] = useState(formatNumber(value))
+function NumericInput({
+  label,
+  value,
+  fractionDigits = 2,
+  onCommit,
+  disabled,
+}: NumericInputProps) {
+  const [draft, setDraft] = useState(formatNumeric(value, fractionDigits))
   const [editing, setEditing] = useState(false)
 
   const commitDraft = useCallback(() => {
     const parsed = parseFiniteInput(draft)
     if (parsed === null) {
-      setDraft(formatNumber(value))
+      setDraft(formatNumeric(value, fractionDigits))
       setEditing(false)
       return
     }
-    const normalized = round2(parsed)
+    const normalized = roundToDecimals(parsed, fractionDigits)
     onCommit(normalized)
-    setDraft(formatNumber(normalized))
+    setDraft(formatNumeric(normalized, fractionDigits))
     setEditing(false)
-  }, [draft, onCommit, value])
+  }, [draft, fractionDigits, onCommit, value])
 
   return (
     <label className={disabled ? 'input-disabled' : undefined}>
@@ -165,9 +341,9 @@ function NumericInput({ label, value, onCommit, disabled }: NumericInputProps) {
         type="text"
         inputMode="decimal"
         disabled={disabled}
-        value={editing ? draft : formatNumber(value)}
+        value={editing ? draft : formatNumeric(value, fractionDigits)}
         onFocus={() => {
-          setDraft(formatNumber(value))
+          setDraft(formatNumeric(value, fractionDigits))
           setEditing(true)
         }}
         onChange={(event) => setDraft(event.target.value)}
@@ -175,7 +351,7 @@ function NumericInput({ label, value, onCommit, disabled }: NumericInputProps) {
         onKeyDown={(event) => {
           if (event.key === 'Enter') commitDraft()
           if (event.key === 'Escape') {
-            setDraft(formatNumber(value))
+            setDraft(formatNumeric(value, fractionDigits))
             setEditing(false)
           }
         }}
@@ -190,6 +366,7 @@ interface SingleTransformGizmoProps {
   asset: Asset
   mode: TransformMode
   isCtrlPressed: boolean
+  translationSnap?: number
   orbitRef: RefObject<OrbitControlsImpl | null>
   onCommit: (id: string, patch: Partial<Asset>) => void
   children?: React.ReactNode
@@ -199,6 +376,7 @@ function SingleTransformGizmo({
   asset,
   mode,
   isCtrlPressed,
+  translationSnap,
   orbitRef,
   onCommit,
   children,
@@ -221,23 +399,25 @@ function SingleTransformGizmo({
 
     const group = groupRef.current
     if (!group) return
-    const nextPosition: Vector3Tuple = [
-      round2(group.position.x),
-      round2(group.position.y),
-      round2(group.position.z),
-    ]
+    let nx = round2(group.position.x)
+    let nz = round2(group.position.z)
+    if (translationSnap != null && translationSnap > 0 && mode === 'translate') {
+      nx = round2(Math.round(nx / translationSnap) * translationSnap)
+      nz = round2(Math.round(nz / translationSnap) * translationSnap)
+    }
+    const nextPosition: Vector3Tuple = [nx, round2(group.position.y), nz]
     const nextRotation: Vector3Tuple = [
       round2(group.rotation.x),
       round2(group.rotation.y),
       round2(group.rotation.z),
     ]
     const nextScale: Vector3Tuple = [
-      Math.max(round2(group.scale.x), 0.02),
-      Math.max(round2(group.scale.y), 0.02),
-      Math.max(round2(group.scale.z), 0.02),
+      Math.max(roundScaleVal(group.scale.x), 0.01),
+      Math.max(roundScaleVal(group.scale.y), 0.01),
+      Math.max(roundScaleVal(group.scale.z), 0.01),
     ]
     onCommit(asset.id, { position: nextPosition, rotation: nextRotation, scale: nextScale })
-  }, [asset.id, onCommit, orbitRef])
+  }, [asset.id, mode, onCommit, orbitRef, translationSnap])
 
   useEffect(() => {
     const onPointerUp = () => finishDrag()
@@ -263,8 +443,13 @@ function SingleTransformGizmo({
       <TransformControls
         object={groupRef}
         mode={mode}
-        translationSnap={mode === 'translate' && !isCtrlPressed ? SNAP_UNIT : undefined}
+        translationSnap={
+          mode === 'translate' && !isCtrlPressed && translationSnap != null
+            ? translationSnap
+            : undefined
+        }
         rotationSnap={mode === 'rotate' && !isCtrlPressed ? Math.PI / 8 : undefined}
+        scaleSnap={null}
         onMouseDown={() => {
           draggingRef.current = true
           if (orbitRef.current) orbitRef.current.enabled = false
@@ -279,6 +464,7 @@ interface MultiTransformGizmoProps {
   selectedAssets: Asset[]
   mode: TransformMode
   isCtrlPressed: boolean
+  translationSnap?: number
   orbitRef: RefObject<OrbitControlsImpl | null>
   onCommit: (updates: Array<{ id: string; patch: Partial<Asset> }>) => void
 }
@@ -287,6 +473,7 @@ function MultiTransformGizmo({
   selectedAssets,
   mode,
   isCtrlPressed,
+  translationSnap,
   orbitRef,
   onCommit,
 }: MultiTransformGizmoProps) {
@@ -365,9 +552,9 @@ function MultiTransformGizmo({
           position: [round2(nextPos.x), round2(nextPos.y), round2(nextPos.z)] as Vector3Tuple,
           rotation: [round2(nextEuler.x), round2(nextEuler.y), round2(nextEuler.z)] as Vector3Tuple,
           scale: [
-            Math.max(round2(nextScale.x), 0.02),
-            Math.max(round2(nextScale.y), 0.02),
-            Math.max(round2(nextScale.z), 0.02),
+            Math.max(roundScaleVal(nextScale.x), 0.01),
+            Math.max(roundScaleVal(nextScale.y), 0.01),
+            Math.max(roundScaleVal(nextScale.z), 0.01),
           ] as Vector3Tuple,
         } satisfies Partial<Asset>,
       }
@@ -394,8 +581,13 @@ function MultiTransformGizmo({
       <TransformControls
         object={pivotRef}
         mode={mode}
-        translationSnap={mode === 'translate' && !isCtrlPressed ? SNAP_UNIT : undefined}
+        translationSnap={
+          mode === 'translate' && !isCtrlPressed && translationSnap != null
+            ? translationSnap
+            : undefined
+        }
         rotationSnap={mode === 'rotate' && !isCtrlPressed ? Math.PI / 8 : undefined}
+        scaleSnap={null}
         onMouseDown={() => {
           const pivot = pivotRef.current
           draggingRef.current = true
@@ -437,22 +629,62 @@ export default function PlannerApp() {
   const [isLoadModalOpen, setIsLoadModalOpen] = useState(false)
   const [floorInspectorOpen, setFloorInspectorOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
-  const [uploadAsWall, setUploadAsWall] = useState(false)
+  const [exportDialogOpen, setExportDialogOpen] = useState(false)
+  const [exportModalKey, setExportModalKey] = useState(0)
+  const [lightingPanelOpen, setLightingPanelOpen] = useState(false)
+  const lightingBarRef = useRef<HTMLDivElement>(null)
+  const lightingButtonRef = useRef<HTMLButtonElement>(null)
+  const lightingPopoverRef = useRef<HTMLDivElement>(null)
+  const toolsMenuRef = useRef<HTMLDivElement>(null)
+  const toolsMenuButtonRef = useRef<HTMLButtonElement>(null)
+  const toolsPopoverRef = useRef<HTMLDivElement>(null)
+  const [toolsMenuOpen, setToolsMenuOpen] = useState(false)
+  const [newGroupDialogOpen, setNewGroupDialogOpen] = useState(false)
+  const [newGroupNameDraft, setNewGroupNameDraft] = useState('')
+  const [libraryDropTargetKey, setLibraryDropTargetKey] = useState<string | null>(null)
+  const [libraryMenu, setLibraryMenu] = useState<{
+    templateType: string
+    left: number
+    top: number
+  } | null>(null)
+  const libraryMenuRef = useRef<HTMLDivElement | null>(null)
+  const [templateMetaDialog, setTemplateMetaDialog] = useState<AssetTemplate | null>(null)
+  const [templateMetaDraft, setTemplateMetaDraft] = useState({
+    name: '',
+    description: '',
+    tags: '',
+  })
+  const [templateGroupDialog, setTemplateGroupDialog] = useState<AssetTemplate | null>(null)
+  const [templateDetailsDialog, setTemplateDetailsDialog] = useState<AssetTemplate | null>(null)
+  const [templatePreview, setTemplatePreview] = useState<AssetTemplate | null>(null)
+  const [importLibraryBusy, setImportLibraryBusy] = useState(false)
+  const eigeneAssetsImportInputRef = useRef<HTMLInputElement | null>(null)
 
   const {
     assets,
     templates,
+    customTemplates,
     floor,
     setFloor,
     cameraView,
     setCameraView,
+    lighting,
+    setLighting,
     selectedIds,
     setSelectedIds,
     addAsset,
     removeAssets,
     updateAsset,
     updateAssets,
-    addCustomModelTemplate,
+    importCustomModelTemplatesBatch,
+    removeCustomTemplate,
+    libraryOrganization,
+    addUserLibraryGroup,
+    removeUserLibraryGroup,
+    assignTemplateToUserGroup,
+    cloneTemplateToUserGroup,
+    toggleFavoriteTemplateType,
+    updateTemplateLibraryMeta,
     undo,
     redo,
     canUndo,
@@ -469,40 +701,163 @@ export default function PlannerApp() {
     renameSlot,
     exportLayout,
     importLayoutFromFile,
+    recordRecentTemplatePlacement,
   } = store
 
-  const activeTemplateType = selectedTemplateType ?? templates[0]?.type ?? null
-  const activeTemplate = useMemo(
-    () => templates.find((template) => template.type === activeTemplateType) ?? null,
-    [activeTemplateType, templates],
+  const resolvedTemplates = useMemo(
+    () => templates.map((t) => applyTemplateDisplayOverrides(t, libraryOrganization)),
+    [templates, libraryOrganization],
   )
 
-  const groupedTemplates = useMemo(() => getTemplatesByCategory(templates), [templates])
+  const activeTemplateType = selectedTemplateType ?? resolvedTemplates[0]?.type ?? null
+  const activeTemplate = useMemo(
+    () => resolvedTemplates.find((template) => template.type === activeTemplateType) ?? null,
+    [activeTemplateType, resolvedTemplates],
+  )
 
-  const [templateGroupExpanded, setTemplateGroupExpanded] = useState<Record<string, boolean>>(
-    readTemplateGroupExpanded,
+  const customTemplateTypeSet = useMemo(
+    () => new Set(customTemplates.map((t) => t.type)),
+    [customTemplates],
   )
 
   useEffect(() => {
-    setTemplateGroupExpanded((prev) => {
-      let changed = false
-      const next = { ...prev }
-      for (const cat of Object.keys(groupedTemplates)) {
-        if (!(cat in next)) {
-          next[cat] = true
-          changed = true
-        }
-      }
-      return changed ? next : prev
-    })
-  }, [groupedTemplates])
+    if (!lightingPanelOpen) return
+    const onDown = (e: PointerEvent) => {
+      const el = lightingBarRef.current
+      if (el && !el.contains(e.target as Node)) setLightingPanelOpen(false)
+    }
+    window.addEventListener('pointerdown', onDown)
+    return () => window.removeEventListener('pointerdown', onDown)
+  }, [lightingPanelOpen])
 
-  const toggleTemplateGroup = useCallback((category: string) => {
-    setTemplateGroupExpanded((prev) => {
-      const currentlyOpen = prev[category] !== false
-      const next = { ...prev, [category]: !currentlyOpen }
+  useEffect(() => {
+    if (!toolsMenuOpen) return
+    const onDown = (e: PointerEvent) => {
+      const el = toolsMenuRef.current
+      if (el && !el.contains(e.target as Node)) setToolsMenuOpen(false)
+    }
+    window.addEventListener('pointerdown', onDown)
+    return () => window.removeEventListener('pointerdown', onDown)
+  }, [toolsMenuOpen])
+
+  useLayoutEffect(() => {
+    if (!toolsMenuOpen) return
+    const pop = toolsPopoverRef.current
+    if (!pop) return
+
+    pop.style.opacity = '0'
+    pop.style.pointerEvents = 'none'
+    pop.style.transition = 'none'
+
+    const update = () => {
+      applyToolbarPopoverLayout(toolsMenuButtonRef.current, toolsPopoverRef.current, 320)
+    }
+    update()
+    update()
+
+    const fadeRaf = requestAnimationFrame(() => {
+      pop.style.transition = 'opacity 0.15s ease-out'
+      pop.style.opacity = '1'
+      pop.style.pointerEvents = 'auto'
+    })
+
+    window.addEventListener('resize', update)
+    return () => {
+      cancelAnimationFrame(fadeRaf)
+      window.removeEventListener('resize', update)
+      pop.style.transition = ''
+      pop.style.opacity = ''
+      pop.style.pointerEvents = ''
+    }
+  }, [toolsMenuOpen])
+
+  useLayoutEffect(() => {
+    if (!lightingPanelOpen) return
+    const pop = lightingPopoverRef.current
+    if (!pop) return
+
+    pop.style.opacity = '0'
+    pop.style.pointerEvents = 'none'
+    pop.style.transition = 'none'
+
+    const update = () => {
+      applyToolbarPopoverLayout(lightingButtonRef.current, lightingPopoverRef.current, 380)
+    }
+    update()
+    update()
+
+    const fadeRaf = requestAnimationFrame(() => {
+      pop.style.transition = 'opacity 0.15s ease-out'
+      pop.style.opacity = '1'
+      pop.style.pointerEvents = 'auto'
+    })
+
+    window.addEventListener('resize', update)
+    return () => {
+      cancelAnimationFrame(fadeRaf)
+      window.removeEventListener('resize', update)
+      pop.style.transition = ''
+      pop.style.opacity = ''
+      pop.style.pointerEvents = ''
+    }
+  }, [lightingPanelOpen])
+
+  const librarySections = useMemo(
+    () => buildLibrarySections(resolvedTemplates, libraryOrganization),
+    [resolvedTemplates, libraryOrganization],
+  )
+
+  const [librarySearchInput, setLibrarySearchInput] = useState('')
+  const [librarySearch, setLibrarySearch] = useState('')
+  const [colorPickerKick, setColorPickerKick] = useState(0)
+  useEffect(() => {
+    const t = window.setTimeout(() => setLibrarySearch(librarySearchInput.trim()), 200)
+    return () => clearTimeout(t)
+  }, [librarySearchInput])
+
+  const filteredLibrarySections = useMemo(() => {
+    if (!librarySearch) return librarySections
+    return librarySections
+      .map((section) => ({
+        ...section,
+        templates: section.templates.filter((tm) =>
+          templateMatchesSearch(tm, libraryOrganization, librarySearch),
+        ),
+      }))
+      .filter((section) => section.templates.length > 0)
+  }, [librarySections, libraryOrganization, librarySearch])
+
+  const templateByType = useMemo(() => new Map(templates.map((t) => [t.type, t])), [templates])
+
+  const gizmoTranslateSnap = useMemo(() => {
+    if (floor.placementSnapEnabled && floor.placementSnapStep > 0) {
+      return floor.placementSnapStep
+    }
+    return undefined
+  }, [floor.placementSnapEnabled, floor.placementSnapStep])
+
+  const [leftPanelHidden, setLeftPanelHidden] = useState(false)
+  const [rightPanelHidden, setRightPanelHidden] = useState(false)
+
+  const favoriteTypeSet = useMemo(
+    () => new Set(libraryOrganization.favoriteTemplateTypes),
+    [libraryOrganization.favoriteTemplateTypes],
+  )
+
+  const [librarySectionExpanded, setLibrarySectionExpanded] = useState<Record<string, boolean>>(
+    readLibrarySectionExpandedMap,
+  )
+
+  const toggleTemplateGroup = useCallback((sectionKey: string) => {
+    setLibrarySectionExpanded((prev) => {
+      const next = { ...prev }
+      if (prev[sectionKey]) {
+        delete next[sectionKey]
+      } else {
+        next[sectionKey] = true
+      }
       try {
-        localStorage.setItem(TEMPLATE_GROUP_EXPANDED_STORAGE_KEY, JSON.stringify(next))
+        localStorage.setItem(LIBRARY_SECTION_EXPANDED_STORAGE_KEY, JSON.stringify(next))
       } catch {
         /* ignore quota / private mode */
       }
@@ -548,12 +903,27 @@ export default function PlannerApp() {
     setHoveredId(null)
     setInfoAssetId(null)
     setFloorInspectorOpen(false)
+    setLightingPanelOpen(false)
+    setToolsMenuOpen(false)
+    setLibraryMenu(null)
   }, [])
+
+  useEffect(() => {
+    if (!libraryMenu) return
+    const onDocPointer = (e: MouseEvent) => {
+      if (libraryMenuRef.current?.contains(e.target as Node)) return
+      setLibraryMenu(null)
+    }
+    document.addEventListener('mousedown', onDocPointer)
+    return () => document.removeEventListener('mousedown', onDocPointer)
+  }, [libraryMenu])
 
   const changeTool = useCallback((nextTool: PlannerTool) => {
     setTool(nextTool)
     setHoveredId(null)
     setFloorInspectorOpen(false)
+    setLightingPanelOpen(false)
+    setToolsMenuOpen(false)
     if (nextTool !== 'place') {
       setPreviewPosition(null)
     }
@@ -567,9 +937,9 @@ export default function PlannerApp() {
         return
       }
       if (tool === 'place') return
-      if (event.ctrlKey || event.metaKey) return
       setFloorInspectorOpen(false)
-      if (event.shiftKey) {
+      const multi = event.ctrlKey || event.metaKey
+      if (multi) {
         setSelectedIds(
           selectedIds.includes(asset.id)
             ? selectedIds.filter((id) => id !== asset.id)
@@ -606,10 +976,10 @@ export default function PlannerApp() {
   const onFloorHover = useCallback(
     (point: Vector3Tuple) => {
       if (mode !== 'edit' || tool !== 'place' || !activeTemplate) return
-      const position = resolvePlacementPosition(point, isCtrlPressed, activeTemplate)
+      const position = resolvePlacementPosition(point, isCtrlPressed, activeTemplate, floor)
       setPreviewPosition(position)
     },
-    [activeTemplate, isCtrlPressed, mode, tool],
+    [activeTemplate, floor, isCtrlPressed, mode, tool],
   )
 
   const onFloorAction = useCallback(
@@ -618,26 +988,178 @@ export default function PlannerApp() {
         return
       }
       if (tool === 'place' && activeTemplate) {
-        const position = resolvePlacementPosition(point, isCtrlPressed, activeTemplate)
+        const position = resolvePlacementPosition(point, isCtrlPressed, activeTemplate, floor)
         const asset = createAssetFromTemplate(activeTemplate, { position })
         addAsset(asset)
+        recordRecentTemplatePlacement(activeTemplate.type)
         return
       }
       setSelectedIds([])
       setFloorInspectorOpen(true)
     },
-    [activeTemplate, addAsset, isCtrlPressed, mode, setSelectedIds, tool],
+    [
+      activeTemplate,
+      addAsset,
+      floor,
+      isCtrlPressed,
+      mode,
+      recordRecentTemplatePlacement,
+      setSelectedIds,
+      tool,
+    ],
   )
 
   const onRemoveSelected = useCallback(() => {
     if (selectedIds.length === 0) return
+    if (
+      selectedIds.length > 1 &&
+      !window.confirm(`${selectedIds.length} Assets wirklich löschen?`)
+    ) {
+      return
+    }
     removeAssets(selectedIds)
   }, [removeAssets, selectedIds])
+
+  const onRemoveCustomTemplate = useCallback(
+    (template: AssetTemplate) => {
+      if (
+        !window.confirm(
+          `Vorlage „${template.label}“ wirklich entfernen? Alle Instanzen in der Szene werden gelöscht.`,
+        )
+      ) {
+        return
+      }
+      removeCustomTemplate(template.type)
+      if (selectedTemplateType === template.type) {
+        setSelectedTemplateType(null)
+      }
+    },
+    [removeCustomTemplate, selectedTemplateType],
+  )
+
+  const onRemoveLibrarySection = useCallback(
+    (section: LibrarySection) => {
+      if (!section.userGroupId) return
+      const n = section.templates.length
+      const msg =
+        n > 0
+          ? `Gruppe „${section.title}“ mit ${n} Vorlage(n) löschen? Die Vorlagen erscheinen wieder unter ihrer Kategorie.`
+          : `Leere Gruppe „${section.title}“ wirklich löschen?`
+      if (!window.confirm(msg)) return
+      removeUserLibraryGroup(section.userGroupId)
+    },
+    [removeUserLibraryGroup],
+  )
+
+  const onLibrarySectionDrop = useCallback(
+    (section: LibrarySection, e: DragEvent) => {
+      e.preventDefault()
+      setLibraryDropTargetKey(null)
+      const type = e.dataTransfer.getData(TEMPLATE_DRAG_MIME)
+      if (!type) return
+      if (section.kind === 'favorites' || section.kind === 'recents') return
+      if (section.kind === 'user' && section.userGroupId) {
+        if (libraryOrganization.templateTypeToUserGroup[type] === section.userGroupId) return
+        cloneTemplateToUserGroup(type, section.userGroupId)
+      } else if (section.kind === 'builtin') {
+        assignTemplateToUserGroup(type, null)
+      }
+    },
+    [assignTemplateToUserGroup, cloneTemplateToUserGroup, libraryOrganization.templateTypeToUserGroup],
+  )
 
   const flashFeedback = useCallback((message: string) => {
     setSaveFeedback(message)
     window.setTimeout(() => setSaveFeedback(null), 2200)
   }, [])
+
+  const onConfirmCreateGroup = useCallback(() => {
+    const id = addUserLibraryGroup(newGroupNameDraft)
+    if (id) {
+      setNewGroupDialogOpen(false)
+      setNewGroupNameDraft('')
+    } else if (newGroupNameDraft.trim()) {
+      flashFeedback('Dieser Gruppenname ist reserviert oder ungültig.')
+    }
+  }, [addUserLibraryGroup, flashFeedback, newGroupNameDraft])
+
+  const duplicateTemplateToWorkspace = useCallback(
+    (template: AssetTemplate) => {
+      const position = resolvePlacementPosition([2, 0, 2], true, template, floor)
+      const asset = createAssetFromTemplate(template, { position })
+      addAsset(asset, true)
+      recordRecentTemplatePlacement(template.type)
+      changeTool('select')
+      flashFeedback(`„${template.label}“ in Szene eingefügt`)
+    },
+    [addAsset, changeTool, flashFeedback, floor, recordRecentTemplatePlacement],
+  )
+
+  const runAlign = useCallback(
+    (mode: Parameters<typeof alignAssetsXZ>[2]) => {
+      if (selectedAssets.length < 2) return
+      const updates = alignAssetsXZ(selectedAssets, templateByType, mode)
+      if (updates.length) updateAssets(updates)
+    },
+    [selectedAssets, templateByType, updateAssets],
+  )
+
+  const runDistributeH = useCallback(() => {
+    if (selectedAssets.length < 3) return
+    const updates = distributeCentersX(selectedAssets)
+    if (updates.length) updateAssets(updates)
+  }, [selectedAssets, updateAssets])
+
+  const runDistributeZ = useCallback(() => {
+    if (selectedAssets.length < 3) return
+    const updates = distributeCentersZ(selectedAssets)
+    if (updates.length) updateAssets(updates)
+  }, [selectedAssets, updateAssets])
+
+  const runSnapSelectionToGrid = useCallback(() => {
+    if (selectedAssets.length < 2 || !floor.placementSnapEnabled) return
+    const updates = snapAssetsToGrid(selectedAssets, floor.placementSnapStep)
+    if (updates.length) updateAssets(updates)
+  }, [floor.placementSnapEnabled, floor.placementSnapStep, selectedAssets, updateAssets])
+
+  const batchToggleLock = useCallback(
+    (locked: boolean) => {
+      if (selectedAssets.length === 0) return
+      updateAssets(selectedAssets.map((a) => ({ id: a.id, patch: { isLocked: locked } })))
+    },
+    [selectedAssets, updateAssets],
+  )
+
+  const batchAddFavorites = useCallback(() => {
+    const types = [...new Set(selectedAssets.map((a) => a.type))]
+    types.forEach((t) => {
+      if (!favoriteTypeSet.has(t)) toggleFavoriteTemplateType(t)
+    })
+  }, [favoriteTypeSet, selectedAssets, toggleFavoriteTemplateType])
+
+  const batchDeleteSelection = useCallback(() => {
+    if (selectedAssets.length === 0) return
+    if (
+      !window.confirm(
+        selectedAssets.length === 1
+          ? 'Dieses Asset wirklich löschen?'
+          : `${selectedAssets.length} Assets wirklich löschen?`,
+      )
+    ) {
+      return
+    }
+    removeAssets(selectedAssets.map((a) => a.id))
+  }, [removeAssets, selectedAssets])
+
+  const openLibraryTemplateMenu = useCallback(
+    (event: ReactMouseEvent<HTMLElement>, templateType: string) => {
+      event.preventDefault()
+      event.stopPropagation()
+      const r = event.currentTarget.getBoundingClientRect()
+      setLibraryMenu({ templateType, left: r.left, top: r.bottom + 6 })
+    },
+    [],
+  )
 
   const onSaveLayout = useCallback(() => {
     save()
@@ -646,17 +1168,52 @@ export default function PlannerApp() {
 
   const onSaveSlot = useCallback(() => {
     const suggested = `Layout ${new Date().toLocaleString()}`
-    const name = window.prompt('Name fuer den Layout-Slot:', suggested)
+    const name = window.prompt('Name für den Layout-Slot:', suggested)
     if (name === null) return
     const slot = saveSlot(name)
     flashFeedback(`Slot "${slot.name}" gespeichert`)
   }, [flashFeedback, saveSlot])
 
   const onExportLayout = useCallback(() => {
-    const suggested = `factory-layout-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}`
-    exportLayout(suggested)
-    flashFeedback('Export gestartet')
-  }, [exportLayout, flashFeedback])
+    setExportModalKey((k) => k + 1)
+    setExportDialogOpen(true)
+  }, [])
+
+  const onConfirmExport = useCallback(
+    (kind: LayoutExportKind) => {
+      exportLayout({
+        kind,
+        shellMode: mode === 'view' ? 'view' : 'edit',
+        librarySectionExpanded,
+      })
+      flashFeedback('Export gestartet')
+    },
+    [exportLayout, flashFeedback, librarySectionExpanded, mode],
+  )
+
+  const onLoadLayoutFile = useCallback(
+    async (file: File) => {
+      const r = await importLayoutFromFile(file)
+      if (r.ok) {
+        if (r.librarySectionExpanded) {
+          setLibrarySectionExpanded(r.librarySectionExpanded)
+          try {
+            localStorage.setItem(
+              LIBRARY_SECTION_EXPANDED_STORAGE_KEY,
+              JSON.stringify(r.librarySectionExpanded),
+            )
+          } catch {
+            /* ignore */
+          }
+        }
+        if (r.shellMode === 'view' || r.shellMode === 'edit') {
+          setMode(r.shellMode)
+        }
+      }
+      return r.ok
+    },
+    [importLayoutFromFile],
+  )
 
   const onOpenLoadModal = useCallback(() => {
     setIsLoadModalOpen(true)
@@ -670,43 +1227,64 @@ export default function PlannerApp() {
     return load()
   }, [load])
 
-  const onUploadAsset = useCallback(
+  const onLibraryBatchImport = useCallback(
     async (event: ChangeEvent<HTMLInputElement>) => {
-      const file = event.target.files?.[0]
+      const files = event.target.files
       try {
-        if (!file) return
-
-        const ext = getExtension(file.name)
-        if (!isAllowedModelExtension(ext)) {
+        if (!files?.length) return
+        setImportLibraryBusy(true)
+        const items: { name: string; modelUrl: string; modelFormat: ModelFormat }[] = []
+        let skipped = 0
+        for (const file of Array.from(files)) {
+          const ext = getExtension(file.name)
+          if (!isAllowedModelExtension(ext)) {
+            skipped += 1
+            continue
+          }
+          if (file.size > MAX_MODEL_SIZE_BYTES) {
+            skipped += 1
+            continue
+          }
+          const modelUrl = await readFileAsDataUrl(file)
+          const name = file.name.replace(/\.[^/.]+$/, '') || 'Asset'
+          items.push({ name, modelUrl, modelFormat: ext })
+        }
+        if (items.length === 0) {
           flashFeedback(
-            `Format nicht unterstuetzt (${ext || 'unbekannt'}). Erlaubt: ${ALLOWED_MODEL_EXTENSIONS.join(', ')}`,
+            skipped > 0
+              ? 'Datei konnte nicht importiert werden (Format oder Größe).'
+              : 'Keine gültigen Dateien ausgewählt.',
           )
           return
         }
-        if (file.size > MAX_MODEL_SIZE_BYTES) {
-          flashFeedback(
-            `Datei zu gross (${formatBytes(file.size)}). Limit: ${formatBytes(MAX_MODEL_SIZE_BYTES)}`,
-          )
-          return
-        }
-
-        const modelUrl = await readFileAsDataUrl(file)
-        const label = file.name.replace(/\.[^/.]+$/, '') || 'Custom Asset'
-        const template = addCustomModelTemplate(label, modelUrl, {
-          modelFormat: ext,
-          category: uploadAsWall ? CATEGORY_WALLS : undefined,
-        })
-        setSelectedTemplateType(template.type)
+        const created = importCustomModelTemplatesBatch(items)
+        setSelectedTemplateType(created[created.length - 1]!.type)
         changeTool('place')
-        flashFeedback(`${ext.toUpperCase()} importiert: ${label}`)
+        if (skipped > 0) {
+          flashFeedback(
+            created.length === 1
+              ? `„${created[0]!.label}“ importiert · ${skipped} übersprungen`
+              : `${created.length} Assets importiert · ${skipped} übersprungen`,
+          )
+        } else if (created.length === 1) {
+          flashFeedback(`„${created[0]!.label}“ importiert`)
+        } else {
+          flashFeedback(`${created.length} Assets importiert`)
+        }
       } catch (error) {
-        console.error('Upload failed', error)
-        flashFeedback('Upload fehlgeschlagen')
+        console.error('Import failed', error)
+        flashFeedback('Datei konnte nicht importiert werden')
       } finally {
+        setImportLibraryBusy(false)
         event.target.value = ''
       }
     },
-    [addCustomModelTemplate, changeTool, flashFeedback, uploadAsWall],
+    [
+      changeTool,
+      flashFeedback,
+      importCustomModelTemplatesBatch,
+      setSelectedTemplateType,
+    ],
   )
 
   // Keyboard shortcuts
@@ -720,10 +1298,94 @@ export default function PlannerApp() {
         setIsCtrlPressed(true)
       }
 
-      if (mode === 'view') {
-        if (!editable && event.key === 'Escape') {
-          setInfoAssetId(null)
+      if (event.key === 'Escape') {
+        if (dismissTopColorPickerEscape()) {
+          event.preventDefault()
+          return
         }
+        if (templatePreview !== null) {
+          event.preventDefault()
+          setTemplatePreview(null)
+          return
+        }
+        if (isLoadModalOpen) {
+          event.preventDefault()
+          setIsLoadModalOpen(false)
+          return
+        }
+        if (exportDialogOpen) {
+          event.preventDefault()
+          setExportDialogOpen(false)
+          return
+        }
+        if (newGroupDialogOpen) {
+          event.preventDefault()
+          setNewGroupDialogOpen(false)
+          return
+        }
+        if (templateMetaDialog) {
+          event.preventDefault()
+          setTemplateMetaDialog(null)
+          return
+        }
+        if (templateGroupDialog) {
+          event.preventDefault()
+          setTemplateGroupDialog(null)
+          return
+        }
+        if (templateDetailsDialog) {
+          event.preventDefault()
+          setTemplateDetailsDialog(null)
+          return
+        }
+        if (shortcutsOpen) {
+          event.preventDefault()
+          setShortcutsOpen(false)
+          return
+        }
+        if (mode === 'view' && infoAssetId) {
+          event.preventDefault()
+          setInfoAssetId(null)
+          return
+        }
+        if (libraryMenu) {
+          event.preventDefault()
+          setLibraryMenu(null)
+          return
+        }
+        if (toolsMenuOpen) {
+          event.preventDefault()
+          setToolsMenuOpen(false)
+          return
+        }
+        if (lightingPanelOpen) {
+          event.preventDefault()
+          setLightingPanelOpen(false)
+          return
+        }
+        if (floorInspectorOpen) {
+          event.preventDefault()
+          setFloorInspectorOpen(false)
+          return
+        }
+        if (librarySearchInput.trim()) {
+          setLibrarySearchInput('')
+          setLibrarySearch('')
+          event.preventDefault()
+          return
+        }
+        if (mode === 'view') {
+          event.preventDefault()
+          changeMode('edit')
+          return
+        }
+        event.preventDefault()
+        changeTool('select')
+        setInfoAssetId(null)
+        return
+      }
+
+      if (mode === 'view') {
         return
       }
 
@@ -749,13 +1411,115 @@ export default function PlannerApp() {
       }
 
       if (editable) return
+
+      if (tool === 'select' && !hasModifier && key === 'z' && !event.shiftKey) {
+        event.preventDefault()
+        undo()
+        return
+      }
+      if (tool === 'select' && !hasModifier && key === 'z' && event.shiftKey) {
+        event.preventDefault()
+        redo()
+        return
+      }
+
+      if (!hasModifier && event.shiftKey && key === 'c') {
+        event.preventDefault()
+        copy()
+        return
+      }
+      if (!hasModifier && event.shiftKey && key === 'v') {
+        event.preventDefault()
+        paste()
+        return
+      }
+
+      if (!hasModifier && key === 'e') {
+        event.preventDefault()
+        changeMode(mode === 'edit' ? 'view' : 'edit')
+        return
+      }
+
+      if (!hasModifier && key === 'h') {
+        event.preventDefault()
+        setRightPanelHidden((v) => !v)
+        return
+      }
+      if (!hasModifier && key === 'm') {
+        event.preventDefault()
+        setLeftPanelHidden((v) => !v)
+        return
+      }
+
+      if (!hasModifier && ['1', '2', '3', '4'].includes(event.key)) {
+        const presetMap: Record<string, CameraViewPreset> = {
+          '1': 'perspective',
+          '2': 'top',
+          '3': 'front',
+          '4': 'side',
+        }
+        const preset = presetMap[event.key]
+        if (preset) {
+          event.preventDefault()
+          setCameraView(preset)
+        }
+        return
+      }
+
+      const selectOnly = tool === 'select'
+
+      if (selectOnly && key === 'g') {
+        event.preventDefault()
+        if (canUseTransform) setTransformMode('translate')
+        return
+      }
+      if (selectOnly && key === 'r') {
+        event.preventDefault()
+        if (canUseTransform) setTransformMode('rotate')
+        return
+      }
+      if (selectOnly && key === 's' && !event.shiftKey) {
+        event.preventDefault()
+        if (canUseTransform) setTransformMode('scale')
+        return
+      }
+
+      if (selectOnly && key === 'd') {
+        event.preventDefault()
+        onRemoveSelected()
+        return
+      }
+
+      if (selectOnly && key === 'l' && selectedAssets.length > 0) {
+        event.preventDefault()
+        const anyUnlocked = selectedAssets.some((a) => !a.isLocked)
+        updateAssets(
+          selectedAssets.map((a) => ({ id: a.id, patch: { isLocked: anyUnlocked } })),
+        )
+        return
+      }
+
+      if (selectOnly && key === 'f' && selectedAssets.length > 0) {
+        event.preventDefault()
+        const types = [...new Set(selectedAssets.map((a) => a.type))]
+        const allFav = types.every((t) => favoriteTypeSet.has(t))
+        types.forEach((t) => {
+          const fav = favoriteTypeSet.has(t)
+          if (allFav && fav) toggleFavoriteTemplateType(t)
+          if (!allFav && !fav) toggleFavoriteTemplateType(t)
+        })
+        return
+      }
+
+      if (selectOnly && key === 'c' && !event.shiftKey && selectedAssets.length > 0) {
+        event.preventDefault()
+        setColorPickerKick((k) => k + 1)
+        return
+      }
+
       if (event.key === 'Delete' || event.key === 'Backspace') {
         event.preventDefault()
         onRemoveSelected()
-      }
-      if (event.key === 'Escape') {
-        changeTool('select')
-        setInfoAssetId(null)
       }
     }
 
@@ -767,15 +1531,45 @@ export default function PlannerApp() {
 
     const handleBlur = () => setIsCtrlPressed(false)
 
-    window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('keydown', handleKeyDown, true)
     window.addEventListener('keyup', handleKeyUp)
     window.addEventListener('blur', handleBlur)
     return () => {
-      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('keydown', handleKeyDown, true)
       window.removeEventListener('keyup', handleKeyUp)
       window.removeEventListener('blur', handleBlur)
     }
-  }, [changeTool, copy, mode, onRemoveSelected, paste, redo, undo])
+  }, [
+    canUseTransform,
+    changeMode,
+    changeTool,
+    copy,
+    exportDialogOpen,
+    favoriteTypeSet,
+    floorInspectorOpen,
+    infoAssetId,
+    isLoadModalOpen,
+    libraryMenu,
+    librarySearchInput,
+    lightingPanelOpen,
+    mode,
+    newGroupDialogOpen,
+    onRemoveSelected,
+    paste,
+    redo,
+    selectedAssets,
+    setCameraView,
+    shortcutsOpen,
+    templateDetailsDialog,
+    templateGroupDialog,
+    templateMetaDialog,
+    templatePreview,
+    toggleFavoriteTemplateType,
+    tool,
+    toolsMenuOpen,
+    undo,
+    updateAssets,
+  ])
 
   const updateSingleMetadata = useCallback(
     (
@@ -847,6 +1641,11 @@ export default function PlannerApp() {
     return createAssetFromTemplate(activeTemplate, { position: previewPosition })
   }, [activeTemplate, mode, previewPosition, tool])
 
+  const libraryMenuTemplate = useMemo(() => {
+    if (!libraryMenu) return null
+    return resolvedTemplates.find((t) => t.type === libraryMenu.templateType) ?? null
+  }, [libraryMenu, resolvedTemplates])
+
   return (
     <div className={`planner-shell mode-${mode}`}>
       {isLoadModalOpen && (
@@ -856,37 +1655,35 @@ export default function PlannerApp() {
           onLoadSlot={loadSlot}
           onDeleteSlot={deleteSlot}
           onRenameSlot={renameSlot}
-          onLoadFile={importLayoutFromFile}
+          onLoadFile={onLoadLayoutFile}
           onLoadCurrent={handleLoadCurrentAutoSlot}
         />
       )}
+      <ExportLayoutModal
+        key={exportModalKey}
+        open={exportDialogOpen}
+        onClose={() => setExportDialogOpen(false)}
+        onConfirm={onConfirmExport}
+      />
       <header className="top-bar top-bar-grouped">
         <span className="toolbar-title">Factory Planning Studio</span>
 
-        <div className={`mode-switch mode-${mode}`}>
-          <span className="mode-badge" data-mode={mode} aria-live="polite">
-            {mode === 'edit' ? 'EDIT MODE' : 'VIEW MODE'}
-          </span>
-          <button
-            type="button"
-            className={mode === 'edit' ? 'active' : ''}
-            onClick={() => changeMode('edit')}
-          >
-            Bearbeiten
-          </button>
-          <button
-            type="button"
-            className={mode === 'view' ? 'active' : ''}
-            onClick={() => changeMode('view')}
-          >
-            Praesentation
-          </button>
-        </div>
-
-        <ToolbarSeparator />
-
-        {mode === 'edit' && (
+        {mode === 'edit' ? (
           <>
+            <div className={`mode-switch mode-${mode}`}>
+              <span className="mode-badge" data-mode={mode} aria-live="polite">
+                EDIT MODE
+              </span>
+              <button type="button" className="active" onClick={() => changeMode('edit')}>
+                Bearbeiten
+              </button>
+              <button type="button" onClick={() => changeMode('view')}>
+                Präsentation
+              </button>
+            </div>
+
+            <ToolbarSeparator />
+
             <ButtonGroup>
               <button
                 type="button"
@@ -960,135 +1757,855 @@ export default function PlannerApp() {
                 Paste
               </button>
             </ButtonGroup>
-          </>
-        )}
 
-        <ToolbarSeparator />
+            <ToolbarSeparator />
 
-        <ButtonGroup>
-          {(['perspective', 'top', 'front', 'side', 'cabinet'] as CameraViewPreset[]).map(
-            (preset) => (
+            <div className="toolbar-dropdown-wrap toolbar-more-wrap" ref={toolsMenuRef}>
+              <button
+                ref={toolsMenuButtonRef}
+                type="button"
+                className={toolsMenuOpen ? 'active' : ''}
+                aria-expanded={toolsMenuOpen}
+                aria-haspopup="true"
+                onClick={() => {
+                  setToolsMenuOpen((o) => !o)
+                  setLightingPanelOpen(false)
+                }}
+              >
+                ⋮ Werkzeuge
+              </button>
+              {toolsMenuOpen ? (
+                <div
+                  ref={toolsPopoverRef}
+                  className="toolbar-popover toolbar-more-menu toolbar-popover--anchored"
+                  role="menu"
+                  aria-label="Ausrichten und Verteilen"
+                >
+                  <div className="toolbar-more-menu-heading">Ausrichten (mind. 2 Assets)</div>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={selectedAssets.length < 2}
+                    onClick={() => {
+                      runAlign('left')
+                      setToolsMenuOpen(false)
+                    }}
+                  >
+                    Linksbündig
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={selectedAssets.length < 2}
+                    onClick={() => {
+                      runAlign('right')
+                      setToolsMenuOpen(false)
+                    }}
+                  >
+                    Rechtsbündig
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={selectedAssets.length < 2}
+                    onClick={() => {
+                      runAlign('centerX')
+                      setToolsMenuOpen(false)
+                    }}
+                  >
+                    Mitte X
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={selectedAssets.length < 2}
+                    onClick={() => {
+                      runAlign('top')
+                      setToolsMenuOpen(false)
+                    }}
+                  >
+                    Oben (Z+)
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={selectedAssets.length < 2}
+                    onClick={() => {
+                      runAlign('bottom')
+                      setToolsMenuOpen(false)
+                    }}
+                  >
+                    Unten (Z−)
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={selectedAssets.length < 2}
+                    onClick={() => {
+                      runAlign('centerZ')
+                      setToolsMenuOpen(false)
+                    }}
+                  >
+                    Mitte Z
+                  </button>
+                  <div className="toolbar-more-menu-heading">Verteilen</div>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={selectedAssets.length < 3}
+                    onClick={() => {
+                      runDistributeH()
+                      setToolsMenuOpen(false)
+                    }}
+                  >
+                    Gleichmäßig auf X
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={selectedAssets.length < 3}
+                    onClick={() => {
+                      runDistributeZ()
+                      setToolsMenuOpen(false)
+                    }}
+                  >
+                    Gleichmäßig auf Z
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={selectedAssets.length < 2 || !floor.placementSnapEnabled}
+                    onClick={() => {
+                      runSnapSelectionToGrid()
+                      setToolsMenuOpen(false)
+                    }}
+                  >
+                    An Platzierungs-Raster ausrichten
+                  </button>
+                </div>
+              ) : null}
+            </div>
+
+            <ToolbarSeparator />
+
+            <ButtonGroup>
+              {(['perspective', 'top', 'front', 'side'] as const).map((preset) => (
+                <button
+                  type="button"
+                  key={preset}
+                  className={cameraView === preset ? 'active' : ''}
+                  onClick={() => setCameraView(preset)}
+                >
+                  {preset === 'perspective'
+                    ? 'Perspektive'
+                    : preset === 'top'
+                      ? 'Top'
+                      : preset === 'front'
+                        ? 'Front'
+                        : 'Seite'}
+                </button>
+              ))}
+            </ButtonGroup>
+
+            <ToolbarSeparator />
+
+            <div className="toolbar-dropdown-wrap toolbar-lighting-wrap" ref={lightingBarRef}>
+              <button
+                ref={lightingButtonRef}
+                type="button"
+                className={lightingPanelOpen ? 'active' : ''}
+                onClick={() => {
+                  setLightingPanelOpen((o) => !o)
+                  setFloorInspectorOpen(false)
+                  setToolsMenuOpen(false)
+                }}
+              >
+                Beleuchtung
+              </button>
+              {lightingPanelOpen ? (
+                <div
+                  ref={lightingPopoverRef}
+                  className="toolbar-popover lighting-popover toolbar-popover--anchored"
+                >
+                  <LightingToolbarPanel lighting={lighting} setLighting={setLighting} />
+                </div>
+              ) : null}
+            </div>
+
+            <ToolbarSeparator />
+
+            <ButtonGroup>
+              <button type="button" onClick={onSaveLayout}>
+                Speichern
+              </button>
+              <button type="button" onClick={onSaveSlot}>
+                Als Slot
+              </button>
+              <button type="button" onClick={onExportLayout}>
+                Export
+              </button>
+              <button type="button" onClick={onOpenLoadModal}>
+                Laden
+              </button>
+            </ButtonGroup>
+
+            <ToolbarSeparator />
+
+            <ButtonGroup>
               <button
                 type="button"
-                key={preset}
-                className={cameraView === preset ? 'active' : ''}
-                onClick={() => setCameraView(preset)}
+                className="toolbar-delete"
+                onClick={onRemoveSelected}
+                disabled={selectedIds.length === 0}
               >
-                {preset === 'perspective'
-                  ? 'Perspektive'
-                  : preset === 'top'
-                    ? 'Top'
-                    : preset === 'front'
-                      ? 'Front'
-                      : preset === 'side'
-                        ? 'Seite'
-                        : 'Cabinet'}
+                Löschen
               </button>
-            ),
-          )}
-        </ButtonGroup>
-
-        <ToolbarSeparator />
-
-        <ButtonGroup>
-          <button type="button" onClick={onSaveLayout}>
-            Speichern
-          </button>
-          {mode === 'edit' && (
-            <button type="button" onClick={onSaveSlot}>
-              Als Slot
+            </ButtonGroup>
+          </>
+        ) : (
+          <>
+            <span className="mode-badge" data-mode={mode} aria-live="polite">
+              VIEW MODE
+            </span>
+            <button type="button" onClick={() => changeMode('edit')}>
+              Präsentation beenden (ESC)
             </button>
-          )}
-          <button type="button" onClick={onExportLayout}>
-            Export
-          </button>
-          <button type="button" onClick={onOpenLoadModal}>
-            Laden
-          </button>
-        </ButtonGroup>
-
-        <ToolbarSeparator />
-
-        {mode === 'edit' && (
-          <ButtonGroup>
-            <button
-              type="button"
-              className="toolbar-delete"
-              onClick={onRemoveSelected}
-              disabled={selectedIds.length === 0}
-            >
-              Loeschen
-            </button>
-          </ButtonGroup>
+            <ToolbarSeparator />
+            <ButtonGroup>
+              {(['perspective', 'top', 'front', 'side'] as CameraViewPreset[]).map((preset) => (
+                <button
+                  type="button"
+                  key={preset}
+                  className={cameraView === preset ? 'active' : ''}
+                  onClick={() => setCameraView(preset)}
+                >
+                  {preset === 'perspective'
+                    ? 'Perspektive'
+                    : preset === 'top'
+                      ? 'Top'
+                      : preset === 'front'
+                        ? 'Front'
+                        : 'Seite'}
+                </button>
+              ))}
+            </ButtonGroup>
+          </>
         )}
       </header>
 
-      <div className={`workspace${mode === 'view' ? ' view-mode' : ''}`}>
+      <div
+        className={`workspace${mode === 'view' ? ' view-mode' : ''}${leftPanelHidden ? ' workspace--hide-library' : ''}${rightPanelHidden ? ' workspace--hide-inspector' : ''}`}
+      >
         <aside className="panel left" aria-hidden={mode === 'view'}>
           <h2>Asset-Bibliothek</h2>
-          <p className="panel-hint">Kategorie waehlen und per Klick in der Szene platzieren.</p>
-          <label className="upload-field">
-            Eigene Assets hochladen (GLB/GLTF/STL, max. 20 MB)
+          <p className="panel-hint">
+            Vorlage wählen und auf den Boden klicken. Eigene Modelle: Plus neben „{EIGENE_ASSETS_USER_GROUP_LABEL}“
+            — GLB, GLTF, STL, OBJ, FBX (max. {formatBytes(MAX_MODEL_SIZE_BYTES)} pro Datei, mehrere Dateien
+            möglich).
+          </p>
+          <div className="library-search-row">
+            <span className="library-search-icon" aria-hidden>
+              🔍
+            </span>
             <input
-              type="file"
-              accept=".glb,.gltf,.stl,model/gltf-binary,model/gltf+json,model/stl"
-              onChange={onUploadAsset}
+              type="search"
+              className="library-search-input"
+              placeholder="Assets suchen…"
+              value={librarySearchInput}
+              onChange={(e) => setLibrarySearchInput(e.target.value)}
+              aria-label="Assets suchen"
             />
-          </label>
-          <label className="checkbox-field upload-wall-flag">
-            <input
-              type="checkbox"
-              checked={uploadAsWall}
-              onChange={(e) => setUploadAsWall(e.target.checked)}
-            />
-            <span>Import unter &quot;Wände&quot; kategorisieren</span>
-          </label>
-          {Object.entries(groupedTemplates).map(([category, list]) => {
-            const expanded = templateGroupExpanded[category] !== false
+            {librarySearchInput ? (
+              <button
+                type="button"
+                className="library-search-clear"
+                aria-label="Suche zurücksetzen"
+                onClick={() => {
+                  setLibrarySearchInput('')
+                  setLibrarySearch('')
+                }}
+              >
+                ×
+              </button>
+            ) : null}
+          </div>
+          <div className="library-toolbar-row library-toolbar-row--import">
+            <button
+              type="button"
+              className="library-new-group-btn"
+              onClick={() => {
+                setNewGroupNameDraft('')
+                setNewGroupDialogOpen(true)
+              }}
+            >
+              + Neue Gruppe
+            </button>
+          </div>
+
+          {filteredLibrarySections.map((section) => {
+            const expanded = librarySectionExpanded[section.sectionKey] === true
+            const sectionAccent = libraryAccentForSectionTitle(section.title)
             return (
-              <div key={category} className="asset-group">
-                <button
-                  type="button"
-                  className="asset-group-header"
-                  onClick={() => toggleTemplateGroup(category)}
-                  aria-expanded={expanded}
-                >
-                  <span
-                    className={`asset-group-chevron${expanded ? ' asset-group-chevron--open' : ''}`}
-                    aria-hidden
+              <div
+                key={section.sectionKey}
+                className={`asset-group${libraryDropTargetKey === section.sectionKey ? ' library-drop-active' : ''}`}
+                onDragOver={(e) => {
+                  if (section.kind === 'favorites' || section.kind === 'recents') {
+                    e.dataTransfer.dropEffect = 'none'
+                    return
+                  }
+                  e.preventDefault()
+                  e.dataTransfer.dropEffect = 'move'
+                  setLibraryDropTargetKey(section.sectionKey)
+                }}
+                onDrop={(e) => onLibrarySectionDrop(section, e)}
+              >
+                <div className="asset-group-header-row">
+                  <button
+                    type="button"
+                    className="asset-group-header"
+                    onClick={() => toggleTemplateGroup(section.sectionKey)}
+                    aria-expanded={expanded}
                   >
-                    ▶
-                  </span>
-                  <span className="asset-group-title">{category}</span>
-                </button>
+                    <span
+                      className={`asset-group-chevron${expanded ? ' asset-group-chevron--open' : ''}`}
+                      aria-hidden
+                    >
+                      ▶
+                    </span>
+                    <span className="asset-group-title">
+                      {section.title}
+                      {section.kind === 'user' && section.templates.length === 0 ? ' (leer)' : ''}
+                    </span>
+                  </button>
+                  {section.userGroupId === EIGENE_ASSETS_USER_GROUP_ID ? (
+                    <>
+                      <input
+                        ref={eigeneAssetsImportInputRef}
+                        type="file"
+                        className="library-import-input-hidden"
+                        accept=".glb,.gltf,.stl,.obj,.fbx,model/gltf-binary,model/gltf+json,model/stl"
+                        multiple
+                        onChange={onLibraryBatchImport}
+                      />
+                      <button
+                        type="button"
+                        className="asset-group-import-header"
+                        title="Asset importieren"
+                        aria-label="Asset importieren"
+                        disabled={importLibraryBusy}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          eigeneAssetsImportInputRef.current?.click()
+                        }}
+                      >
+                        +
+                      </button>
+                    </>
+                  ) : null}
+                  {section.deletable ? (
+                    <button
+                      type="button"
+                      className="asset-group-delete-header"
+                      title="Gruppe löschen"
+                      aria-label={`Gruppe ${section.title} löschen`}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onRemoveLibrarySection(section)
+                      }}
+                    >
+                      ×
+                    </button>
+                  ) : null}
+                </div>
                 <div
                   className={`asset-group-items${expanded ? ' asset-group-items--expanded' : ' asset-group-items--collapsed'}`}
                   aria-hidden={!expanded}
                 >
-                  {list.map((template) => (
-                    <button
-                      type="button"
-                      key={template.type}
-                      className={
-                        tool === 'place' && activeTemplateType === template.type ? 'active' : ''
-                      }
-                      onClick={() => {
-                        setFloorInspectorOpen(false)
-                        setSelectedTemplateType(template.type)
-                        changeTool('place')
+                  {section.kind === 'favorites' && section.templates.length === 0 ? (
+                    <p className="panel-hint library-fav-empty">
+                      Über das Menü (⋮) bei einer Vorlage „Zu Favoriten hinzufügen“ wählen.
+                    </p>
+                  ) : null}
+                  {section.kind === 'recents' && section.templates.length === 0 ? (
+                    <p className="panel-hint library-fav-empty">
+                      Erscheint automatisch, sobald Sie Assets platzieren.
+                    </p>
+                  ) : null}
+                  {section.templates.map((template) => (
+                    <div
+                      key={`${section.sectionKey}-${template.type}`}
+                      className="asset-template-block"
+                      style={{ borderLeft: `4px solid ${sectionAccent}` }}
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData(TEMPLATE_DRAG_MIME, template.type)
+                        e.dataTransfer.effectAllowed = 'move'
                       }}
+                      onDragEnd={() => setLibraryDropTargetKey(null)}
                     >
-                      <span>{template.label}</span>
-                      <small>
-                        {template.geometry.kind} |{' '}
-                        {template.scale.map((v) => v.toFixed(1)).join(' x ')} m
-                      </small>
-                    </button>
+                      <div className="asset-template-row">
+                        <button
+                          type="button"
+                          className={`asset-template-select${
+                            tool === 'place' && activeTemplateType === template.type ? ' active' : ''
+                          }`}
+                          onClick={() => {
+                            setFloorInspectorOpen(false)
+                            setSelectedTemplateType(template.type)
+                            changeTool('place')
+                          }}
+                        >
+                          <span>{template.label}</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="library-template-menu-btn"
+                          title="Optionen"
+                          aria-label={`Optionen für ${template.label}`}
+                          onClick={(e) => openLibraryTemplateMenu(e, template.type)}
+                          onPointerDown={(e) => e.stopPropagation()}
+                        >
+                          ⋮
+                        </button>
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>
             )
           })}
+
+          {newGroupDialogOpen ? (
+            <div
+              className="library-dialog-backdrop"
+              role="presentation"
+              onClick={() => setNewGroupDialogOpen(false)}
+              onKeyDown={(e) => e.key === 'Escape' && setNewGroupDialogOpen(false)}
+            >
+              <div
+                className="library-dialog"
+                role="dialog"
+                aria-labelledby="new-group-title"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <h3 id="new-group-title">Neue Gruppe</h3>
+                <input
+                  className="library-dialog-input"
+                  placeholder="Gruppenname eingeben"
+                  value={newGroupNameDraft}
+                  autoFocus
+                  onChange={(e) => setNewGroupNameDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') onConfirmCreateGroup()
+                  }}
+                />
+                <div className="library-dialog-actions">
+                  <button type="button" onClick={onConfirmCreateGroup}>
+                    Erstellen
+                  </button>
+                  <button type="button" onClick={() => setNewGroupDialogOpen(false)}>
+                    Abbrechen
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {libraryMenu && libraryMenuTemplate ? (
+            <div
+              ref={libraryMenuRef}
+              className="library-context-menu"
+              style={{
+                position: 'fixed',
+                left: libraryMenu.left,
+                top: libraryMenu.top,
+                zIndex: 1000,
+              }}
+              role="menu"
+            >
+              <button
+                type="button"
+                className="library-context-menu-item"
+                role="menuitem"
+                onClick={() => {
+                  toggleFavoriteTemplateType(libraryMenuTemplate.type)
+                  setLibraryMenu(null)
+                }}
+              >
+                <span className="library-context-menu-icon" aria-hidden>
+                  {favoriteTypeSet.has(libraryMenuTemplate.type) ? '☆' : '★'}
+                </span>
+                <span className="library-context-menu-label">
+                  {favoriteTypeSet.has(libraryMenuTemplate.type)
+                    ? 'Aus Favoriten entfernen'
+                    : 'Zu Favoriten hinzufügen'}
+                </span>
+              </button>
+              <div className="library-context-menu-divider" role="separator" />
+              <button
+                type="button"
+                className="library-context-menu-item"
+                role="menuitem"
+                onClick={() => {
+                  const t = libraryMenuTemplate
+                  const tags = getTagsFromTemplate(t, libraryOrganization)
+                  setTemplateMetaDraft({
+                    name: t.label,
+                    description: t.metadata?.description ?? '',
+                    tags: tags.join(', '),
+                  })
+                  setTemplateMetaDialog(t)
+                  setLibraryMenu(null)
+                }}
+              >
+                <span className="library-context-menu-icon" aria-hidden>
+                  ℹ
+                </span>
+                <span className="library-context-menu-label">Name & Beschreibung bearbeiten</span>
+              </button>
+              <button
+                type="button"
+                className="library-context-menu-item"
+                role="menuitem"
+                onClick={() => {
+                  setTemplateGroupDialog(libraryMenuTemplate)
+                  setLibraryMenu(null)
+                }}
+              >
+                <span className="library-context-menu-icon" aria-hidden>
+                  📁
+                </span>
+                <span className="library-context-menu-label">In Gruppe verschieben</span>
+              </button>
+              <div className="library-context-menu-divider" role="separator" />
+              <button
+                type="button"
+                className="library-context-menu-item"
+                role="menuitem"
+                onClick={() => {
+                  setTemplatePreview(libraryMenuTemplate)
+                  setLibraryMenu(null)
+                }}
+              >
+                <span className="library-context-menu-icon" aria-hidden>
+                  👁
+                </span>
+                <span className="library-context-menu-label">Vorschau</span>
+              </button>
+              <button
+                type="button"
+                className="library-context-menu-item"
+                role="menuitem"
+                onClick={() => {
+                  duplicateTemplateToWorkspace(libraryMenuTemplate)
+                  setLibraryMenu(null)
+                }}
+              >
+                <span className="library-context-menu-icon" aria-hidden>
+                  📋
+                </span>
+                <span className="library-context-menu-label">In Workspace duplizieren</span>
+              </button>
+              <button
+                type="button"
+                className="library-context-menu-item"
+                role="menuitem"
+                onClick={() => {
+                  setTemplateDetailsDialog(libraryMenuTemplate)
+                  setLibraryMenu(null)
+                }}
+              >
+                <span className="library-context-menu-icon" aria-hidden>
+                  📊
+                </span>
+                <span className="library-context-menu-label">Details anzeigen</span>
+              </button>
+              <div className="library-context-menu-divider" role="separator" />
+              <button
+                type="button"
+                className="library-context-menu-item library-context-menu-item--danger"
+                role="menuitem"
+                disabled={!customTemplateTypeSet.has(libraryMenuTemplate.type)}
+                title={
+                  customTemplateTypeSet.has(libraryMenuTemplate.type)
+                    ? undefined
+                    : 'Nur eigene Uploads können aus der Bibliothek gelöscht werden'
+                }
+                onClick={() => {
+                  if (!customTemplateTypeSet.has(libraryMenuTemplate.type)) return
+                  onRemoveCustomTemplate(libraryMenuTemplate)
+                  setLibraryMenu(null)
+                }}
+              >
+                <span className="library-context-menu-icon" aria-hidden>
+                  🗑
+                </span>
+                <span className="library-context-menu-label">Löschen</span>
+              </button>
+            </div>
+          ) : null}
+
+          {templateMetaDialog ? (
+            <div
+              className="library-dialog-backdrop"
+              role="presentation"
+              onClick={() => setTemplateMetaDialog(null)}
+              onKeyDown={(e) => e.key === 'Escape' && setTemplateMetaDialog(null)}
+            >
+              <div
+                className="library-dialog"
+                role="dialog"
+                aria-labelledby="template-meta-title"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <h3 id="template-meta-title">Vorlage bearbeiten</h3>
+                <label className="library-dialog-field">
+                  <span>Name</span>
+                  <input
+                    className="library-dialog-input"
+                    value={templateMetaDraft.name}
+                    onChange={(e) =>
+                      setTemplateMetaDraft((d) => ({ ...d, name: e.target.value }))
+                    }
+                  />
+                </label>
+                <label className="library-dialog-field">
+                  <span>Beschreibung</span>
+                  <textarea
+                    className="library-dialog-textarea"
+                    rows={3}
+                    value={templateMetaDraft.description}
+                    onChange={(e) =>
+                      setTemplateMetaDraft((d) => ({ ...d, description: e.target.value }))
+                    }
+                  />
+                </label>
+                <label className="library-dialog-field">
+                  <span>Tags (kommagetrennt)</span>
+                  <input
+                    className="library-dialog-input"
+                    value={templateMetaDraft.tags}
+                    onChange={(e) =>
+                      setTemplateMetaDraft((d) => ({ ...d, tags: e.target.value }))
+                    }
+                  />
+                </label>
+                <div className="library-dialog-actions">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const tags = templateMetaDraft.tags
+                        .split(',')
+                        .map((s) => s.trim())
+                        .filter(Boolean)
+                      updateTemplateLibraryMeta(templateMetaDialog.type, {
+                        label: templateMetaDraft.name,
+                        description: templateMetaDraft.description,
+                        tags: tags.length > 0 ? tags : null,
+                      })
+                      setTemplateMetaDialog(null)
+                    }}
+                  >
+                    Speichern
+                  </button>
+                  <button type="button" onClick={() => setTemplateMetaDialog(null)}>
+                    Abbrechen
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {templateGroupDialog ? (
+            <div
+              className="library-dialog-backdrop"
+              role="presentation"
+              onClick={() => setTemplateGroupDialog(null)}
+              onKeyDown={(e) => e.key === 'Escape' && setTemplateGroupDialog(null)}
+            >
+              <div
+                className="library-dialog"
+                role="dialog"
+                aria-labelledby="template-group-title"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <h3 id="template-group-title">Bibliotheks-Gruppe</h3>
+                <label className="library-dialog-field">
+                  <span>Zuordnung</span>
+                  <select
+                    className="library-dialog-input template-group-select"
+                    value={
+                      libraryOrganization.templateTypeToUserGroup[templateGroupDialog.type] ?? ''
+                    }
+                    onChange={(e) => {
+                      const v = e.target.value
+                      if (v === '') {
+                        assignTemplateToUserGroup(templateGroupDialog.type, null)
+                        return
+                      }
+                      cloneTemplateToUserGroup(templateGroupDialog.type, v)
+                    }}
+                  >
+                    <option value="">Kategorie (Standard)</option>
+                    <option value={EIGENE_ASSETS_USER_GROUP_ID}>{EIGENE_ASSETS_USER_GROUP_LABEL}</option>
+                    {libraryOrganization.userGroups
+                      .filter((g) => g.id !== EIGENE_ASSETS_USER_GROUP_ID)
+                      .map((g) => (
+                        <option key={g.id} value={g.id}>
+                          {g.label}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                <div className="library-dialog-actions">
+                  <button type="button" onClick={() => setTemplateGroupDialog(null)}>
+                    Schließen
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {templateDetailsDialog ? (
+            <div
+              className="library-dialog-backdrop"
+              role="presentation"
+              onClick={() => setTemplateDetailsDialog(null)}
+              onKeyDown={(e) => e.key === 'Escape' && setTemplateDetailsDialog(null)}
+            >
+              <div
+                className="library-dialog library-details-dialog"
+                role="dialog"
+                aria-labelledby="template-details-title"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="details-dialog-header">
+                  <div>
+                    <h3 id="template-details-title">{templateDetailsDialog.label}</h3>
+                    <p className="details-dialog-subtitle">{templateDetailsDialog.category}</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="details-dialog-close"
+                    onClick={() => setTemplateDetailsDialog(null)}
+                    aria-label="Schließen"
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className="details-dialog-body">
+                  <section className="details-section">
+                    <h4>Basis-Informationen</h4>
+                    <dl className="details-dl">
+                      <dt>Name</dt>
+                      <dd>{templateDetailsDialog.label}</dd>
+                      <dt>Beschreibung</dt>
+                      <dd>{templateDetailsDialog.metadata?.description?.trim() || '—'}</dd>
+                      <dt className="details-dt-muted">Typ-ID</dt>
+                      <dd className="details-dd-muted">
+                        <code>{templateDetailsDialog.type}</code>
+                      </dd>
+                    </dl>
+                  </section>
+                  <section className="details-section">
+                    <h4>Geometrie</h4>
+                    <dl className="details-dl">
+                      <dt>Art</dt>
+                      <dd>{templateDetailsDialog.geometry.kind}</dd>
+                      <dt>Abmessungen (ca.)</dt>
+                      <dd>{formatTemplateDimensions(templateDetailsDialog)}</dd>
+                      <dt>In Millimetern</dt>
+                      <dd>{formatTemplateDimensionsMm(templateDetailsDialog)}</dd>
+                      <dt>Template-Skalierung</dt>
+                      <dd>
+                        {templateDetailsDialog.scale[0].toFixed(4)} ×{' '}
+                        {templateDetailsDialog.scale[1].toFixed(4)} ×{' '}
+                        {templateDetailsDialog.scale[2].toFixed(4)}
+                      </dd>
+                    </dl>
+                  </section>
+                  <section className="details-section">
+                    <h4>Material</h4>
+                    <dl className="details-dl">
+                      <dt>Farbe</dt>
+                      <dd className="details-color-row">
+                        <span
+                          className="details-color-swatch"
+                          style={{ backgroundColor: templateDetailsDialog.color }}
+                          aria-hidden
+                        />
+                        <span>{templateDetailsDialog.color}</span>
+                      </dd>
+                    </dl>
+                  </section>
+                  <section className="details-section">
+                    <h4>Status</h4>
+                    <dl className="details-dl">
+                      <dt>Favorit</dt>
+                      <dd>
+                        {libraryOrganization.favoriteTemplateTypes.includes(
+                          templateDetailsDialog.type,
+                        )
+                          ? '★ Ja'
+                          : '☆ Nein'}
+                      </dd>
+                      <dt>Bibliotheks-Gruppe</dt>
+                      <dd>
+                        {(() => {
+                          const gid =
+                            libraryOrganization.templateTypeToUserGroup[templateDetailsDialog.type]
+                          if (!gid) return `Standard (${templateDetailsDialog.category})`
+                          const g = libraryOrganization.userGroups.find((u) => u.id === gid)
+                          return g?.label ?? gid
+                        })()}
+                      </dd>
+                    </dl>
+                  </section>
+                  <section className="details-section">
+                    <h4>Metadaten</h4>
+                    <dl className="details-dl">
+                      <dt>Tags</dt>
+                      <dd>
+                        {getTagsFromTemplate(templateDetailsDialog, libraryOrganization).join(', ') ||
+                          '—'}
+                      </dd>
+                      {templateDetailsDialog.createdAt ? (
+                        <>
+                          <dt>Importiert am</dt>
+                          <dd>
+                            {new Date(templateDetailsDialog.createdAt).toLocaleString('de-DE')}
+                          </dd>
+                        </>
+                      ) : (
+                        <>
+                          <dt>Import</dt>
+                          <dd>Nein (eingebaute Vorlage)</dd>
+                        </>
+                      )}
+                      {templateDetailsDialog.geometry.kind === 'custom' ? (
+                        <>
+                          <dt>Modell-Format</dt>
+                          <dd>{templateDetailsDialog.geometry.params.modelFormat ?? '—'}</dd>
+                          <dt>Modell-URL</dt>
+                          <dd className="library-details-mono">
+                            {templateDetailsDialog.geometry.params.modelUrl
+                              ? `${String(templateDetailsDialog.geometry.params.modelUrl).slice(0, 64)}…`
+                              : '—'}
+                          </dd>
+                        </>
+                      ) : null}
+                    </dl>
+                  </section>
+                </div>
+                <div className="library-dialog-actions">
+                  <button type="button" onClick={() => setTemplateDetailsDialog(null)}>
+                    Schließen
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </aside>
 
         <main className="scene-wrapper">
@@ -1105,7 +2622,7 @@ export default function PlannerApp() {
               attach="fog"
               args={[mode === 'view' ? '#0f1b29' : '#d2dae3', 55, 145]}
             />
-            {mode === 'edit' ? <Lighting /> : <ViewModeOverlay mode="view" />}
+            <Lighting settings={lighting} presentation={mode === 'view'} />
             <AnimatedCameraRig preset={cameraView} orbitRef={orbitRef} />
             <FactoryFloor
               floor={floor}
@@ -1135,6 +2652,7 @@ export default function PlannerApp() {
                   isSelected={selectedIds.includes(asset.id)}
                   isHovered={hoveredId === asset.id}
                   isEditMode={mode === 'edit'}
+                  selectionAccent={libraryAccentForSectionTitle(asset.category)}
                   onClick={onAssetClick}
                   onPointerOver={onAssetPointerOver}
                   onPointerOut={onAssetPointerOut}
@@ -1148,6 +2666,7 @@ export default function PlannerApp() {
                 mode={transformMode}
                 isCtrlPressed={isCtrlPressed}
                 orbitRef={orbitRef}
+                translationSnap={gizmoTranslateSnap}
                 onCommit={(id, patch) => updateAsset(id, patch)}
               >
                 <AssetRenderer
@@ -1156,6 +2675,7 @@ export default function PlannerApp() {
                   isHovered={hoveredId === singleSelected.id}
                   isEditMode
                   skipTransform
+                  selectionAccent={libraryAccentForSectionTitle(singleSelected.category)}
                   onClick={onAssetClick}
                   onPointerOver={onAssetPointerOver}
                   onPointerOut={onAssetPointerOut}
@@ -1169,6 +2689,7 @@ export default function PlannerApp() {
                 mode={transformMode}
                 isCtrlPressed={isCtrlPressed}
                 orbitRef={orbitRef}
+                translationSnap={gizmoTranslateSnap}
                 onCommit={(updates) => updateAssets(updates)}
               />
             )}
@@ -1217,7 +2738,7 @@ export default function PlannerApp() {
 
           {mode === 'view' && (
             <div className="view-hint-bar">
-              <span>Praesentationsmodus: Klicke ein Asset fuer Details.</span>
+              <span>Präsentationsmodus: Klicke ein Asset für Details.</span>
             </div>
           )}
         </main>
@@ -1240,6 +2761,17 @@ export default function PlannerApp() {
                 <p className="panel-hint">
                   Form: {singleSelected.geometry.kind} | Kategorie: {singleSelected.category}
                 </p>
+                <p className="panel-hint">
+                  Maße (ca.):{' '}
+                  {templateByType.has(singleSelected.type)
+                    ? formatTemplateDimensions(templateByType.get(singleSelected.type)!)
+                    : '—'}
+                </p>
+                <p className="panel-hint">
+                  Position (m): X {formatNumber(singleSelected.position[0])}, Y{' '}
+                  {formatNumber(singleSelected.position[1])}, Z{' '}
+                  {formatNumber(singleSelected.position[2])}
+                </p>
                 <p className="panel-hint">ID: {singleSelected.id.slice(0, 20)}...</p>
 
                 <h3>Sperre</h3>
@@ -1255,8 +2787,8 @@ export default function PlannerApp() {
                 </label>
                 {singleSelected.isLocked ? (
                   <p className="panel-hint">
-                    Gesperrt: Transform nur im Inspector eingeschraenkt; Farbe/Lock hier
-                    weiterhin aenderbar. In der Szene ohne Transform-Gizmo.
+                    Gesperrt: Transform nur im Inspector eingeschränkt; Farbe/Lock hier
+                    weiterhin änderbar. In der Szene ohne Transform-Gizmo.
                   </p>
                 ) : null}
 
@@ -1344,15 +2876,49 @@ export default function PlannerApp() {
                 </div>
 
                 <h4 className="inspector-subheading">Skalierung</h4>
+                <p className="panel-hint inspector-scale-hint">
+                  Stufenlos (Gizmo und Eingaben). Einheitlich: alle Achsen auf einen Wert setzen.
+                </p>
+                <label className="opacity-slider-field">
+                  Alle Achsen gleich
+                  <input
+                    type="range"
+                    min={0.01}
+                    max={10}
+                    step={0.001}
+                    disabled={singleSelected.isLocked}
+                    value={roundToDecimals(
+                      (singleSelected.scale[0] +
+                        singleSelected.scale[1] +
+                        singleSelected.scale[2]) /
+                        3,
+                      4,
+                    )}
+                    onChange={(event) => {
+                      const v = Number(event.target.value)
+                      updateAsset(singleSelected.id, { scale: [v, v, v] })
+                    }}
+                  />
+                  <span className="slider-value-hint">
+                    {formatNumeric(
+                      (singleSelected.scale[0] +
+                        singleSelected.scale[1] +
+                        singleSelected.scale[2]) /
+                        3,
+                      4,
+                    )}
+                  </span>
+                </label>
                 <div className="vector-grid" key={`${singleSelected.id}-scale`}>
                   <NumericInput
                     label="Breite (X)"
                     value={singleSelected.scale[0]}
+                    fractionDigits={4}
                     disabled={singleSelected.isLocked}
                     onCommit={(value) =>
                       updateAsset(singleSelected.id, {
                         scale: [
-                          Math.max(value, 0.05),
+                          Math.max(value, 0.01),
                           singleSelected.scale[1],
                           singleSelected.scale[2],
                         ],
@@ -1360,29 +2926,31 @@ export default function PlannerApp() {
                     }
                   />
                   <NumericInput
-                    label="Hoehe (Y)"
+                    label="Höhe (Y)"
                     value={singleSelected.scale[1]}
+                    fractionDigits={4}
                     disabled={singleSelected.isLocked}
                     onCommit={(value) =>
                       updateAsset(singleSelected.id, {
                         scale: [
                           singleSelected.scale[0],
-                          Math.max(value, 0.05),
+                          Math.max(value, 0.01),
                           singleSelected.scale[2],
                         ],
                       })
                     }
                   />
                   <NumericInput
-                    label="Laenge (Z)"
+                    label="Länge (Z)"
                     value={singleSelected.scale[2]}
+                    fractionDigits={4}
                     disabled={singleSelected.isLocked}
                     onCommit={(value) =>
                       updateAsset(singleSelected.id, {
                         scale: [
                           singleSelected.scale[0],
                           singleSelected.scale[1],
-                          Math.max(value, 0.05),
+                          Math.max(value, 0.01),
                         ],
                       })
                     }
@@ -1397,7 +2965,7 @@ export default function PlannerApp() {
                     <p className="panel-hint material-mode-hint">
                       Modus:{' '}
                       <strong>{singleSelected.materialMode ?? 'original'}</strong> — Original nutzt
-                      GLTF-Materialien; Override faerbt alle Meshes mit der gewaehlten Farbe.
+                      GLTF-Materialien; Override färbt alle Meshes mit der gewählten Farbe.
                     </p>
                     <div className="segmented-toggle" role="group" aria-label="Materialmodus">
                       <button
@@ -1424,13 +2992,14 @@ export default function PlannerApp() {
                   </>
                 ) : (
                   <p className="panel-hint">
-                    Farbe und Deckkraft gelten fuer Primitive und STL; GLB/GLTF zusaetzlich mit
+                    Farbe und Deckkraft gelten für Primitive und STL; GLB/GLTF zusätzlich mit
                     Modus Original/Override.
                   </p>
                 )}
 
                 <ColorPickerPopover
                   value={singleSelected.color}
+                  openSignal={colorPickerKick}
                   onCommit={(nextColor) =>
                     updateAsset(singleSelected.id, { color: sanitizeColor(nextColor) })
                   }
@@ -1567,41 +3136,80 @@ export default function PlannerApp() {
                   className="add-field-button"
                   onClick={addCustomMetadataField}
                 >
-                  + Feld hinzufuegen
+                  + Feld hinzufügen
                 </button>
               </div>
             ) : selectedAssets.length > 1 ? (
               <div className="inspector-content">
-                <p className="selected-title">{selectedAssets.length} Assets ausgewaehlt</p>
+                <p className="selected-title">{selectedAssets.length} Assets ausgewählt</p>
                 <p className="panel-hint">
                   Mehrfachauswahl: Transform nur wenn mindestens zwei nicht gesperrte Assets
-                  ausgewaehlt sind. Gesperrte Assets werden nicht mitbewegt.
+                  ausgewählt sind. Gesperrte Assets werden nicht mitbewegt.
                 </p>
+                <h3>Stapel</h3>
                 <div className="batch-lock-actions">
+                  <button type="button" onClick={() => batchToggleLock(true)}>
+                    Alle sperren
+                  </button>
+                  <button type="button" onClick={() => batchToggleLock(false)}>
+                    Alle entsperren
+                  </button>
+                  <button type="button" onClick={batchAddFavorites}>
+                    Zu Favoriten
+                  </button>
+                  <button type="button" className="danger" onClick={batchDeleteSelection}>
+                    Löschen…
+                  </button>
+                </div>
+                <h3>Material</h3>
+                <ColorPickerPopover
+                  label="Farbe (alle)"
+                  value={selectedAssets[0]?.color ?? FALLBACK_ASSET_COLOR}
+                  openSignal={colorPickerKick}
+                  onCommit={(nextColor) => {
+                    const c = sanitizeColor(nextColor)
+                    updateAssets(selectedAssets.map((a) => ({ id: a.id, patch: { color: c } })))
+                  }}
+                />
+                <h3>Ausrichten</h3>
+                <p className="panel-hint">
+                  Zusätzlich: Menü „⋮ Werkzeuge“ in der Toolbar für Ausrichten und Verteilen.
+                </p>
+                <div className="batch-lock-actions batch-align-actions">
                   <button
                     type="button"
-                    onClick={() =>
-                      updateAssets(selectedAssets.map((a) => ({ id: a.id, patch: { isLocked: true } })))
-                    }
+                    disabled={selectedAssets.length < 2}
+                    onClick={() => runAlign('left')}
                   >
-                    Alle sperren
+                    Links
                   </button>
                   <button
                     type="button"
-                    onClick={() =>
-                      updateAssets(
-                        selectedAssets.map((a) => ({ id: a.id, patch: { isLocked: false } })),
-                      )
-                    }
+                    disabled={selectedAssets.length < 2}
+                    onClick={() => runAlign('right')}
                   >
-                    Alle entsperren
+                    Rechts
+                  </button>
+                  <button
+                    type="button"
+                    disabled={selectedAssets.length < 3}
+                    onClick={runDistributeH}
+                  >
+                    Verteilen X
+                  </button>
+                  <button
+                    type="button"
+                    disabled={selectedAssets.length < 3}
+                    onClick={runDistributeZ}
+                  >
+                    Verteilen Z
                   </button>
                 </div>
               </div>
             ) : floorInspectorOpen ? (
               <div className="inspector-content inspector-floor">
                 <p className="selected-title">Boden</p>
-                <p className="panel-hint">Raster im Praesentationsmodus aus; Bodenfarbe bleibt.</p>
+                <p className="panel-hint">Raster im Präsentationsmodus aus; Bodenfarbe bleibt.</p>
                 <ColorPickerPopover
                   label="Bodenfarbe"
                   value={floor.color}
@@ -1632,7 +3240,7 @@ export default function PlannerApp() {
                   />
                 </label>
                 <label className="opacity-slider-field">
-                  Bodengroesse ({floor.size.toFixed(0)} m)
+                  Bodengröße ({floor.size.toFixed(0)} m)
                   <input
                     type="range"
                     min={40}
@@ -1642,26 +3250,66 @@ export default function PlannerApp() {
                     onChange={(e) => setFloor({ size: Number(e.target.value) })}
                   />
                 </label>
+                <h3>Einrasten</h3>
+                <label className="checkbox-field">
+                  <input
+                    type="checkbox"
+                    checked={floor.placementSnapEnabled}
+                    onChange={(e) => setFloor({ placementSnapEnabled: e.target.checked })}
+                  />
+                  <span>Beim Platzieren und Verschieben am Raster einrasten (STRG: frei)</span>
+                </label>
+                <label className="metadata-field">
+                  Raster-Schritt
+                  <select
+                    value={String(floor.placementSnapStep)}
+                    onChange={(e) =>
+                      setFloor({
+                        placementSnapStep: sanitizePlacementSnapStep(Number(e.target.value)),
+                      })
+                    }
+                    disabled={!floor.placementSnapEnabled}
+                  >
+                    {([0.25, 0.5, 1, 2, 5] as const).map((s) => (
+                      <option key={s} value={s}>
+                        {s} m
+                      </option>
+                    ))}
+                  </select>
+                </label>
               </div>
             ) : (
               <div className="inspector-content">
                 <p className="panel-hint">
                   Klicke ein platziertes Asset an, um Informationen und Position zu bearbeiten.
                 </p>
-                <p className="panel-hint">Oder den Boden (kein Asset gewaehlt), um den Boden zu bearbeiten.</p>
+                <p className="panel-hint">Oder den Boden (kein Asset gewählt), um den Boden zu bearbeiten.</p>
               </div>
             )}
         </aside>
       </div>
-      <ShortcutsModal open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
-      <button
-        type="button"
-        className="shortcuts-fab"
-        onClick={() => setShortcutsOpen(true)}
-        aria-label="Tastenkuerzel oeffnen"
-      >
-        ?
-      </button>
+      <TemplatePreviewDialog
+        open={templatePreview !== null}
+        template={templatePreview}
+        onClose={() => setTemplatePreview(null)}
+      />
+      {mode === 'edit' && (
+        <>
+          <ShortcutsModal
+            key={shortcutsOpen ? 'shortcuts-open' : 'shortcuts-closed'}
+            open={shortcutsOpen}
+            onClose={() => setShortcutsOpen(false)}
+          />
+          <button
+            type="button"
+            className="shortcuts-fab"
+            onClick={() => setShortcutsOpen(true)}
+            aria-label="Tastenkürzel öffnen"
+          >
+            ?
+          </button>
+        </>
+      )}
     </div>
   )
 }
