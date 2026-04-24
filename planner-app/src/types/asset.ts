@@ -34,6 +34,8 @@ export interface GeometryParams {
 
 export type ModelFormat = 'gltf' | 'glb' | 'stl'
 
+export type MaterialMode = 'original' | 'override'
+
 export interface AssetGeometry {
   kind: GeometryKind
   params: GeometryParams
@@ -65,13 +67,22 @@ export interface Asset {
   id: string
   type: string
   category: string
+  /** Optional library group id (e.g. template category); set when placing from template. */
+  groupId?: string
   position: Vector3Tuple
   rotation: Vector3Tuple
   scale: Vector3Tuple
+  /** Hex; for GLTF with materialMode "original", mesh materials keep file colors. */
   color: string
   geometry: AssetGeometry
   metadata: AssetMetadata
   visual?: AssetVisual
+  /** GLTF/GLB: use embedded materials vs. tint with `color` / `opacity`. Primitives behave like override. */
+  materialMode?: MaterialMode
+  /** When true: no scene selection (edit), no transform gizmo; materials may appear dimmed. */
+  isLocked?: boolean
+  /** 0–1; combines with `visual.opacity` — this field wins when set. */
+  opacity?: number
 }
 
 export interface AssetTemplate {
@@ -182,6 +193,17 @@ export function sanitizeMetadata(value: unknown): AssetMetadata {
   return { customData: {} }
 }
 
+export function resolveAssetOpacity(asset: Asset): number {
+  const raw = asset.opacity ?? asset.visual?.opacity ?? 1
+  if (!isFiniteNumber(raw)) return 1
+  return Math.min(1, Math.max(0, raw))
+}
+
+function sanitizeMaterialMode(value: unknown): MaterialMode | undefined {
+  if (value === 'original' || value === 'override') return value
+  return undefined
+}
+
 export function sanitizeVisual(value: unknown): AssetVisual | undefined {
   if (!value || typeof value !== 'object') {
     return undefined
@@ -204,10 +226,19 @@ export function sanitizeAsset(value: unknown): Asset | null {
   if (typeof entry.id !== 'string' || entry.id.length === 0) return null
   if (typeof entry.type !== 'string') return null
 
+  const opacityRaw = entry.opacity
+  const opacity =
+    isFiniteNumber(opacityRaw) ? Math.min(1, Math.max(0, opacityRaw)) : undefined
+
+  const groupIdRaw = entry.groupId
+  const groupId =
+    typeof groupIdRaw === 'string' && groupIdRaw.length > 0 ? groupIdRaw : undefined
+
   return {
     id: entry.id,
     type: entry.type,
     category: typeof entry.category === 'string' ? entry.category : 'Allgemein',
+    groupId,
     position: sanitizeVector3(entry.position, FALLBACK_POSITION),
     rotation: sanitizeVector3(entry.rotation, FALLBACK_ROTATION),
     scale: sanitizeScale(entry.scale),
@@ -215,6 +246,9 @@ export function sanitizeAsset(value: unknown): Asset | null {
     geometry: sanitizeGeometry(entry.geometry),
     metadata: sanitizeMetadata(entry.metadata),
     visual: sanitizeVisual(entry.visual),
+    materialMode: sanitizeMaterialMode(entry.materialMode),
+    isLocked: typeof entry.isLocked === 'boolean' ? entry.isLocked : undefined,
+    opacity,
   }
 }
 
@@ -233,6 +267,9 @@ export function cloneAsset(asset: Asset): Asset {
       customData: { ...(asset.metadata.customData ?? {}) },
     },
     visual: asset.visual ? { ...asset.visual } : undefined,
+    materialMode: asset.materialMode,
+    isLocked: asset.isLocked,
+    opacity: asset.opacity,
   }
 }
 

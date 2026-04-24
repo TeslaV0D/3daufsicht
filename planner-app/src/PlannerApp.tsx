@@ -1,4 +1,4 @@
-import { Canvas, useThree, type ThreeEvent } from '@react-three/fiber'
+import { Canvas, type ThreeEvent } from '@react-three/fiber'
 import { Html, OrbitControls, TransformControls } from '@react-three/drei'
 import {
   useCallback,
@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
   type ChangeEvent,
+  type ReactNode,
   type RefObject,
 } from 'react'
 import {
@@ -19,50 +20,51 @@ import {
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 
 import './App.css'
-import FactoryFloor from './components/FactoryFloor'
-import FactoryWalls from './components/FactoryWalls'
-import Lighting from './components/Lighting'
-import ViewModeOverlay from './components/ViewModeOverlay'
+import AnimatedCameraRig, { CAMERA_PRESETS } from './components/AnimatedCameraRig'
 import AssetInfoModal from './components/AssetInfoModal'
 import AssetRenderer, { GhostAssetRenderer } from './components/AssetRenderer'
+import ColorPickerPopover from './components/ColorPickerPopover'
+import FactoryFloor from './components/FactoryFloor'
+import Lighting from './components/Lighting'
 import LoadLayoutModal from './components/LoadLayoutModal'
+import ScenePlacementRaycast from './components/ScenePlacementRaycast'
+import ShortcutsModal from './components/ShortcutsModal'
+import ViewModeOverlay from './components/ViewModeOverlay'
 
 import {
+  CATEGORY_WALLS,
   getTemplatesByCategory,
   createAssetFromTemplate,
   geometryKindSupports2D,
 } from './AssetFactory'
 import { useAssetsStore } from './store/useAssetsStore'
-import type { Asset, AssetTemplate } from './types/asset'
-import { sanitizeColor } from './types/asset'
+import type { Asset, AssetTemplate, MaterialMode } from './types/asset'
+import { resolveAssetOpacity, sanitizeColor } from './types/asset'
+import type { CameraViewPreset } from './types/plannerUi'
 
 type PlannerTool = 'select' | 'place'
 type PlannerMode = 'edit' | 'view'
-type CameraPreset = 'perspective' | 'top' | 'front' | 'side'
 type TransformMode = 'translate' | 'rotate' | 'scale'
 
 const SNAP_UNIT = 1
 const FALLBACK_ASSET_COLOR = '#8ca0b6'
-const COLOR_SWATCHES = [
-  '#e03131',
-  '#f08c00',
-  '#f59f00',
-  '#2f9e44',
-  '#0ca678',
-  '#15aabf',
-  '#1c7ed6',
-  '#3d8bfd',
-  '#5f3dc4',
-  '#7048e8',
-  '#c2255c',
-  '#495057',
-]
+const TEMPLATE_GROUP_EXPANDED_STORAGE_KEY = 'factory-template-group-expanded'
+const HOVER_POINTER_OUT_DEBOUNCE_MS = 50
 
-const CAMERA_PRESETS: Record<CameraPreset, { position: Vector3Tuple; target: Vector3Tuple }> = {
-  perspective: { position: [22, 18, 22], target: [0, 0, 0] },
-  top: { position: [0, 42, 0.01], target: [0, 0, 0] },
-  front: { position: [0, 12, 36], target: [0, 2, 0] },
-  side: { position: [36, 12, 0], target: [0, 2, 0] },
+function readTemplateGroupExpanded(): Record<string, boolean> {
+  try {
+    const raw = localStorage.getItem(TEMPLATE_GROUP_EXPANDED_STORAGE_KEY)
+    if (!raw) return {}
+    const data = JSON.parse(raw) as unknown
+    if (!data || typeof data !== 'object') return {}
+    const out: Record<string, boolean> = {}
+    for (const [k, v] of Object.entries(data as Record<string, unknown>)) {
+      if (typeof v === 'boolean') out[k] = v
+    }
+    return out
+  } catch {
+    return {}
+  }
 }
 
 const round2 = (value: number) => Number(value.toFixed(2))
@@ -73,24 +75,6 @@ const isFiniteNumber = (value: number) => Number.isFinite(value)
 const parseFiniteInput = (rawValue: string): number | null => {
   const parsed = Number(rawValue)
   return isFiniteNumber(parsed) ? parsed : null
-}
-
-function clampRgbChannel(value: number) {
-  return Math.min(255, Math.max(0, Math.round(value)))
-}
-function channelToHex(value: number) {
-  return clampRgbChannel(value).toString(16).padStart(2, '0')
-}
-function rgbToHex(red: number, green: number, blue: number) {
-  return `#${channelToHex(red)}${channelToHex(green)}${channelToHex(blue)}`
-}
-function hexToRgb(color: string) {
-  const normalized = sanitizeColor(color).slice(1)
-  return {
-    red: Number.parseInt(normalized.slice(0, 2), 16),
-    green: Number.parseInt(normalized.slice(2, 4), 16),
-    blue: Number.parseInt(normalized.slice(4, 6), 16),
-  }
 }
 
 function isEditableTarget(target: EventTarget | null) {
@@ -139,26 +123,12 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-function CameraController({
-  preset,
-  orbitRef,
-}: {
-  preset: CameraPreset
-  orbitRef: RefObject<OrbitControlsImpl | null>
-}) {
-  const { camera } = useThree()
-  useEffect(() => {
-    const selected = CAMERA_PRESETS[preset]
-    camera.position.set(...selected.position)
-    const controls = orbitRef.current
-    if (controls) {
-      controls.target.set(...selected.target)
-      controls.update()
-    } else {
-      camera.lookAt(...selected.target)
-    }
-  }, [preset, camera, orbitRef])
-  return null
+function ButtonGroup({ children }: { children: ReactNode }) {
+  return <div className="toolbar-button-group">{children}</div>
+}
+
+function ToolbarSeparator() {
+  return <span className="toolbar-separator" aria-hidden="true" />
 }
 
 // --- Inputs
@@ -168,9 +138,10 @@ interface NumericInputProps {
   value: number
   step?: string
   onCommit: (value: number) => void
+  disabled?: boolean
 }
 
-function NumericInput({ label, value, onCommit }: NumericInputProps) {
+function NumericInput({ label, value, onCommit, disabled }: NumericInputProps) {
   const [draft, setDraft] = useState(formatNumber(value))
   const [editing, setEditing] = useState(false)
 
@@ -188,11 +159,12 @@ function NumericInput({ label, value, onCommit }: NumericInputProps) {
   }, [draft, onCommit, value])
 
   return (
-    <label>
+    <label className={disabled ? 'input-disabled' : undefined}>
       {label}
       <input
         type="text"
         inputMode="decimal"
+        disabled={disabled}
         value={editing ? draft : formatNumber(value)}
         onFocus={() => {
           setDraft(formatNumber(value))
@@ -208,154 +180,6 @@ function NumericInput({ label, value, onCommit }: NumericInputProps) {
           }
         }}
       />
-    </label>
-  )
-}
-
-interface ColorInputProps {
-  value: string
-  onCommit: (value: string) => void
-}
-
-function ColorInput({ value, onCommit }: ColorInputProps) {
-  const [draft, setDraft] = useState(sanitizeColor(value))
-  const [editing, setEditing] = useState(false)
-  const [open, setOpen] = useState(false)
-  const pickerRef = useRef<HTMLDivElement>(null)
-
-  const activeColor = sanitizeColor(editing ? draft : value)
-  const activeRgb = useMemo(() => hexToRgb(activeColor), [activeColor])
-
-  const commitDraft = useCallback(() => {
-    const normalized = sanitizeColor(draft)
-    onCommit(normalized)
-    setDraft(normalized)
-    setEditing(false)
-  }, [draft, onCommit])
-
-  useEffect(() => {
-    if (!open) return
-    const handler = (event: PointerEvent) => {
-      const target = event.target
-      if (!(target instanceof Node)) return
-      if (pickerRef.current?.contains(target)) return
-      setOpen(false)
-      setDraft(sanitizeColor(value))
-      setEditing(false)
-    }
-    window.addEventListener('pointerdown', handler)
-    return () => window.removeEventListener('pointerdown', handler)
-  }, [open, value])
-
-  const applyRgb = useCallback(
-    (channel: 'red' | 'green' | 'blue', input: string) => {
-      const parsed = parseFiniteInput(input)
-      if (parsed === null) return
-      const next = clampRgbChannel(parsed)
-      const { red, green, blue } = activeRgb
-      const color =
-        channel === 'red'
-          ? rgbToHex(next, green, blue)
-          : channel === 'green'
-            ? rgbToHex(red, next, blue)
-            : rgbToHex(red, green, next)
-      setDraft(color)
-      onCommit(color)
-    },
-    [activeRgb, onCommit],
-  )
-
-  return (
-    <label className="color-picker">
-      Farbe
-      <div className="color-control" ref={pickerRef}>
-        <button
-          type="button"
-          className="color-trigger"
-          onClick={() => {
-            setDraft(sanitizeColor(value))
-            setEditing(false)
-            setOpen((p) => !p)
-          }}
-        >
-          <span className="color-trigger-swatch" style={{ backgroundColor: activeColor }} />
-          <span>{activeColor.toUpperCase()}</span>
-        </button>
-
-        {open && (
-          <div className="color-popover" role="dialog" aria-label="Farbenauswahl">
-            <div className="color-swatch-grid">
-              {COLOR_SWATCHES.map((swatch) => (
-                <button
-                  key={swatch}
-                  type="button"
-                  className="color-swatch"
-                  style={{ backgroundColor: swatch }}
-                  aria-label={`Farbe ${swatch}`}
-                  onClick={() => {
-                    setDraft(swatch)
-                    setEditing(false)
-                    onCommit(swatch)
-                    setOpen(false)
-                  }}
-                />
-              ))}
-            </div>
-
-            <div className="color-rgb-grid">
-              <label>
-                R
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={String(activeRgb.red)}
-                  onChange={(event) => applyRgb('red', event.target.value)}
-                />
-              </label>
-              <label>
-                G
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={String(activeRgb.green)}
-                  onChange={(event) => applyRgb('green', event.target.value)}
-                />
-              </label>
-              <label>
-                B
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={String(activeRgb.blue)}
-                  onChange={(event) => applyRgb('blue', event.target.value)}
-                />
-              </label>
-            </div>
-
-            <label className="color-hex-field">
-              Hex
-              <input
-                type="text"
-                value={editing ? draft : sanitizeColor(value)}
-                onFocus={() => {
-                  setDraft(sanitizeColor(value))
-                  setEditing(true)
-                }}
-                onChange={(event) => setDraft(event.target.value)}
-                onBlur={commitDraft}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') commitDraft()
-                  if (event.key === 'Escape') {
-                    setDraft(sanitizeColor(value))
-                    setEditing(false)
-                  }
-                }}
-                placeholder="#RRGGBB"
-              />
-            </label>
-          </div>
-        )}
-      </div>
     </label>
   )
 }
@@ -603,18 +427,25 @@ export default function PlannerApp() {
   const [mode, setMode] = useState<PlannerMode>('edit')
   const [tool, setTool] = useState<PlannerTool>('select')
   const [transformMode, setTransformMode] = useState<TransformMode>('translate')
-  const [cameraPreset, setCameraPreset] = useState<CameraPreset>('perspective')
   const [selectedTemplateType, setSelectedTemplateType] = useState<string | null>(null)
   const [previewPosition, setPreviewPosition] = useState<Vector3Tuple | null>(null)
   const [isCtrlPressed, setIsCtrlPressed] = useState(false)
   const [hoveredId, setHoveredId] = useState<string | null>(null)
+  const hoverLeaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [infoAssetId, setInfoAssetId] = useState<string | null>(null)
   const [saveFeedback, setSaveFeedback] = useState<string | null>(null)
   const [isLoadModalOpen, setIsLoadModalOpen] = useState(false)
+  const [floorInspectorOpen, setFloorInspectorOpen] = useState(false)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const [uploadAsWall, setUploadAsWall] = useState(false)
 
   const {
     assets,
     templates,
+    floor,
+    setFloor,
+    cameraView,
+    setCameraView,
     selectedIds,
     setSelectedIds,
     addAsset,
@@ -648,11 +479,60 @@ export default function PlannerApp() {
 
   const groupedTemplates = useMemo(() => getTemplatesByCategory(templates), [templates])
 
+  const [templateGroupExpanded, setTemplateGroupExpanded] = useState<Record<string, boolean>>(
+    readTemplateGroupExpanded,
+  )
+
+  useEffect(() => {
+    setTemplateGroupExpanded((prev) => {
+      let changed = false
+      const next = { ...prev }
+      for (const cat of Object.keys(groupedTemplates)) {
+        if (!(cat in next)) {
+          next[cat] = true
+          changed = true
+        }
+      }
+      return changed ? next : prev
+    })
+  }, [groupedTemplates])
+
+  const toggleTemplateGroup = useCallback((category: string) => {
+    setTemplateGroupExpanded((prev) => {
+      const currentlyOpen = prev[category] !== false
+      const next = { ...prev, [category]: !currentlyOpen }
+      try {
+        localStorage.setItem(TEMPLATE_GROUP_EXPANDED_STORAGE_KEY, JSON.stringify(next))
+      } catch {
+        /* ignore quota / private mode */
+      }
+      return next
+    })
+  }, [])
+
+  useEffect(
+    () => () => {
+      if (hoverLeaveTimerRef.current) {
+        clearTimeout(hoverLeaveTimerRef.current)
+      }
+    },
+    [],
+  )
+
   const selectedAssets = useMemo(
     () => assets.filter((asset) => selectedIds.includes(asset.id)),
     [assets, selectedIds],
   )
   const singleSelected = selectedAssets.length === 1 ? selectedAssets[0] : null
+  const transformableSelected = useMemo(
+    () => selectedAssets.filter((asset) => !asset.isLocked),
+    [selectedAssets],
+  )
+  const canUseTransform = useMemo(() => {
+    if (selectedAssets.length === 0) return false
+    if (selectedAssets.length === 1) return !selectedAssets[0].isLocked
+    return transformableSelected.length > 1
+  }, [selectedAssets, transformableSelected])
 
   const infoAsset = useMemo(
     () => (infoAssetId ? assets.find((asset) => asset.id === infoAssetId) ?? null : null),
@@ -667,11 +547,13 @@ export default function PlannerApp() {
     }
     setHoveredId(null)
     setInfoAssetId(null)
+    setFloorInspectorOpen(false)
   }, [])
 
   const changeTool = useCallback((nextTool: PlannerTool) => {
     setTool(nextTool)
     setHoveredId(null)
+    setFloorInspectorOpen(false)
     if (nextTool !== 'place') {
       setPreviewPosition(null)
     }
@@ -685,28 +567,40 @@ export default function PlannerApp() {
         return
       }
       if (tool === 'place') return
-      const addToSelection = event.ctrlKey || event.metaKey || isCtrlPressed
-      setSelectedIds(
-        selectedIds.includes(asset.id)
-          ? addToSelection
+      if (event.ctrlKey || event.metaKey) return
+      setFloorInspectorOpen(false)
+      if (event.shiftKey) {
+        setSelectedIds(
+          selectedIds.includes(asset.id)
             ? selectedIds.filter((id) => id !== asset.id)
-            : [asset.id]
-          : addToSelection
-            ? [...selectedIds, asset.id]
-            : [asset.id],
-      )
+            : [...selectedIds, asset.id],
+        )
+        return
+      }
+      setSelectedIds([asset.id])
     },
-    [isCtrlPressed, mode, selectedIds, setSelectedIds, tool],
+    [mode, selectedIds, setSelectedIds, tool],
   )
 
   const onAssetPointerOver = useCallback(
     (_event: ThreeEvent<PointerEvent>, asset: Asset) => {
-      setHoveredId((current) => (current === asset.id ? current : asset.id))
+      if (hoverLeaveTimerRef.current) {
+        clearTimeout(hoverLeaveTimerRef.current)
+        hoverLeaveTimerRef.current = null
+      }
+      setHoveredId(asset.id)
     },
     [],
   )
   const onAssetPointerOut = useCallback((_event: ThreeEvent<PointerEvent>, asset: Asset) => {
-    setHoveredId((current) => (current === asset.id ? null : current))
+    const id = asset.id
+    if (hoverLeaveTimerRef.current) {
+      clearTimeout(hoverLeaveTimerRef.current)
+    }
+    hoverLeaveTimerRef.current = setTimeout(() => {
+      hoverLeaveTimerRef.current = null
+      setHoveredId((current) => (current === id ? null : current))
+    }, HOVER_POINTER_OUT_DEBOUNCE_MS)
   }, [])
 
   const onFloorHover = useCallback(
@@ -730,6 +624,7 @@ export default function PlannerApp() {
         return
       }
       setSelectedIds([])
+      setFloorInspectorOpen(true)
     },
     [activeTemplate, addAsset, isCtrlPressed, mode, setSelectedIds, tool],
   )
@@ -797,7 +692,10 @@ export default function PlannerApp() {
 
         const modelUrl = await readFileAsDataUrl(file)
         const label = file.name.replace(/\.[^/.]+$/, '') || 'Custom Asset'
-        const template = addCustomModelTemplate(label, modelUrl, { modelFormat: ext })
+        const template = addCustomModelTemplate(label, modelUrl, {
+          modelFormat: ext,
+          category: uploadAsWall ? CATEGORY_WALLS : undefined,
+        })
         setSelectedTemplateType(template.type)
         changeTool('place')
         flashFeedback(`${ext.toUpperCase()} importiert: ${label}`)
@@ -808,7 +706,7 @@ export default function PlannerApp() {
         event.target.value = ''
       }
     },
-    [addCustomModelTemplate, changeTool, flashFeedback],
+    [addCustomModelTemplate, changeTool, flashFeedback, uploadAsWall],
   )
 
   // Keyboard shortcuts
@@ -962,32 +860,34 @@ export default function PlannerApp() {
           onLoadCurrent={handleLoadCurrentAutoSlot}
         />
       )}
-      <header className="top-bar">
-        <div className="toolbar-group">
-          <span className="toolbar-title">Factory Planning Studio</span>
+      <header className="top-bar top-bar-grouped">
+        <span className="toolbar-title">Factory Planning Studio</span>
 
-          <div className={`mode-switch mode-${mode}`}>
-            <span className="mode-badge" data-mode={mode} aria-live="polite">
-              {mode === 'edit' ? 'EDIT MODE' : 'VIEW MODE'}
-            </span>
-            <button
-              type="button"
-              className={mode === 'edit' ? 'active' : ''}
-              onClick={() => changeMode('edit')}
-            >
-              Bearbeiten
-            </button>
-            <button
-              type="button"
-              className={mode === 'view' ? 'active' : ''}
-              onClick={() => changeMode('view')}
-            >
-              Praesentation
-            </button>
-          </div>
+        <div className={`mode-switch mode-${mode}`}>
+          <span className="mode-badge" data-mode={mode} aria-live="polite">
+            {mode === 'edit' ? 'EDIT MODE' : 'VIEW MODE'}
+          </span>
+          <button
+            type="button"
+            className={mode === 'edit' ? 'active' : ''}
+            onClick={() => changeMode('edit')}
+          >
+            Bearbeiten
+          </button>
+          <button
+            type="button"
+            className={mode === 'view' ? 'active' : ''}
+            onClick={() => changeMode('view')}
+          >
+            Praesentation
+          </button>
+        </div>
 
-          {mode === 'edit' && (
-            <>
+        <ToolbarSeparator />
+
+        {mode === 'edit' && (
+          <>
+            <ButtonGroup>
               <button
                 type="button"
                 className={tool === 'select' ? 'active' : ''}
@@ -1002,11 +902,19 @@ export default function PlannerApp() {
               >
                 Platzieren
               </button>
+            </ButtonGroup>
+            <ToolbarSeparator />
+            <ButtonGroup>
               <button
                 type="button"
                 className={transformMode === 'translate' ? 'active' : ''}
                 onClick={() => setTransformMode('translate')}
-                disabled={selectedIds.length === 0}
+                disabled={!canUseTransform}
+                title={
+                  !canUseTransform && selectedAssets.some((a) => a.isLocked)
+                    ? 'Asset ist gesperrt'
+                    : undefined
+                }
               >
                 Bewegen
               </button>
@@ -1014,7 +922,12 @@ export default function PlannerApp() {
                 type="button"
                 className={transformMode === 'rotate' ? 'active' : ''}
                 onClick={() => setTransformMode('rotate')}
-                disabled={selectedIds.length === 0}
+                disabled={!canUseTransform}
+                title={
+                  !canUseTransform && selectedAssets.some((a) => a.isLocked)
+                    ? 'Asset ist gesperrt'
+                    : undefined
+                }
               >
                 Drehen
               </button>
@@ -1022,17 +935,18 @@ export default function PlannerApp() {
                 type="button"
                 className={transformMode === 'scale' ? 'active' : ''}
                 onClick={() => setTransformMode('scale')}
-                disabled={selectedIds.length === 0}
+                disabled={!canUseTransform}
+                title={
+                  !canUseTransform && selectedAssets.some((a) => a.isLocked)
+                    ? 'Asset ist gesperrt'
+                    : undefined
+                }
               >
                 Skalieren
               </button>
-            </>
-          )}
-        </div>
-
-        <div className="toolbar-group">
-          {mode === 'edit' && (
-            <>
+            </ButtonGroup>
+            <ToolbarSeparator />
+            <ButtonGroup>
               <button type="button" onClick={undo} disabled={!canUndo}>
                 Undo
               </button>
@@ -1045,24 +959,38 @@ export default function PlannerApp() {
               <button type="button" onClick={paste} disabled={!canPaste}>
                 Paste
               </button>
-            </>
+            </ButtonGroup>
+          </>
+        )}
+
+        <ToolbarSeparator />
+
+        <ButtonGroup>
+          {(['perspective', 'top', 'front', 'side', 'cabinet'] as CameraViewPreset[]).map(
+            (preset) => (
+              <button
+                type="button"
+                key={preset}
+                className={cameraView === preset ? 'active' : ''}
+                onClick={() => setCameraView(preset)}
+              >
+                {preset === 'perspective'
+                  ? 'Perspektive'
+                  : preset === 'top'
+                    ? 'Top'
+                    : preset === 'front'
+                      ? 'Front'
+                      : preset === 'side'
+                        ? 'Seite'
+                        : 'Cabinet'}
+              </button>
+            ),
           )}
-          {(['perspective', 'top', 'front', 'side'] as CameraPreset[]).map((preset) => (
-            <button
-              type="button"
-              key={preset}
-              className={cameraPreset === preset ? 'active' : ''}
-              onClick={() => setCameraPreset(preset)}
-            >
-              {preset === 'perspective'
-                ? 'Perspektive'
-                : preset === 'top'
-                  ? 'Top'
-                  : preset === 'front'
-                    ? 'Front'
-                    : 'Seite'}
-            </button>
-          ))}
+        </ButtonGroup>
+
+        <ToolbarSeparator />
+
+        <ButtonGroup>
           <button type="button" onClick={onSaveLayout}>
             Speichern
           </button>
@@ -1071,18 +999,28 @@ export default function PlannerApp() {
               Als Slot
             </button>
           )}
-          <button type="button" onClick={onOpenLoadModal}>
-            Laden
-          </button>
           <button type="button" onClick={onExportLayout}>
             Export
           </button>
-          {mode === 'edit' && (
-            <button type="button" className="danger" onClick={onRemoveSelected}>
+          <button type="button" onClick={onOpenLoadModal}>
+            Laden
+          </button>
+        </ButtonGroup>
+
+        <ToolbarSeparator />
+
+        {mode === 'edit' && (
+          <ButtonGroup>
+            <button
+              type="button"
+              className="toolbar-delete"
+              onClick={onRemoveSelected}
+              disabled={selectedIds.length === 0}
+            >
               Loeschen
             </button>
-          )}
-        </div>
+          </ButtonGroup>
+        )}
       </header>
 
       <div className={`workspace${mode === 'view' ? ' view-mode' : ''}`}>
@@ -1097,30 +1035,60 @@ export default function PlannerApp() {
               onChange={onUploadAsset}
             />
           </label>
-          {Object.entries(groupedTemplates).map(([category, list]) => (
-            <div key={category} className="asset-group">
-              <h3>{category}</h3>
-              {list.map((template) => (
+          <label className="checkbox-field upload-wall-flag">
+            <input
+              type="checkbox"
+              checked={uploadAsWall}
+              onChange={(e) => setUploadAsWall(e.target.checked)}
+            />
+            <span>Import unter &quot;Wände&quot; kategorisieren</span>
+          </label>
+          {Object.entries(groupedTemplates).map(([category, list]) => {
+            const expanded = templateGroupExpanded[category] !== false
+            return (
+              <div key={category} className="asset-group">
                 <button
                   type="button"
-                  key={template.type}
-                  className={
-                    tool === 'place' && activeTemplateType === template.type ? 'active' : ''
-                  }
-                  onClick={() => {
-                    setSelectedTemplateType(template.type)
-                    changeTool('place')
-                  }}
+                  className="asset-group-header"
+                  onClick={() => toggleTemplateGroup(category)}
+                  aria-expanded={expanded}
                 >
-                  <span>{template.label}</span>
-                  <small>
-                    {template.geometry.kind} |{' '}
-                    {template.scale.map((v) => v.toFixed(1)).join(' x ')} m
-                  </small>
+                  <span
+                    className={`asset-group-chevron${expanded ? ' asset-group-chevron--open' : ''}`}
+                    aria-hidden
+                  >
+                    ▶
+                  </span>
+                  <span className="asset-group-title">{category}</span>
                 </button>
-              ))}
-            </div>
-          ))}
+                <div
+                  className={`asset-group-items${expanded ? ' asset-group-items--expanded' : ' asset-group-items--collapsed'}`}
+                  aria-hidden={!expanded}
+                >
+                  {list.map((template) => (
+                    <button
+                      type="button"
+                      key={template.type}
+                      className={
+                        tool === 'place' && activeTemplateType === template.type ? 'active' : ''
+                      }
+                      onClick={() => {
+                        setFloorInspectorOpen(false)
+                        setSelectedTemplateType(template.type)
+                        changeTool('place')
+                      }}
+                    >
+                      <span>{template.label}</span>
+                      <small>
+                        {template.geometry.kind} |{' '}
+                        {template.scale.map((v) => v.toFixed(1)).join(' x ')} m
+                      </small>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
         </aside>
 
         <main className="scene-wrapper">
@@ -1130,7 +1098,7 @@ export default function PlannerApp() {
 
           <Canvas
             shadows
-            camera={{ position: CAMERA_PRESETS.perspective.position, fov: 48 }}
+            camera={{ position: CAMERA_PRESETS[cameraView].position, fov: 48 }}
           >
             <color attach="background" args={[mode === 'view' ? '#0f1b29' : '#d2dae3']} />
             <fog
@@ -1138,13 +1106,25 @@ export default function PlannerApp() {
               args={[mode === 'view' ? '#0f1b29' : '#d2dae3', 55, 145]}
             />
             {mode === 'edit' ? <Lighting /> : <ViewModeOverlay mode="view" />}
-            <CameraController preset={cameraPreset} orbitRef={orbitRef} />
-            <FactoryFloor onHover={onFloorHover} onAction={onFloorAction} />
-            <FactoryWalls />
+            <AnimatedCameraRig preset={cameraView} orbitRef={orbitRef} />
+            <FactoryFloor
+              floor={floor}
+              isPresentation={mode === 'view'}
+              deferPointerToSceneRaycast={mode === 'edit' && tool === 'place'}
+              onHover={onFloorHover}
+              onAction={onFloorAction}
+            />
+            {mode === 'edit' && tool === 'place' && (
+              <ScenePlacementRaycast
+                active
+                onHover={onFloorHover}
+                onPlace={onFloorAction}
+              />
+            )}
 
             {assets.map((asset) => {
               const isOnlySingleEditSelection =
-                mode === 'edit' && singleSelected?.id === asset.id
+                mode === 'edit' && singleSelected?.id === asset.id && !singleSelected.isLocked
               if (isOnlySingleEditSelection) {
                 return null
               }
@@ -1162,7 +1142,7 @@ export default function PlannerApp() {
               )
             })}
 
-            {mode === 'edit' && singleSelected && (
+            {mode === 'edit' && singleSelected && !singleSelected.isLocked && (
               <SingleTransformGizmo
                 asset={singleSelected}
                 mode={transformMode}
@@ -1183,9 +1163,9 @@ export default function PlannerApp() {
               </SingleTransformGizmo>
             )}
 
-            {mode === 'edit' && selectedAssets.length > 1 && (
+            {mode === 'edit' && transformableSelected.length > 1 && (
               <MultiTransformGizmo
-                selectedAssets={selectedAssets}
+                selectedAssets={transformableSelected}
                 mode={transformMode}
                 isCtrlPressed={isCtrlPressed}
                 orbitRef={orbitRef}
@@ -1229,19 +1209,15 @@ export default function PlannerApp() {
             />
           </Canvas>
 
-          {mode === 'edit' && (
-            <div className="status-bar">
-              <span>STRG/CMD: freie Platzierung und freies Bewegen/Rotieren</span>
-              <span>STRG/CMD + Z: Undo | Shift+Z/Y: Redo</span>
-              <span>STRG/CMD + C/V: Copy/Paste</span>
-              {saveFeedback && <span className="save-feedback">{saveFeedback}</span>}
+          {saveFeedback ? (
+            <div className="save-feedback-toast" role="status">
+              {saveFeedback}
             </div>
-          )}
+          ) : null}
 
           {mode === 'view' && (
             <div className="view-hint-bar">
               <span>Praesentationsmodus: Klicke ein Asset fuer Details.</span>
-              {saveFeedback && <span className="save-feedback">{saveFeedback}</span>}
             </div>
           )}
         </main>
@@ -1249,20 +1225,50 @@ export default function PlannerApp() {
         <aside className="panel right" aria-hidden={mode === 'view'}>
           <h2>Inspector</h2>
             {singleSelected ? (
-              <div className="inspector-content">
+              <div
+                className={`inspector-content${singleSelected.isLocked ? ' inspector-asset-locked' : ''}`}
+              >
                 <p className="selected-title">
                   {singleSelected.metadata.name ?? singleSelected.type}
+                  {singleSelected.isLocked ? (
+                    <span className="lock-indicator" title="Gesperrt">
+                      {' '}
+                      &#128274; Locked
+                    </span>
+                  ) : null}
                 </p>
                 <p className="panel-hint">
                   Form: {singleSelected.geometry.kind} | Kategorie: {singleSelected.category}
                 </p>
                 <p className="panel-hint">ID: {singleSelected.id.slice(0, 20)}...</p>
 
-                <h3>Position</h3>
+                <h3>Sperre</h3>
+                <label className="checkbox-field">
+                  <input
+                    type="checkbox"
+                    checked={singleSelected.isLocked ?? false}
+                    onChange={(event) =>
+                      updateAsset(singleSelected.id, { isLocked: event.target.checked })
+                    }
+                  />
+                  <span>Asset sperren (keine Auswahl / kein Gizmo in der Szene)</span>
+                </label>
+                {singleSelected.isLocked ? (
+                  <p className="panel-hint">
+                    Gesperrt: Transform nur im Inspector eingeschraenkt; Farbe/Lock hier
+                    weiterhin aenderbar. In der Szene ohne Transform-Gizmo.
+                  </p>
+                ) : null}
+
+                <h3 title={singleSelected.isLocked ? 'Asset ist gesperrt' : undefined}>
+                  Transform
+                </h3>
+                <h4 className="inspector-subheading">Position</h4>
                 <div className="vector-grid" key={`${singleSelected.id}-pos`}>
                   <NumericInput
                     label="X"
                     value={singleSelected.position[0]}
+                    disabled={singleSelected.isLocked}
                     onCommit={(value) =>
                       updateAsset(singleSelected.id, {
                         position: [value, singleSelected.position[1], singleSelected.position[2]],
@@ -1272,6 +1278,7 @@ export default function PlannerApp() {
                   <NumericInput
                     label="Y"
                     value={singleSelected.position[1]}
+                    disabled={singleSelected.isLocked}
                     onCommit={(value) =>
                       updateAsset(singleSelected.id, {
                         position: [singleSelected.position[0], value, singleSelected.position[2]],
@@ -1281,6 +1288,7 @@ export default function PlannerApp() {
                   <NumericInput
                     label="Z"
                     value={singleSelected.position[2]}
+                    disabled={singleSelected.isLocked}
                     onCommit={(value) =>
                       updateAsset(singleSelected.id, {
                         position: [singleSelected.position[0], singleSelected.position[1], value],
@@ -1289,11 +1297,12 @@ export default function PlannerApp() {
                   />
                 </div>
 
-                <h3>Rotation (Grad)</h3>
+                <h4 className="inspector-subheading">Rotation (Grad)</h4>
                 <div className="vector-grid" key={`${singleSelected.id}-rot`}>
                   <NumericInput
                     label="X"
                     value={radToDeg(singleSelected.rotation[0])}
+                    disabled={singleSelected.isLocked}
                     onCommit={(value) =>
                       updateAsset(singleSelected.id, {
                         rotation: [
@@ -1307,6 +1316,7 @@ export default function PlannerApp() {
                   <NumericInput
                     label="Y"
                     value={radToDeg(singleSelected.rotation[1])}
+                    disabled={singleSelected.isLocked}
                     onCommit={(value) =>
                       updateAsset(singleSelected.id, {
                         rotation: [
@@ -1320,6 +1330,7 @@ export default function PlannerApp() {
                   <NumericInput
                     label="Z"
                     value={radToDeg(singleSelected.rotation[2])}
+                    disabled={singleSelected.isLocked}
                     onCommit={(value) =>
                       updateAsset(singleSelected.id, {
                         rotation: [
@@ -1332,11 +1343,12 @@ export default function PlannerApp() {
                   />
                 </div>
 
-                <h3>Skalierung</h3>
+                <h4 className="inspector-subheading">Skalierung</h4>
                 <div className="vector-grid" key={`${singleSelected.id}-scale`}>
                   <NumericInput
                     label="Breite (X)"
                     value={singleSelected.scale[0]}
+                    disabled={singleSelected.isLocked}
                     onCommit={(value) =>
                       updateAsset(singleSelected.id, {
                         scale: [
@@ -1350,6 +1362,7 @@ export default function PlannerApp() {
                   <NumericInput
                     label="Hoehe (Y)"
                     value={singleSelected.scale[1]}
+                    disabled={singleSelected.isLocked}
                     onCommit={(value) =>
                       updateAsset(singleSelected.id, {
                         scale: [
@@ -1363,6 +1376,7 @@ export default function PlannerApp() {
                   <NumericInput
                     label="Laenge (Z)"
                     value={singleSelected.scale[2]}
+                    disabled={singleSelected.isLocked}
                     onCommit={(value) =>
                       updateAsset(singleSelected.id, {
                         scale: [
@@ -1375,11 +1389,74 @@ export default function PlannerApp() {
                   />
                 </div>
 
-                <ColorInput
+                <h3>Material</h3>
+                {singleSelected.geometry.kind === 'custom' &&
+                (singleSelected.geometry.params.modelFormat === 'glb' ||
+                  singleSelected.geometry.params.modelFormat === 'gltf') ? (
+                  <>
+                    <p className="panel-hint material-mode-hint">
+                      Modus:{' '}
+                      <strong>{singleSelected.materialMode ?? 'original'}</strong> — Original nutzt
+                      GLTF-Materialien; Override faerbt alle Meshes mit der gewaehlten Farbe.
+                    </p>
+                    <div className="segmented-toggle" role="group" aria-label="Materialmodus">
+                      <button
+                        type="button"
+                        className={
+                          (singleSelected.materialMode ?? 'original') === 'original' ? 'active' : ''
+                        }
+                        onClick={() =>
+                          updateAsset(singleSelected.id, { materialMode: 'original' as MaterialMode })
+                        }
+                      >
+                        Original
+                      </button>
+                      <button
+                        type="button"
+                        className={singleSelected.materialMode === 'override' ? 'active' : ''}
+                        onClick={() =>
+                          updateAsset(singleSelected.id, { materialMode: 'override' as MaterialMode })
+                        }
+                      >
+                        Override
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <p className="panel-hint">
+                    Farbe und Deckkraft gelten fuer Primitive und STL; GLB/GLTF zusaetzlich mit
+                    Modus Original/Override.
+                  </p>
+                )}
+
+                <ColorPickerPopover
                   value={singleSelected.color}
                   onCommit={(nextColor) =>
                     updateAsset(singleSelected.id, { color: sanitizeColor(nextColor) })
                   }
+                />
+
+                <label className="opacity-slider-field">
+                  Deckkraft ({Math.round(resolveAssetOpacity(singleSelected) * 100)}%)
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={Math.round(resolveAssetOpacity(singleSelected) * 100)}
+                    onChange={(event) =>
+                      updateAsset(singleSelected.id, {
+                        opacity: Number(event.target.value) / 100,
+                      })
+                    }
+                  />
+                </label>
+                <div
+                  className="material-preview-swatch"
+                  style={{
+                    backgroundColor: singleSelected.color,
+                    opacity: resolveAssetOpacity(singleSelected),
+                  }}
+                  title="Vorschau Farbe + Deckkraft"
                 />
 
                 <h3>Info</h3>
@@ -1497,19 +1574,94 @@ export default function PlannerApp() {
               <div className="inspector-content">
                 <p className="selected-title">{selectedAssets.length} Assets ausgewaehlt</p>
                 <p className="panel-hint">
-                  Mehrfachauswahl kann direkt ueber den Transform-Gizmo bewegt, gedreht und
-                  skaliert werden.
+                  Mehrfachauswahl: Transform nur wenn mindestens zwei nicht gesperrte Assets
+                  ausgewaehlt sind. Gesperrte Assets werden nicht mitbewegt.
                 </p>
+                <div className="batch-lock-actions">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      updateAssets(selectedAssets.map((a) => ({ id: a.id, patch: { isLocked: true } })))
+                    }
+                  >
+                    Alle sperren
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      updateAssets(
+                        selectedAssets.map((a) => ({ id: a.id, patch: { isLocked: false } })),
+                      )
+                    }
+                  >
+                    Alle entsperren
+                  </button>
+                </div>
+              </div>
+            ) : floorInspectorOpen ? (
+              <div className="inspector-content inspector-floor">
+                <p className="selected-title">Boden</p>
+                <p className="panel-hint">Raster im Praesentationsmodus aus; Bodenfarbe bleibt.</p>
+                <ColorPickerPopover
+                  label="Bodenfarbe"
+                  value={floor.color}
+                  onCommit={(c) => setFloor({ color: sanitizeColor(c) })}
+                />
+                <label className="checkbox-field">
+                  <input
+                    type="checkbox"
+                    checked={floor.gridVisible}
+                    onChange={(e) => setFloor({ gridVisible: e.target.checked })}
+                  />
+                  <span>Raster anzeigen (nur Bearbeiten)</span>
+                </label>
+                <ColorPickerPopover
+                  label="Rasterfarbe"
+                  value={floor.gridColor}
+                  onCommit={(c) => setFloor({ gridColor: sanitizeColor(c) })}
+                />
+                <label className="opacity-slider-field">
+                  Raster-Zellenabstand ({floor.gridSize.toFixed(2)} m)
+                  <input
+                    type="range"
+                    min={10}
+                    max={200}
+                    step={5}
+                    value={Math.round(floor.gridSize * 100)}
+                    onChange={(e) => setFloor({ gridSize: Number(e.target.value) / 100 })}
+                  />
+                </label>
+                <label className="opacity-slider-field">
+                  Bodengroesse ({floor.size.toFixed(0)} m)
+                  <input
+                    type="range"
+                    min={40}
+                    max={200}
+                    step={5}
+                    value={floor.size}
+                    onChange={(e) => setFloor({ size: Number(e.target.value) })}
+                  />
+                </label>
               </div>
             ) : (
               <div className="inspector-content">
                 <p className="panel-hint">
                   Klicke ein platziertes Asset an, um Informationen und Position zu bearbeiten.
                 </p>
+                <p className="panel-hint">Oder den Boden (kein Asset gewaehlt), um den Boden zu bearbeiten.</p>
               </div>
             )}
         </aside>
       </div>
+      <ShortcutsModal open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+      <button
+        type="button"
+        className="shortcuts-fab"
+        onClick={() => setShortcutsOpen(true)}
+        aria-label="Tastenkuerzel oeffnen"
+      >
+        ?
+      </button>
     </div>
   )
 }

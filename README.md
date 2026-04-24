@@ -39,7 +39,7 @@ npm run lint
 - Hallenboden in Betonoptik, dezentes Grid, Hallenrahmen mit Rueck- und Seitenwaenden.
 - Orbit-Kamera mit Damping, Zoom-To-Cursor, Kamera-Presets (Perspektive, Top, Front, Seite).
 - Ghost-Placement-Vorschau beim Platzieren.
-- Hover-Feedback ueber `onPointerEnter` / `onPointerLeave` fuer flackerfreies Highlight mit leichtem Scale- und Glow-Effekt.
+- Hover-Feedback ueber Pointer-Enter/Leave mit kurzem Debounce beim Verlassen, damit Submesh-Wechsel die Animation nicht neu starten.
 
 ### Unified Asset System
 
@@ -97,6 +97,21 @@ npm run lint
 - Feste App-Hoehe (kein Seiten-Scroll), Top-Bar darf umbrechen.
 - Panels (Library, Inspector) werden im View Mode per CSS ausgeblendet (nicht unmountet) — Inspector bleibt nach Mode-Wechsel stabil.
 - Modal-Animationen (Fade + Scale).
+
+### Asset-Gruppen (Bibliothek)
+
+- Kategorien in der linken Asset-Bibliothek sind anklappbar (Chevron dreht sich, Hohe animiert).
+- Expandierter Zustand pro Kategorie wird in `localStorage` unter `factory-template-group-expanded` gespeichert.
+- Platzierte Assets erhalten optional `groupId` (entspricht der Template-Kategorie) fuer Zuordnung zur Bibliotheksgruppe.
+
+### Hover-Feedback (Bugfix)
+
+- Hover-Highlight und leichte Skalierung bleiben stabil, wenn die Maus ueber komplexe Meshes (z. B. GLTF mit Teilgeometrien) bewegt wird — kein staendiges Neu-Triggern durch Pointer-Flattern zwischen Submeshes.
+
+### Tastenkuerzel (UI)
+
+- Die fruehere statische Shortcuts-Leiste unten im Edit-Modus entfaellt; alle Kuerzel stehen im Dialog ueber den Button „?“ rechts unten.
+- Speicher-Rueckmeldungen erscheinen als kompakte Toast-Zeile unten in der Szene.
 
 ## Bedienung
 

@@ -6,6 +6,7 @@ export const CATEGORY_PRIMITIVE_2D = 'Primitive 2D'
 export const CATEGORY_LOGISTICS = 'Logistik'
 export const CATEGORY_PRODUCTION = 'Produktion'
 export const CATEGORY_ZONES = 'Zonen'
+export const CATEGORY_WALLS = 'Wände'
 export const CATEGORY_PATHS = 'Wege'
 export const CATEGORY_LABELS = 'Labels'
 export const CATEGORY_CUSTOM = 'Eigene Assets'
@@ -226,6 +227,20 @@ export const ASSET_TEMPLATES: AssetTemplate[] = [
     },
   },
 
+  // ========== WÄNDE ==========
+  {
+    type: 'wall-segment',
+    label: 'Wandsegment',
+    category: CATEGORY_WALLS,
+    color: '#c5ced8',
+    scale: [80.7, 8, 0.35],
+    geometry: { kind: 'box', params: { width: 1, height: 1, depth: 1 } },
+    metadata: {
+      name: 'Wand',
+      description: 'Wandsegment wie andere Assets positionierbar.',
+    },
+  },
+
   // ========== ZONEN ==========
   {
     type: 'zone-production',
@@ -335,6 +350,7 @@ export function createAssetFromTemplate(template: AssetTemplate, overrides?: Par
     id: generateId(template.type),
     type: template.type,
     category: template.category,
+    groupId: template.category,
     position: [0, template.scale[1] / 2, 0],
     rotation: [0, 0, 0],
     scale: [...template.scale] as Asset['scale'],
@@ -350,19 +366,29 @@ export function createAssetFromTemplate(template: AssetTemplate, overrides?: Par
     visual: template.visual ? { ...template.visual } : undefined,
   }
 
-  if (overrides) {
-    return cloneAsset({ ...asset, ...overrides })
+  let next: Asset = asset
+  const fmt = asset.geometry.params.modelFormat ?? 'glb'
+  if (asset.geometry.kind === 'custom' && (fmt === 'glb' || fmt === 'gltf')) {
+    next = { ...asset, materialMode: 'original' as const }
   }
-  return asset
+  if (overrides) {
+    return cloneAsset({ ...next, ...overrides })
+  }
+  return next
 }
 
 export function createCustomModelTemplate(
   name: string,
   modelUrl: string,
-  options: { scale?: Asset['scale']; modelFormat?: ModelFormat } = {},
+  options: {
+    scale?: Asset['scale']
+    modelFormat?: ModelFormat
+    category?: string
+  } = {},
 ): AssetTemplate {
   const modelFormat: ModelFormat = options.modelFormat ?? 'glb'
   const scale = options.scale ?? [2, 2, 2]
+  const category = options.category ?? CATEGORY_CUSTOM
   const description =
     modelFormat === 'stl'
       ? 'Benutzerdefiniertes STL Modell (CAD/Mesh).'
@@ -370,7 +396,7 @@ export function createCustomModelTemplate(
   return {
     type: `custom-${generateId('model')}`,
     label: name,
-    category: CATEGORY_CUSTOM,
+    category,
     color: '#a5b4c4',
     scale,
     geometry: {
@@ -396,6 +422,7 @@ export function getTemplatesByCategory(templates: AssetTemplate[]): Record<strin
     CATEGORY_PRODUCTION,
     CATEGORY_LOGISTICS,
     CATEGORY_ZONES,
+    CATEGORY_WALLS,
     CATEGORY_PATHS,
     CATEGORY_LABELS,
     CATEGORY_CUSTOM,
@@ -420,8 +447,21 @@ export function createDefaultDemoLayout(): Asset[] {
   const shelf = ASSET_TEMPLATES.find((t) => t.type === 'shelf-block')!
   const zoneProduction = ASSET_TEMPLATES.find((t) => t.type === 'zone-production')!
   const pathWalkway = ASSET_TEMPLATES.find((t) => t.type === 'path-walkway')!
+  const wallSeg = ASSET_TEMPLATES.find((t) => t.type === 'wall-segment')!
 
   const assets: Asset[] = [
+    createAssetFromTemplate(wallSeg, {
+      position: [0, 4, -40.175],
+      scale: [80.7, 8, 0.35],
+    }),
+    createAssetFromTemplate(wallSeg, {
+      position: [-40.175, 4, 0],
+      scale: [0.35, 8, 80.7],
+    }),
+    createAssetFromTemplate(wallSeg, {
+      position: [40.175, 4, 0],
+      scale: [0.35, 8, 80.7],
+    }),
     createAssetFromTemplate(zoneProduction, {
       position: [0, 0.02, 0],
       scale: [12, 1, 10],
