@@ -143,6 +143,42 @@ Ausgefuehrte Checks:
 
 Ergebnis: beide Checks erfolgreich.
 
+## Stand 9: STL-Import
+
+### Erweiterte Dateiformate
+
+- Upload erlaubt jetzt `.glb`, `.gltf` und `.stl` (Validierung per Extension, Groessenlimit 20 MB, fehlerfreundliches Toast-Feedback).
+- `GeometryParams` um `modelFormat: 'gltf' | 'glb' | 'stl'` erweitert; `AssetVisual` um `flatShading` fuer CAD-Optik.
+- `createCustomModelTemplate(name, url, { modelFormat })` legt das Format persistent im Template ab — Save/Load und Slots bleiben kompatibel.
+
+### STLModel-Komponente
+
+- Neue Komponente `STLModel` in `AssetRenderer.tsx` laedt per `useLoader(STLLoader, url)` aus `three/examples/jsm/loaders/STLLoader`.
+- Post-Processing beim Laden:
+  - `computeVertexNormals()` (falls fehlend oder Flat Shading erzwungen).
+  - `computeBoundingBox()` + `center()` fuer Ursprungs-Centering.
+  - Automatische Skalierung auf `asset.scale` (max-Dim-Normalisierung).
+  - Y-Offset so, dass das Modell auf dem Boden sitzt.
+- Standard-`meshStandardMaterial` (grau default, Farbe aus Asset). `wireframe` und `flatShading` reagieren live auf die Inspector-Toggles.
+
+### Renderer-Integration
+
+- `'custom'`-Case in `GeometryMesh` verzweigt nach `modelFormat`:
+  - STL → `<STLModel />`
+  - GLB/GLTF → bestehendes `<UploadedModel />` (drei/`useGLTF`).
+- Fallback-Box bleibt fuer beide Pfade gleich (Suspense-Fallback).
+
+### Inspector-Erweiterung
+
+- Fuer `geometry.kind === 'custom'` neuer Abschnitt "Modell-Optik" mit:
+  - **Wireframe**-Toggle (GLB/GLTF + STL).
+  - **Flat Shading**-Toggle (nur STL).
+- Beide werden in `asset.visual` persistiert und fliessen in die Material-Config.
+
+### Kompatibilitaet
+
+- STL-Assets sind voll in das bestehende System integriert: auswaehlbar, transformierbar (Gizmo), Save/Load (data-URL-persistent), View-Mode-Popup, Hover-Feedback.
+
 ## Offene optionale Erweiterungen
 
 - Box-Selection fuer Mehrfachauswahl.
