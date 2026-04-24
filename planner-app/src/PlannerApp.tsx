@@ -1,6 +1,5 @@
 import { Canvas, type ThreeEvent, useThree } from '@react-three/fiber'
 import {
-  Grid,
   Html,
   OrbitControls,
   TransformControls,
@@ -28,6 +27,9 @@ import {
 } from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import './App.css'
+import FactoryFloor from './components/FactoryFloor'
+import FactoryWalls from './components/FactoryWalls'
+import Lighting from './components/Lighting'
 
 type PlannerTool = 'select' | 'place'
 type CameraPreset = 'perspective' | 'top' | 'front' | 'side'
@@ -75,7 +77,6 @@ interface AssetMeshProps {
   isPlacementMode: boolean
   useTransformGizmo: boolean
   transformMode: TransformMode
-  isAltPressed: boolean
   isCtrlPressed: boolean
   orbitRef: RefObject<OrbitControlsImpl | null>
   onSelect: (id: string, addToSelection: boolean) => void
@@ -97,7 +98,6 @@ interface ColorInputProps {
 interface MultiTransformGizmoProps {
   selectedAssets: PlacedAsset[]
   mode: TransformMode
-  isAltPressed: boolean
   isCtrlPressed: boolean
   orbitRef: RefObject<OrbitControlsImpl | null>
   onCommit: (updates: Array<{ id: string; position: Vector3Tuple; rotation: Vector3Tuple }>) => void
@@ -672,26 +672,36 @@ function AssetPrimitive({
   dimensions,
   color,
   isSelected,
+  ghost = false,
 }: {
   shape: AssetShape
   dimensions: Vector3Tuple
   color: string
   isSelected: boolean
+  ghost?: boolean
 }) {
   const x = Math.max(dimensions[0], 0.05)
   const y = Math.max(dimensions[1], 0.05)
   const z = Math.max(dimensions[2], 0.05)
+  const materialColor = ghost ? '#7ce9a4' : isSelected ? '#74c0fc' : color
+  const materialRoughness = ghost ? 0.35 : 0.62
+  const materialMetalness = ghost ? 0.06 : 0.18
+  const materialEmissive = ghost ? '#1a7f47' : isSelected ? '#0b7285' : '#000000'
+  const materialEmissiveIntensity = ghost ? 0.22 : isSelected ? 0.15 : 0
+  const materialOpacity = ghost ? 0.45 : 1
 
   if (shape === 'rhombus') {
     return (
       <mesh castShadow receiveShadow rotation={[0, Math.PI / 4, 0]}>
         <boxGeometry args={[x / Math.SQRT2, y, z / Math.SQRT2]} />
         <meshStandardMaterial
-          color={isSelected ? '#74c0fc' : color}
-          roughness={0.55}
-          metalness={0.25}
-          emissive={isSelected ? '#0b7285' : '#000000'}
-          emissiveIntensity={isSelected ? 0.15 : 0}
+          color={materialColor}
+          roughness={materialRoughness}
+          metalness={materialMetalness}
+          emissive={materialEmissive}
+          emissiveIntensity={materialEmissiveIntensity}
+          transparent={ghost}
+          opacity={materialOpacity}
         />
       </mesh>
     )
@@ -702,11 +712,13 @@ function AssetPrimitive({
       <mesh castShadow receiveShadow>
         <cylinderGeometry args={[x / 2, z / 2, y, 24]} />
         <meshStandardMaterial
-          color={isSelected ? '#74c0fc' : color}
-          roughness={0.55}
-          metalness={0.25}
-          emissive={isSelected ? '#0b7285' : '#000000'}
-          emissiveIntensity={isSelected ? 0.15 : 0}
+          color={materialColor}
+          roughness={materialRoughness}
+          metalness={materialMetalness}
+          emissive={materialEmissive}
+          emissiveIntensity={materialEmissiveIntensity}
+          transparent={ghost}
+          opacity={materialOpacity}
         />
       </mesh>
     )
@@ -717,11 +729,13 @@ function AssetPrimitive({
       <mesh castShadow receiveShadow>
         <coneGeometry args={[Math.max(x, z) / 2, y, 24]} />
         <meshStandardMaterial
-          color={isSelected ? '#74c0fc' : color}
-          roughness={0.55}
-          metalness={0.25}
-          emissive={isSelected ? '#0b7285' : '#000000'}
-          emissiveIntensity={isSelected ? 0.15 : 0}
+          color={materialColor}
+          roughness={materialRoughness}
+          metalness={materialMetalness}
+          emissive={materialEmissive}
+          emissiveIntensity={materialEmissiveIntensity}
+          transparent={ghost}
+          opacity={materialOpacity}
         />
       </mesh>
     )
@@ -732,11 +746,13 @@ function AssetPrimitive({
       <mesh castShadow receiveShadow scale={[x, y, z]}>
         <sphereGeometry args={[0.5, 24, 16]} />
         <meshStandardMaterial
-          color={isSelected ? '#74c0fc' : color}
-          roughness={0.55}
-          metalness={0.25}
-          emissive={isSelected ? '#0b7285' : '#000000'}
-          emissiveIntensity={isSelected ? 0.15 : 0}
+          color={materialColor}
+          roughness={materialRoughness}
+          metalness={materialMetalness}
+          emissive={materialEmissive}
+          emissiveIntensity={materialEmissiveIntensity}
+          transparent={ghost}
+          opacity={materialOpacity}
         />
       </mesh>
     )
@@ -747,11 +763,13 @@ function AssetPrimitive({
       <mesh castShadow receiveShadow>
         <cylinderGeometry args={[x / 2, z / 2, y, 6]} />
         <meshStandardMaterial
-          color={isSelected ? '#74c0fc' : color}
-          roughness={0.55}
-          metalness={0.25}
-          emissive={isSelected ? '#0b7285' : '#000000'}
-          emissiveIntensity={isSelected ? 0.15 : 0}
+          color={materialColor}
+          roughness={materialRoughness}
+          metalness={materialMetalness}
+          emissive={materialEmissive}
+          emissiveIntensity={materialEmissiveIntensity}
+          transparent={ghost}
+          opacity={materialOpacity}
         />
       </mesh>
     )
@@ -762,11 +780,13 @@ function AssetPrimitive({
       <mesh castShadow receiveShadow>
         <cylinderGeometry args={[Math.max(x, z) / 2, Math.max(x, z) / 2, y, 48]} />
         <meshStandardMaterial
-          color={isSelected ? '#74c0fc' : color}
-          roughness={0.55}
-          metalness={0.25}
-          emissive={isSelected ? '#0b7285' : '#000000'}
-          emissiveIntensity={isSelected ? 0.15 : 0}
+          color={materialColor}
+          roughness={materialRoughness}
+          metalness={materialMetalness}
+          emissive={materialEmissive}
+          emissiveIntensity={materialEmissiveIntensity}
+          transparent={ghost}
+          opacity={materialOpacity}
         />
       </mesh>
     )
@@ -777,11 +797,13 @@ function AssetPrimitive({
       <mesh castShadow receiveShadow>
         <boxGeometry args={[x, y, z]} />
         <meshStandardMaterial
-          color={isSelected ? '#74c0fc' : color}
-          roughness={0.55}
-          metalness={0.25}
-          emissive={isSelected ? '#0b7285' : '#000000'}
-          emissiveIntensity={isSelected ? 0.15 : 0}
+          color={materialColor}
+          roughness={materialRoughness}
+          metalness={materialMetalness}
+          emissive={materialEmissive}
+          emissiveIntensity={materialEmissiveIntensity}
+          transparent={ghost}
+          opacity={materialOpacity}
         />
       </mesh>
     )
@@ -791,11 +813,13 @@ function AssetPrimitive({
     <mesh castShadow receiveShadow>
       <boxGeometry args={[x, y, z]} />
       <meshStandardMaterial
-        color={isSelected ? '#74c0fc' : color}
-        roughness={0.55}
-        metalness={0.25}
-        emissive={isSelected ? '#0b7285' : '#000000'}
-        emissiveIntensity={isSelected ? 0.15 : 0}
+        color={materialColor}
+        roughness={materialRoughness}
+        metalness={materialMetalness}
+        emissive={materialEmissive}
+        emissiveIntensity={materialEmissiveIntensity}
+        transparent={ghost}
+        opacity={materialOpacity}
       />
     </mesh>
   )
@@ -830,7 +854,14 @@ function AssetVisual({
         {isSelected && (
           <mesh>
             <boxGeometry args={dimensions} />
-            <meshBasicMaterial color="#74c0fc" wireframe />
+            <meshStandardMaterial
+              color="#74c0fc"
+              wireframe
+              roughness={0.35}
+              metalness={0.1}
+              emissive="#74c0fc"
+              emissiveIntensity={0.15}
+            />
           </mesh>
         )}
       </group>
@@ -1049,7 +1080,6 @@ function AssetMesh({
   isPlacementMode,
   useTransformGizmo,
   transformMode,
-  isAltPressed,
   isCtrlPressed,
   orbitRef,
   onSelect,
@@ -1117,7 +1147,7 @@ function AssetMesh({
         <TransformControls
           object={groupRef}
           mode={transformMode}
-          translationSnap={transformMode === 'translate' && !isAltPressed ? SNAP_UNIT : undefined}
+          translationSnap={transformMode === 'translate' && !isCtrlPressed ? SNAP_UNIT : undefined}
           rotationSnap={transformMode === 'rotate' && !isCtrlPressed ? Math.PI / 8 : undefined}
           onMouseDown={() => {
             isDraggingRef.current = true
@@ -1135,7 +1165,6 @@ function AssetMesh({
 function MultiTransformGizmo({
   selectedAssets,
   mode,
-  isAltPressed,
   isCtrlPressed,
   orbitRef,
   onCommit,
@@ -1247,7 +1276,7 @@ function MultiTransformGizmo({
       <TransformControls
         object={pivotRef}
         mode={mode}
-        translationSnap={mode === 'translate' && !isAltPressed ? SNAP_UNIT : undefined}
+        translationSnap={mode === 'translate' && !isCtrlPressed ? SNAP_UNIT : undefined}
         rotationSnap={mode === 'rotate' && !isCtrlPressed ? Math.PI / 8 : undefined}
         onMouseDown={() => {
           const pivot = pivotRef.current
@@ -1293,7 +1322,6 @@ export default function PlannerApp() {
   const [cameraPreset, setCameraPreset] = useState<CameraPreset>('perspective')
   const [activeDefinitionId, setActiveDefinitionId] = useState<string>(DEFAULT_ASSET_DEFINITIONS[0].id)
   const [previewPosition, setPreviewPosition] = useState<Vector3Tuple | null>(null)
-  const [isAltPressed, setIsAltPressed] = useState(false)
   const [isCtrlPressed, setIsCtrlPressed] = useState(false)
 
   const [historyPast, setHistoryPast] = useState<HistorySnapshot[]>([])
@@ -1447,9 +1475,6 @@ export default function PlannerApp() {
       const editable = isEditableTarget(event.target)
       const hasPrimaryModifier = event.ctrlKey || event.metaKey
 
-      if (event.key === 'Alt') {
-        setIsAltPressed(true)
-      }
       if (event.key === 'Control' || event.key === 'Meta') {
         setIsCtrlPressed(true)
       }
@@ -1493,16 +1518,12 @@ export default function PlannerApp() {
     }
 
     const handleKeyUp = (event: KeyboardEvent) => {
-      if (event.key === 'Alt') {
-        setIsAltPressed(false)
-      }
       if (event.key === 'Control' || event.key === 'Meta') {
         setIsCtrlPressed(false)
       }
     }
 
     const handleWindowBlur = () => {
-      setIsAltPressed(false)
       setIsCtrlPressed(false)
     }
 
@@ -1538,10 +1559,10 @@ export default function PlannerApp() {
       if (tool !== 'place' || !activeDefinition) {
         return
       }
-      const position = resolvePlacementPosition(point, isAltPressed, activeDefinition.size[1])
+      const position = resolvePlacementPosition(point, isCtrlPressed, activeDefinition.size[1])
       setPreviewPosition(position)
     },
-    [activeDefinition, isAltPressed, tool],
+    [activeDefinition, isCtrlPressed, tool],
   )
 
   const onFloorAction = useCallback(
@@ -1550,7 +1571,7 @@ export default function PlannerApp() {
         const newAsset: PlacedAsset = {
           id: newAssetId(),
           definitionId: activeDefinition.id,
-          position: resolvePlacementPosition(point, isAltPressed, activeDefinition.size[1]),
+          position: resolvePlacementPosition(point, isCtrlPressed, activeDefinition.size[1]),
           rotation: [0, 0, 0],
           dimensions: [...activeDefinition.size] as Vector3Tuple,
           color: activeDefinition.color,
@@ -1563,7 +1584,7 @@ export default function PlannerApp() {
       }
       setSelectedIds([])
     },
-    [activeDefinition, applySceneChange, isAltPressed, tool],
+    [activeDefinition, applySceneChange, isCtrlPressed, tool],
   )
 
   const updateAssetTransform = useCallback(
@@ -1843,45 +1864,12 @@ export default function PlannerApp() {
 
         <main className="scene-wrapper">
           <Canvas shadows camera={{ position: CAMERA_PRESETS.perspective.position, fov: 48 }}>
-            <color attach="background" args={['#0a1018']} />
-            <fog attach="fog" args={['#0a1018', 40, 95]} />
-            <hemisphereLight intensity={0.35} groundColor="#172029" />
-            <ambientLight intensity={0.6} />
-            <directionalLight
-              castShadow
-              position={[18, 20, 14]}
-              intensity={1}
-              shadow-mapSize-width={1024}
-              shadow-mapSize-height={1024}
-            />
+            <color attach="background" args={['#d2dae3']} />
+            <fog attach="fog" args={['#d2dae3', 55, 135]} />
+            <Lighting />
             <CameraController preset={cameraPreset} orbitRef={orbitRef} />
-
-            <mesh
-              rotation={[-Math.PI / 2, 0, 0]}
-              receiveShadow
-              onPointerMove={(event: ThreeEvent<PointerEvent>) => {
-                const point = event.point
-                onFloorHover([point.x, point.y, point.z])
-              }}
-              onClick={(event: ThreeEvent<MouseEvent>) => {
-                event.stopPropagation()
-                const point = event.point
-                onFloorAction([point.x, point.y, point.z])
-              }}
-            >
-              <planeGeometry args={[80, 80]} />
-              <meshStandardMaterial color="#1f2a35" roughness={0.95} metalness={0.05} />
-            </mesh>
-
-            <Grid
-              position={[0, 0.02, 0]}
-              args={[80, 80]}
-              cellColor="#2b8aef"
-              sectionColor="#8ce99a"
-              cellSize={1}
-              sectionSize={5}
-              fadeDistance={70}
-            />
+            <FactoryFloor onHover={onFloorHover} onAction={onFloorAction} />
+            <FactoryWalls />
 
             {assets.map((asset) => {
               const definition = definitionById.get(asset.definitionId)
@@ -1896,7 +1884,6 @@ export default function PlannerApp() {
                   isSelected={selectedIds.includes(asset.id)}
                   useTransformGizmo={selectedIds.length === 1 && selectedIds.includes(asset.id)}
                   isPlacementMode={tool === 'place'}
-                  isAltPressed={isAltPressed}
                   isCtrlPressed={isCtrlPressed}
                   transformMode={transformMode}
                   orbitRef={orbitRef}
@@ -1910,7 +1897,6 @@ export default function PlannerApp() {
               <MultiTransformGizmo
                 selectedAssets={selectedAssets}
                 mode={transformMode}
-                isAltPressed={isAltPressed}
                 isCtrlPressed={isCtrlPressed}
                 orbitRef={orbitRef}
                 onCommit={updateManyAssetTransforms}
@@ -1920,11 +1906,12 @@ export default function PlannerApp() {
             {tool === 'place' && activeDefinition && previewPosition && (
               <group>
                 <group position={previewPosition}>
-                  <AssetVisual
-                    definition={activeDefinition}
+                  <AssetPrimitive
+                    shape={activeDefinition.shape}
                     dimensions={activeDefinition.size}
                     color={activeDefinition.color}
                     isSelected={false}
+                    ghost
                   />
                 </group>
                 <Html
@@ -1945,14 +1932,19 @@ export default function PlannerApp() {
               makeDefault
               enablePan
               enableZoom
+              enableDamping
+              dampingFactor={0.08}
+              screenSpacePanning
+              zoomToCursor
               minDistance={6}
               maxDistance={75}
-              maxPolarAngle={Math.PI / 2}
+              minPolarAngle={0.2}
+              maxPolarAngle={Math.PI / 2 - 0.03}
             />
           </Canvas>
 
           <div className="status-bar">
-            <span>ALT: frei platzieren</span>
+            <span>STRG/CMD: freie Platzierung und freies Bewegen/Rotieren</span>
             <span>STRG/CMD + Z: Undo | Shift+Z/Y: Redo</span>
             <span>STRG/CMD + C/V: Copy/Paste</span>
           </div>

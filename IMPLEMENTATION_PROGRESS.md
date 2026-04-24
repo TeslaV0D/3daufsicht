@@ -104,12 +104,82 @@ Technisch:
 - Shape-Parsing fuer neue Formen erweitert (`rectangle`, `circle`)
 - Layout-Hydration aus `localStorage` bleibt rueckwaertskompatibel
 
+## Stand 4: Visual Upgrade + Steuerungsanpassung (neu umgesetzt)
+
+### 1) ALT ersetzt durch STRG/CMD fuer freie Platzierung/Bewegung
+
+Hintergrund:
+- ALT oeffnet in manchen Browsern/systemseitig Menue-Interaktionen.
+- Dadurch war freie Bewegung/Platzierung unzuverlaessig.
+
+Umsetzung:
+- Freie Platzierung ist jetzt an `STRG/CMD` gebunden.
+- Freies Verschieben und freies Rotieren sind ebenfalls an `STRG/CMD` gekoppelt.
+- Einheitliche Modifier-Logik fuer Placement und TransformControls.
+
+### 2) Lighting komplett modernisiert
+
+Umgesetzt:
+- `Canvas` mit Shadows bleibt aktiv.
+- Neue Szene-Komponente `Lighting.tsx`:
+  - `ambientLight` mit niedriger Intensitaet
+  - `directionalLight` mit aktivierten Shadows und erweitertem Shadow-Frustum
+  - `Environment preset="warehouse"` fuer realistischere Reflexion/Umgebungslicht
+
+### 3) Boden + Grid ueberarbeitet
+
+Neue Komponente `FactoryFloor.tsx`:
+- grosse Hallenboden-Plane mit hellem Material:
+  - Farbe `#e5e5e5`
+  - `meshStandardMaterial` mit `roughness 0.9`, `metalness 0.1`
+- Grid deutlich dezenter:
+  - neutralere Farben
+  - staerkeres Fade, geringere Dominanz
+
+### 4) Hallenrahmen/Waende hinzugefuegt
+
+Neue Komponente `FactoryWalls.tsx`:
+- Rueckwand + zwei Seitenwaende als Box-Geometrien
+- Hoehe ~8 Einheiten
+- leicht graublaue Materialtoene
+- `castShadow` + `receiveShadow` aktiv
+
+### 5) Ghost Placement verbessert
+
+- Vorschau beim Platzieren nutzt jetzt ein halbtransparentes, leicht gruenes Ghost-Material.
+- Preview folgt weiterhin der Maus und wird erst beim Klick final platziert.
+
+### 6) Kamera-Feeling modernisiert
+
+`OrbitControls` erweitert um:
+- `enableDamping`
+- `dampingFactor={0.08}`
+- `screenSpacePanning`
+- `zoomToCursor`
+- enger begrenzte Polar-Angles (kein Unter-den-Boden-Drehen)
+
+### 7) Komponentenstruktur verbessert
+
+Neu erstellt:
+- `planner-app/src/components/Lighting.tsx`
+- `planner-app/src/components/FactoryFloor.tsx`
+- `planner-app/src/components/FactoryWalls.tsx`
+
+Integration:
+- `PlannerApp.tsx` verwendet die neuen Bausteine und bleibt fuer Selection, TransformControls, Inspector, Undo/Redo, Copy/Paste voll kompatibel.
+
 ## Relevante Dateien
 
 - `planner-app/src/PlannerApp.tsx`
   - zentrale App-Logik (Assets, Platzierung, Auswahl, Gizmo, Undo/Redo, Copy/Paste, Upload, Inspector)
 - `planner-app/src/App.css`
   - Modernes UI-Layout und Styling inkl. eigenem Farb-Popover
+- `planner-app/src/components/Lighting.tsx`
+  - physikalisch wirkende Licht-/Umgebungsbeleuchtung
+- `planner-app/src/components/FactoryFloor.tsx`
+  - Hallenboden + dezentes Grid + Pointer-Interaktion fuer Platzierung
+- `planner-app/src/components/FactoryWalls.tsx`
+  - Hallenrahmen mit Rueck- und Seitenwaenden
 - `planner-app/src/index.css`
   - Globale Basisstile
 - `README.md`

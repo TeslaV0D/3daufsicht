@@ -36,7 +36,7 @@ npm run lint
   - Hubwagen
 - Mehrere Formtypen: Box, Rechteck, Kreis, Rhombus, Zylinder, Kegel, Kugel, Hexagon
 - Platzieren per Klick in der Szene
-- ALT gedrueckt: freies Platzieren ohne Grid-Snap
+- STRG/CMD gedrueckt: freies Platzieren ohne Grid-Snap (ALT entfernt)
 - Auswahl per Klick
 - STRG/CTRL gedrueckt: Mehrfachauswahl
 - XYZ bewegen und Rotieren (Transform-Gizmo bei Einzel- und Mehrfachauswahl)
@@ -50,13 +50,19 @@ npm run lint
 - Undo/Redo (STRG/CMD + Z, STRG/CMD + Y, STRG/CMD + SHIFT + Z)
 - Copy/Paste (STRG/CMD + C / V)
 - Speichern/Laden des Layouts in `localStorage`
+- Realistische Hallen-Visuals:
+  - Physikalischeres Licht mit HDRI-Umgebung (`warehouse`)
+  - Schatten in der gesamten Szene
+  - Hallenboden in Betonoptik + dezenteres Grid
+  - Hallenrahmen mit Rueck- und Seitenwaenden
+  - Damping-Kamera fuer fluessigere Navigation
+  - Ghost-Placement Vorschau beim Platzieren
 
 ## Bedienung
 
 - **Auswahl**: Asset anklicken
 - **Mehrfachauswahl**: `STRG` + Klick (oder `CMD` auf macOS)
 - **Platzieren**: Tool "Platzieren" aktivieren, Asset waehlen, auf Boden klicken
-- **Freies Platzieren/Bewegen**: `ALT` gedrueckt halten
-- **Freies Rotieren**: `STRG/CMD` beim Rotieren gedrueckt halten
+- **Freies Platzieren/Bewegen/Rotieren**: `STRG/CMD` gedrueckt halten
 - **Loeschen**: Button "Loeschen" oder `Entf`
 - **Abbrechen Platzierung**: `Escape`
