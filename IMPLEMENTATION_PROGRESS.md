@@ -2,190 +2,137 @@
 
 ## Projektziel
 
-Interaktive 3D-Planungsapplikation fuer Hallen-/Fabriklayout mit City-Skylines/SIMS-aehnlicher Bedienung und modernem Look.
+Interaktive 3D-Planungsapplikation fuer Hallen-/Fabriklayout mit City-Skylines/SIMS-aehnlicher Bedienung und modernem Look, mit klarer Trennung zwischen Edit- und Praesentationsmodus.
 
-## Stand 1: MVP-Grundlage (bereits umgesetzt)
+## Stand 1: MVP-Grundlage
 
-- React + TypeScript + Vite App unter `planner-app` erstellt
-- 3D-Szene mit `three.js`, `@react-three/fiber`, `@react-three/drei`
-- Kamera:
-  - Zoom
-  - Pan
-  - Orbit
-  - Presets: Perspektive, Top, Front, Seite
-- Asset-Workflow:
-  - Asset-Bibliothek links
-  - Platzieren per Klick auf den Boden
-  - ALT fuer freies Platzieren (ohne Grid-Snap)
-  - Einzel- und Mehrfachauswahl (STRG/CMD)
-  - Loeschen per Button und Entf/Backspace
-- Inspector:
-  - Position/Rotation editierbar
-  - Asset-Metadaten editierbar
-- Persistenz:
-  - Speichern/Laden in `localStorage`
+- React + TypeScript + Vite App unter `planner-app`.
+- 3D-Szene mit `three.js`, `@react-three/fiber`, `@react-three/drei`.
+- Kamera: Zoom / Pan / Orbit, Kamera-Presets (Perspektive, Top, Front, Seite).
+- Asset-Workflow: Bibliothek, Platzieren, Einzel-/Mehrfachauswahl, Loeschen.
+- Inspector: Position/Rotation editierbar, Metadaten editierbar.
+- Persistenz: Speichern/Laden in `localStorage`.
 
-## Stand 2: Fehlerbehebungen nach Nutzerfeedback (umgesetzt)
+## Stand 2: Stabilisierungen
 
-### 1) Verschieben/Drehen funktionierte nicht stabil
+- `TransformControls` sauber an selektiertes Mesh gebunden; `OrbitControls` waehrend Drag deaktiviert.
+- Robuste Input-Validierung (`parseFiniteInput`, `isVector3Tuple` mit `Number.isFinite`).
+- Kontrollierte Inspector-Eingaben mit Draft-State (Commit nur bei gueltigen Werten).
 
-Problem:
-- Transform-Gizmo war nicht sauber an das selektierte Objekt gebunden.
-- Visuell konnte die Achse in der Szenenmitte erscheinen statt am Asset.
+## Stand 3: Erweiterungen (Formen + Produktionsobjekte)
 
-Loesung:
-- `TransformControls` jetzt direkt mit dem selektierten Mesh-Ref verknuepft:
-  - `object={meshRef}`
-- Beim Draggen wird OrbitControls deaktiviert, danach wieder aktiviert.
-- Transformationen schreiben Position/Rotation in den Zustand zurueck.
+- Grundformen: Rechteck, Kreis.
+- Produktionsnahe Assets: Produktionslinie, Hubwagen, Angestellte, Kisten.
+- Farbe und Groesse (X/Y/Z) pro Instanz anpassbar.
 
-### 2) Asset verschwand bei Werteingaben im Inspector
+## Stand 4: Visual Upgrade + Steuerungsanpassung
 
-Problem:
-- Zwischenzustaende bei Number-Input (z. B. leer, unvollstaendig) konnten zu ungueltigen Zahlen fuehren.
-- Ungueltige Werte verursachten ungueltige Position/Rotation (z. B. `NaN`) und damit Rendering-Probleme.
+- `ALT` ersetzt durch `STRG/CMD` fuer freie Platzierung/Bewegung.
+- Neue Komponenten: `Lighting.tsx`, `FactoryFloor.tsx`, `FactoryWalls.tsx`.
+- HDRI-Environment (`warehouse`), weichere Kamera (`enableDamping`, `zoomToCursor`).
 
-Loesung:
-- Robuste Validierung eingefuehrt:
-  - `parseFiniteInput(...)`
-  - `isVector3Tuple(...)` validiert auch Endlichkeit (`Number.isFinite`)
-- Position/Rotation werden nur uebernommen, wenn gueltig.
-- Zusaetzlich kontrollierte Eingabefelder mit lokalem Draft-Zustand:
-  - Bearbeitung bleibt fluessig
-  - Commit nur bei gueltiger Zahl
-  - Ungueltige Zwischenwerte werden nicht in das Asset-Modell geschrieben
+## Stand 5: Unified Asset System + Praesentationsmodus (View Mode)
 
-### 3) Eigenschaften aendern
+### Datengetrieben
 
-Status:
-- Metadatenbearbeitung im Inspector ist aktiv und bleibt erhalten.
-- Position/Rotation-Eigenschaften koennen stabil geaendert werden.
+- Einheitliches `Asset`-Datenmodell (`src/types/asset.ts`): `type`, `category`, `position`, `rotation`, `scale`, `color`, `geometry { kind, params }`, `metadata { name, description, zoneType, text, customData }`, `visual { opacity, emissive, hoverEffect, ... }`.
+- `AssetFactory` (`src/AssetFactory.ts`) mit Templates fuer: Primitive 3D (Box, Sphere, Cylinder, Cone, Torus, Hexagon), Primitive 2D (Plane, Circle, Ring), Produktion, Logistik, Zonen (als Plane-Assets mit Opacity), Wege, Labels.
+- Keine hardcodierten Zonen/Wege mehr.
+- `useAssetsStore.ts` kapselt State, History (Undo/Redo), Selection, Clipboard, Persistenz.
 
-## Stand 3: Erweiterungen fuer Planung und Bedienung (neu umgesetzt)
+### Komponenten
 
-### 1) Neue Formen + Produktionsobjekte
+- `AssetRenderer.tsx` — universeller Renderer fuer alle Geometrien + GLB/GLTF (`useGLTF`).
+- `AssetInfoModal.tsx` — Floating Modal fuer View Mode.
+- `ViewModeOverlay.tsx` — staerkeres Lighting fuer Praesentation.
 
-Ergaenzt:
-- Grundformen: Rechteck und Kreis
-- Produktionsnahe Assets:
-  - Produktionslinie
-  - Hubwagen
-  - Angestellte
-  - Kisten
+### Save/Load
 
-Alle Objekte sind ueber den Inspector in Farbe und Groesse (X/Y/Z) pro Instanz anpassbar.
+- Versionierte Payload unter `factory-layout` in `localStorage`:
+  ```ts
+  { version: 2, assets: Asset[], customTemplates?: AssetTemplate[] }
+  ```
+- Vollstaendige Validierung (`sanitizeAsset` + `sanitizeVector3` + `sanitizeColor`).
+- Rueckwaertskompatibel zu altem Array-Format.
 
-### 2) Benutzerdefinierte Farbwahl (ohne System-Color-Picker)
+## Stand 6: Bugfixes Popup + Inspector
 
-Die Inspector-Farbsteuerung wurde auf ein eigenes UI umgestellt:
-- Trigger-Button mit Farbvorschau
-- eigenes Popover-Fenster
-- vordefinierte Farbswatches
-- RGB-Kanaele (R/G/B) als numerische Eingabe
-- Hex-Eingabe mit Validierung
+- `AssetInfoModal`: Outside-Click und ESC schliessen das Popup sauber; `stopPropagation` auf Modal-eigenem Click.
+- Inspector und Library-Panel werden **immer** gemountet — Visibility nur ueber CSS (`workspace.view-mode .panel { opacity: 0; pointer-events: none; }`). Dadurch verschwindet der Inspector nach Mode-Wechsel nicht mehr.
+- Mode-Badge `EDIT MODE` / `VIEW MODE` mit farblichem Akzent und Glow.
+- Smooth Transitions (Fade + Grid-Columns-Animation).
+- Modal-Animation (Scale + Fade Entry), `max-height` + Scroll.
+- Pointer-Cursor im View Mode.
 
-Technisch:
-- keine Abhaengigkeit mehr von `input type="color"`
-- saubere Normalisierung ueber `sanitizeColor(...)`
-- Umrechnung zwischen Hex und RGB ueber Hilfsfunktionen
+## Stand 7: Mode-Separation + Layout-Fixes
 
-### 3) Inspector- und Transform-Erweiterung
+### Saubere Inhalte im View-Mode-Popup
 
-- Position X/Y/Z editierbar
-- Rotation X/Y/Z in Grad editierbar
-- Groesse (Breite/Hoehe/Laenge) editierbar
-- Einzelauswahl und Mehrfachauswahl bleiben fuer Transformations-Gizmo nutzbar
-- Snap-Verhalten:
-  - Verschieben: Raster-Snap standardmaessig, `ALT` fuer frei
-  - Rotieren: Winkel-Snap standardmaessig, `CTRL/CMD` fuer frei
+- `AssetInfoModal` zeigt **nur semantische Informationen**: Name, Kategorie, Zone-Typ, Beschreibung, Custom Metadata. Keine Transform-Daten (Position, Rotation, Scale, Typ-ID, Geometry-Kind).
 
-### 4) Daten-/Kompatibilitaet
+### Layout ohne Scroll
 
-- Shape-Parsing fuer neue Formen erweitert (`rectangle`, `circle`)
-- Layout-Hydration aus `localStorage` bleibt rueckwaertskompatibel
+- `html, body, #root { height: 100%; overflow: hidden; }`.
+- `.planner-shell { height: 100vh; max-height: 100vh; overflow: hidden; }`.
+- `.workspace`, `.scene-wrapper` und `canvas` auf feste Fuellhoehe/-breite (`height: 100%`, `width: 100%`).
+- Top-Bar darf umbrechen (`flex-wrap: wrap`) ohne die Shell zu strecken (`flex: 0 0 auto`).
+- Responsive-Fallbacks mit `minmax(0, ...)` und Panel-`max-height`.
 
-## Stand 4: Visual Upgrade + Steuerungsanpassung (neu umgesetzt)
+### Kamera-Reset bei Mode-Wechsel
 
-### 1) ALT ersetzt durch STRG/CMD fuer freie Platzierung/Bewegung
+- `<OrbitControls key={`orbit-${mode}`} ... />` erzwingt harten Reset.
+- Pro Mode eigene Parameter:
+  - View: `dampingFactor: 0.1`, `minDistance: 4`, `maxDistance: 120`, ruhigere `rotateSpeed`/`zoomSpeed`.
+  - Edit: bisherige Werte (0.08 damping, 6–85 distance).
 
-Hintergrund:
-- ALT oeffnet in manchen Browsern/systemseitig Menue-Interaktionen.
-- Dadurch war freie Bewegung/Platzierung unzuverlaessig.
+## Stand 8: Text-Labels, Datei-Persistenz, Hover-Fix, Docs
 
-Umsetzung:
-- Freie Platzierung ist jetzt an `STRG/CMD` gebunden.
-- Freies Verschieben und freies Rotieren sind ebenfalls an `STRG/CMD` gekoppelt.
-- Einheitliche Modifier-Logik fuer Placement und TransformControls.
+### Editierbare Text-Labels
 
-### 2) Lighting komplett modernisiert
+- `metadata.text` im `AssetMetadata`-Schema ergaenzt (`src/types/asset.ts`), mit Sanitizer.
+- `AssetRenderer` zieht fuer `geometry.kind === 'text'` zuerst `asset.metadata.text`, dann `geometry.params.text`, dann `'Label'`.
+- Default-Template `label-text` legt den Text jetzt in `metadata.text` ab statt in `params.text`.
+- Inspector zeigt fuer Text-Assets ein `Textinhalt`-Feld (max. 160 Zeichen), Live-Update im Rendering.
 
-Umgesetzt:
-- `Canvas` mit Shadows bleibt aktiv.
-- Neue Szene-Komponente `Lighting.tsx`:
-  - `ambientLight` mit niedriger Intensitaet
-  - `directionalLight` mit aktivierten Shadows und erweitertem Shadow-Frustum
-  - `Environment preset="warehouse"` fuer realistischere Reflexion/Umgebungslicht
+### Datei-basiertes Save / Load
 
-### 3) Boden + Grid ueberarbeitet
+- Neue Store-API (`useAssetsStore.ts`):
+  - `slots`, `saveSlot(name)`, `loadSlot(id)`, `deleteSlot(id)`, `renameSlot(id, name)` — mehrere benannte Layouts in `localStorage` unter `factory-layout-slots`.
+  - `exportLayout(suggestedName?)` — laedt das aktuelle Layout als `.json` runter (Blob + `a.download`).
+  - `importLayoutFromFile(file)` / `importLayoutFromData(data)` — FileReader + Validierung.
+- Neue Komponente `LoadLayoutModal.tsx`:
+  - Button "Auto-Layout laden" (entspricht altem `load()`).
+  - Liste gespeicherter Slots (laden, umbenennen, loeschen).
+  - "Datei auswaehlen" fuer externe `.json`-Imports.
+- Toolbar-Buttons:
+  - `Speichern` → Auto-Slot.
+  - `Als Slot` → benannter Slot.
+  - `Laden` → oeffnet Modal.
+  - `Export` → `.json`-Download.
 
-Neue Komponente `FactoryFloor.tsx`:
-- grosse Hallenboden-Plane mit hellem Material:
-  - Farbe `#e5e5e5`
-  - `meshStandardMaterial` mit `roughness 0.9`, `metalness 0.1`
-- Grid deutlich dezenter:
-  - neutralere Farben
-  - staerkeres Fade, geringere Dominanz
+### Hover-Stabilitaet
 
-### 4) Hallenrahmen/Waende hinzugefuegt
+- `AssetRenderer` nutzt jetzt `onPointerEnter` / `onPointerLeave` (statt `onPointerOver` / `onPointerOut`).  
+  Folge: Keine wiederholten Enter/Leave-Events bei Mausbewegung innerhalb des Asset-Subtrees — Hover-State flickert nicht mehr.
+- `PlannerApp` verwendet `setHoveredId((current) => current === asset.id ? current : asset.id)`, um unnoetige Re-Renders zu vermeiden.
 
-Neue Komponente `FactoryWalls.tsx`:
-- Rueckwand + zwei Seitenwaende als Box-Geometrien
-- Hoehe ~8 Einheiten
-- leicht graublaue Materialtoene
-- `castShadow` + `receiveShadow` aktiv
+### Dokumentation
 
-### 5) Ghost Placement verbessert
-
-- Vorschau beim Platzieren nutzt jetzt ein halbtransparentes, leicht gruenes Ghost-Material.
-- Preview folgt weiterhin der Maus und wird erst beim Klick final platziert.
-
-### 6) Kamera-Feeling modernisiert
-
-`OrbitControls` erweitert um:
-- `enableDamping`
-- `dampingFactor={0.08}`
-- `screenSpacePanning`
-- `zoomToCursor`
-- enger begrenzte Polar-Angles (kein Unter-den-Boden-Drehen)
-
-### 7) Komponentenstruktur verbessert
-
-Neu erstellt:
-- `planner-app/src/components/Lighting.tsx`
-- `planner-app/src/components/FactoryFloor.tsx`
-- `planner-app/src/components/FactoryWalls.tsx`
-
-Integration:
-- `PlannerApp.tsx` verwendet die neuen Bausteine und bleibt fuer Selection, TransformControls, Inspector, Undo/Redo, Copy/Paste voll kompatibel.
+- `README.md` und `IMPLEMENTATION_PROGRESS.md` aktualisiert mit den neuen Features und Bedienung.
 
 ## Relevante Dateien
 
-- `planner-app/src/PlannerApp.tsx`
-  - zentrale App-Logik (Assets, Platzierung, Auswahl, Gizmo, Undo/Redo, Copy/Paste, Upload, Inspector)
-- `planner-app/src/App.css`
-  - Modernes UI-Layout und Styling inkl. eigenem Farb-Popover
-- `planner-app/src/components/Lighting.tsx`
-  - physikalisch wirkende Licht-/Umgebungsbeleuchtung
-- `planner-app/src/components/FactoryFloor.tsx`
-  - Hallenboden + dezentes Grid + Pointer-Interaktion fuer Platzierung
-- `planner-app/src/components/FactoryWalls.tsx`
-  - Hallenrahmen mit Rueck- und Seitenwaenden
-- `planner-app/src/index.css`
-  - Globale Basisstile
-- `README.md`
-  - Projekt- und Bedienungsbeschreibung
-- `planner-app/README.md`
-  - App-spezifisches Setup und Feature-Ueberblick
+- `planner-app/src/PlannerApp.tsx` — Hauptlogik, Modus, Tools, Inspector, Toolbar, Modals.
+- `planner-app/src/AssetFactory.ts` — Templates + Kategorien + Demo-Layout.
+- `planner-app/src/store/useAssetsStore.ts` — State-Hook, History, Persistenz, Slots, Import/Export.
+- `planner-app/src/types/asset.ts` — `Asset`-Typen, Sanitizer, Fallbacks.
+- `planner-app/src/components/AssetRenderer.tsx` — universeller 3D-Renderer (alle Geometrien, Text, GLB).
+- `planner-app/src/components/AssetInfoModal.tsx` — semantisches View-Mode-Popup.
+- `planner-app/src/components/LoadLayoutModal.tsx` — Load/Import-Dialog.
+- `planner-app/src/components/ViewModeOverlay.tsx` — View-Mode-Lighting.
+- `planner-app/src/components/Lighting.tsx`, `FactoryFloor.tsx`, `FactoryWalls.tsx` — Szenen-Bausteine.
+- `planner-app/src/App.css` — modernes UI-Layout, Transitions, Modals, Mode-Badge.
+- `planner-app/src/index.css` — globale Basisstile, Kein-Scroll-Layout.
 
 ## Test- und Qualitaetsstand
 
@@ -194,13 +141,11 @@ Ausgefuehrte Checks:
 - `npm run lint`
 - `npm run build`
 
-Ergebnis:
+Ergebnis: beide Checks erfolgreich.
 
-- Beide Checks erfolgreich (inkl. aktueller Erweiterungen)
+## Offene optionale Erweiterungen
 
-## Offene naechste Schritte (optional)
-
-- Box-Selection fuer Mehrfachauswahl
-- Import-Dialog mit Startwerten fuer Rotation/Groesse
-- Kollisions-/Abstandsregeln
-- Export (Screenshot/PDF)
+- Box-Selection fuer Mehrfachauswahl.
+- Kollisions-/Abstandsregeln zwischen Assets.
+- Screenshot/PDF-Export aus View Mode.
+- Animationspfade fuer bewegliche Assets.
