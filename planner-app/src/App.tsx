@@ -37,6 +37,13 @@ interface AssetMeshProps {
   onTransform: (id: string, position: Vector3Tuple, rotation: Vector3Tuple) => void
 }
 
+interface NumericTransformInputProps {
+  label: string
+  value: number
+  step?: string
+  onCommit: (value: number) => void
+}
+
 const STORAGE_KEY = 'layout-planner-v1'
 const SNAP_UNIT = 1
 
@@ -123,6 +130,8 @@ const CAMERA_PRESETS: Record<CameraPreset, { position: Vector3Tuple; target: Vec
 }
 
 const round2 = (value: number) => Number(value.toFixed(2))
+const isFiniteNumber = (value: number) => Number.isFinite(value)
+const formatNumber = (value: number) => String(round2(value))
 
 function newAssetId() {
   return `asset-${crypto.randomUUID()}`
@@ -140,8 +149,16 @@ function isVector3Tuple(value: unknown): value is Vector3Tuple {
     value.length === 3 &&
     typeof value[0] === 'number' &&
     typeof value[1] === 'number' &&
-    typeof value[2] === 'number'
+    typeof value[2] === 'number' &&
+    isFiniteNumber(value[0]) &&
+    isFiniteNumber(value[1]) &&
+    isFiniteNumber(value[2])
   )
+}
+
+function parseFiniteInput(rawValue: string): number | null {
+  const parsedValue = Number(rawValue)
+  return isFiniteNumber(parsedValue) ? parsedValue : null
 }
 
 function parseStoredAssets(rawLayout: string): PlacedAsset[] | null {
@@ -244,6 +261,50 @@ function CameraController({
   return null
 }
 
+function NumericTransformInput({ label, value, step = '0.1', onCommit }: NumericTransformInputProps) {
+  const [draft, setDraft] = useState(formatNumber(value))
+  const [isEditing, setIsEditing] = useState(false)
+
+  const visibleValue = isEditing ? draft : formatNumber(value)
+
+  const commitDraft = useCallback(() => {
+    const parsedValue = parseFiniteInput(draft)
+    if (parsedValue === null) {
+      setDraft(formatNumber(value))
+      setIsEditing(false)
+      return
+    }
+    const normalizedValue = round2(parsedValue)
+    onCommit(normalizedValue)
+    setDraft(formatNumber(normalizedValue))
+    setIsEditing(false)
+  }, [draft, onCommit, value])
+
+  return (
+    <label>
+      {label}
+      <input
+        type="text"
+        inputMode="decimal"
+        value={visibleValue}
+        onFocus={() => setIsEditing(true)}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={commitDraft}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            commitDraft()
+          }
+          if (event.key === 'Escape') {
+            setDraft(formatNumber(value))
+            setIsEditing(false)
+          }
+        }}
+        data-step={step}
+      />
+    </label>
+  )
+}
+
 function AssetMesh({
   asset,
   definition,
@@ -254,67 +315,82 @@ function AssetMesh({
   onSelect,
   onTransform,
 }: AssetMeshProps) {
-  const meshRef = useRef<Mesh | null>(null)
-  const meshNode = (
-    <mesh
-      ref={meshRef}
-      castShadow
-      receiveShadow
-      position={asset.position}
-      rotation={asset.rotation}
-      onClick={(event: ThreeEvent<MouseEvent>) => {
-        event.stopPropagation()
-        onSelect(asset.id, event.ctrlKey || event.metaKey)
-      }}
-    >
-      <boxGeometry args={definition.size} />
-      <meshStandardMaterial
-        color={isSelected ? '#74c0fc' : definition.color}
-        roughness={0.55}
-        metalness={0.25}
-        emissive={isSelected ? '#0b7285' : '#000000'}
-        emissiveIntensity={isSelected ? 0.15 : 0}
-      />
-    </mesh>
-  )
+  const meshRef = useRef<Mesh>(null!)
+  const isDraggingRef = useRef(false)
+
+  const commitTransform = useCallback(() => {
+    const currentMesh = meshRef.current
+    const currentPosition: Vector3Tuple = [
+      round2(currentMesh.position.x),
+      round2(currentMesh.position.y),
+      round2(currentMesh.position.z),
+    ]
+    const currentRotation: Vector3Tuple = [
+      round2(currentMesh.rotation.x),
+      round2(currentMesh.rotation.y),
+      round2(currentMesh.rotation.z),
+    ]
+    onTransform(asset.id, currentPosition, currentRotation)
+  }, [asset.id, onTransform])
+
+  const finishDragging = useCallback(() => {
+    if (!isDraggingRef.current) {
+      return
+    }
+    isDraggingRef.current = false
+    if (orbitRef.current) {
+      orbitRef.current.enabled = true
+    }
+    commitTransform()
+  }, [commitTransform, orbitRef])
+
+  useEffect(() => {
+    const onWindowPointerUp = () => finishDragging()
+    const onWindowBlur = () => finishDragging()
+    window.addEventListener('pointerup', onWindowPointerUp)
+    window.addEventListener('blur', onWindowBlur)
+    return () => {
+      window.removeEventListener('pointerup', onWindowPointerUp)
+      window.removeEventListener('blur', onWindowBlur)
+    }
+  }, [finishDragging])
 
   return (
     <group>
+      <mesh
+        ref={meshRef}
+        castShadow
+        receiveShadow
+        position={asset.position}
+        rotation={asset.rotation}
+        onClick={(event: ThreeEvent<MouseEvent>) => {
+          event.stopPropagation()
+          onSelect(asset.id, event.ctrlKey || event.metaKey)
+        }}
+      >
+        <boxGeometry args={definition.size} />
+        <meshStandardMaterial
+          color={isSelected ? '#74c0fc' : definition.color}
+          roughness={0.55}
+          metalness={0.25}
+          emissive={isSelected ? '#0b7285' : '#000000'}
+          emissiveIntensity={isSelected ? 0.15 : 0}
+        />
+      </mesh>
+
       {useTransformGizmo && (
         <TransformControls
+          object={meshRef}
           mode={transformMode}
           onMouseDown={() => {
+            isDraggingRef.current = true
             if (orbitRef.current) {
               orbitRef.current.enabled = false
             }
           }}
-          onMouseUp={() => {
-            if (orbitRef.current) {
-              orbitRef.current.enabled = true
-            }
-          }}
-          onObjectChange={() => {
-            const currentMesh = meshRef.current
-            if (!currentMesh) {
-              return
-            }
-            const currentPosition: Vector3Tuple = [
-              round2(currentMesh.position.x),
-              round2(currentMesh.position.y),
-              round2(currentMesh.position.z),
-            ]
-            const currentRotation: Vector3Tuple = [
-              round2(currentMesh.rotation.x),
-              round2(currentMesh.rotation.y),
-              round2(currentMesh.rotation.z),
-            ]
-            onTransform(asset.id, currentPosition, currentRotation)
-          }}
-        >
-          {meshNode}
-        </TransformControls>
+          onMouseUp={finishDragging}
+        />
       )}
-      {!useTransformGizmo && meshNode}
     </group>
   )
 }
@@ -466,8 +542,8 @@ function App() {
           asset.id === id
             ? {
                 ...asset,
-                position,
-                rotation,
+                position: isVector3Tuple(position) ? position : asset.position,
+                rotation: isVector3Tuple(rotation) ? rotation : asset.rotation,
               }
             : asset,
         ),
@@ -720,83 +796,52 @@ function App() {
             <div className="inspector-content">
               <p className="selected-title">{singleSelectedDefinition.label}</p>
               <p className="panel-hint">ID: {singleSelectedAsset.id.slice(0, 16)}...</p>
-              <div className="vector-grid">
-                <label>
-                  X
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={singleSelectedAsset.position[0]}
-                    onChange={(event) =>
-                      updateAssetTransform(
-                        singleSelectedAsset.id,
-                        [
-                          Number(event.target.value),
-                          singleSelectedAsset.position[1],
-                          singleSelectedAsset.position[2],
-                        ],
-                        singleSelectedAsset.rotation,
-                      )
-                    }
-                  />
-                </label>
-                <label>
-                  Y
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={singleSelectedAsset.position[1]}
-                    onChange={(event) =>
-                      updateAssetTransform(
-                        singleSelectedAsset.id,
-                        [
-                          singleSelectedAsset.position[0],
-                          Number(event.target.value),
-                          singleSelectedAsset.position[2],
-                        ],
-                        singleSelectedAsset.rotation,
-                      )
-                    }
-                  />
-                </label>
-                <label>
-                  Z
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={singleSelectedAsset.position[2]}
-                    onChange={(event) =>
-                      updateAssetTransform(
-                        singleSelectedAsset.id,
-                        [
-                          singleSelectedAsset.position[0],
-                          singleSelectedAsset.position[1],
-                          Number(event.target.value),
-                        ],
-                        singleSelectedAsset.rotation,
-                      )
-                    }
-                  />
-                </label>
-                <label>
-                  Rot Y
-                  <input
-                    type="number"
-                    step="0.05"
-                    value={singleSelectedAsset.rotation[1]}
-                    onChange={(event) =>
-                      updateAssetTransform(
-                        singleSelectedAsset.id,
-                        singleSelectedAsset.position,
-                        [
-                          singleSelectedAsset.rotation[0],
-                          Number(event.target.value),
-                          singleSelectedAsset.rotation[2],
-                        ],
-                      )
-                    }
-                  />
-                </label>
+              <div className="vector-grid" key={singleSelectedAsset.id}>
+                <NumericTransformInput
+                  label="X"
+                  value={singleSelectedAsset.position[0]}
+                  onCommit={(nextValue) =>
+                    updateAssetTransform(
+                      singleSelectedAsset.id,
+                      [nextValue, singleSelectedAsset.position[1], singleSelectedAsset.position[2]],
+                      singleSelectedAsset.rotation,
+                    )
+                  }
+                />
+                <NumericTransformInput
+                  label="Y"
+                  value={singleSelectedAsset.position[1]}
+                  onCommit={(nextValue) =>
+                    updateAssetTransform(
+                      singleSelectedAsset.id,
+                      [singleSelectedAsset.position[0], nextValue, singleSelectedAsset.position[2]],
+                      singleSelectedAsset.rotation,
+                    )
+                  }
+                />
+                <NumericTransformInput
+                  label="Z"
+                  value={singleSelectedAsset.position[2]}
+                  onCommit={(nextValue) =>
+                    updateAssetTransform(
+                      singleSelectedAsset.id,
+                      [singleSelectedAsset.position[0], singleSelectedAsset.position[1], nextValue],
+                      singleSelectedAsset.rotation,
+                    )
+                  }
+                />
+                <NumericTransformInput
+                  label="Rot Y"
+                  step="0.05"
+                  value={singleSelectedAsset.rotation[1]}
+                  onCommit={(nextValue) =>
+                    updateAssetTransform(
+                      singleSelectedAsset.id,
+                      singleSelectedAsset.position,
+                      [singleSelectedAsset.rotation[0], nextValue, singleSelectedAsset.rotation[2]],
+                    )
+                  }
+                />
               </div>
               <h3>Asset-Infos</h3>
               {Object.entries(singleSelectedAsset.metadata).map(([key, value]) => (
