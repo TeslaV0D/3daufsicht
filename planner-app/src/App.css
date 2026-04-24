@@ -119,6 +119,62 @@ button.danger {
   color: #91a9c6;
 }
 
+.upload-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin-top: 0.55rem;
+  padding: 0.48rem 0.7rem;
+  border: 1px dashed #3a5574;
+  border-radius: 0.6rem;
+  background: #112133;
+  color: #d9e6f5;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.upload-label:hover {
+  border-color: #4dabf7;
+}
+
+.upload-label input {
+  display: none;
+}
+
+.upload-row {
+  margin-top: 0.7rem;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.upload-row input[type='file'] {
+  display: none;
+}
+
+.upload-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #305275;
+  background: #15304a;
+  color: #dff1ff;
+  border-radius: 0.6rem;
+  padding: 0.4rem 0.7rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.upload-button:hover {
+  border-color: #4e84c1;
+}
+
+.upload-hint {
+  font-size: 0.75rem;
+  color: #90aac7;
+  margin-top: 0.35rem;
+}
+
 .scene-wrapper {
   position: relative;
   min-height: 0;
@@ -142,6 +198,10 @@ button.danger {
   padding: 0.5rem 0.7rem;
   border-radius: 0.5rem;
   font-size: 0.82rem;
+}
+
+.status-bar .danger {
+  color: #ff8f8f;
 }
 
 .preview-badge {
