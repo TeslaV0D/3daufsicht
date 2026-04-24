@@ -25,6 +25,7 @@ import Lighting from './components/Lighting'
 import ViewModeOverlay from './components/ViewModeOverlay'
 import AssetInfoModal from './components/AssetInfoModal'
 import AssetRenderer, { GhostAssetRenderer } from './components/AssetRenderer'
+import LoadLayoutModal from './components/LoadLayoutModal'
 
 import {
   getTemplatesByCategory,
@@ -590,6 +591,7 @@ export default function PlannerApp() {
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const [infoAssetId, setInfoAssetId] = useState<string | null>(null)
   const [saveFeedback, setSaveFeedback] = useState<string | null>(null)
+  const [isLoadModalOpen, setIsLoadModalOpen] = useState(false)
 
   const {
     assets,
@@ -610,6 +612,13 @@ export default function PlannerApp() {
     canPaste,
     save,
     load,
+    slots,
+    saveSlot,
+    loadSlot,
+    deleteSlot,
+    renameSlot,
+    exportLayout,
+    importLayoutFromFile,
   } = store
 
   const activeTemplateType = selectedTemplateType ?? templates[0]?.type ?? null
@@ -673,7 +682,7 @@ export default function PlannerApp() {
 
   const onAssetPointerOver = useCallback(
     (_event: ThreeEvent<PointerEvent>, asset: Asset) => {
-      setHoveredId(asset.id)
+      setHoveredId((current) => (current === asset.id ? current : asset.id))
     },
     [],
   )
@@ -711,16 +720,40 @@ export default function PlannerApp() {
     removeAssets(selectedIds)
   }, [removeAssets, selectedIds])
 
+  const flashFeedback = useCallback((message: string) => {
+    setSaveFeedback(message)
+    window.setTimeout(() => setSaveFeedback(null), 2200)
+  }, [])
+
   const onSaveLayout = useCallback(() => {
     save()
-    setSaveFeedback('Gespeichert')
-    window.setTimeout(() => setSaveFeedback(null), 2000)
-  }, [save])
+    flashFeedback('Gespeichert (Auto-Slot)')
+  }, [flashFeedback, save])
 
-  const onLoadLayout = useCallback(() => {
-    const ok = load()
-    setSaveFeedback(ok ? 'Geladen' : 'Kein gespeichertes Layout gefunden')
-    window.setTimeout(() => setSaveFeedback(null), 2200)
+  const onSaveSlot = useCallback(() => {
+    const suggested = `Layout ${new Date().toLocaleString()}`
+    const name = window.prompt('Name fuer den Layout-Slot:', suggested)
+    if (name === null) return
+    const slot = saveSlot(name)
+    flashFeedback(`Slot "${slot.name}" gespeichert`)
+  }, [flashFeedback, saveSlot])
+
+  const onExportLayout = useCallback(() => {
+    const suggested = `factory-layout-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}`
+    exportLayout(suggested)
+    flashFeedback('Export gestartet')
+  }, [exportLayout, flashFeedback])
+
+  const onOpenLoadModal = useCallback(() => {
+    setIsLoadModalOpen(true)
+  }, [])
+
+  const onCloseLoadModal = useCallback(() => {
+    setIsLoadModalOpen(false)
+  }, [])
+
+  const handleLoadCurrentAutoSlot = useCallback((): boolean => {
+    return load()
   }, [load])
 
   const onUploadAsset = useCallback(
@@ -809,7 +842,11 @@ export default function PlannerApp() {
   }, [changeTool, copy, mode, onRemoveSelected, paste, redo, undo])
 
   const updateSingleMetadata = useCallback(
-    (key: string, value: string, kind: 'name' | 'description' | 'zoneType' | 'custom') => {
+    (
+      key: string,
+      value: string,
+      kind: 'name' | 'description' | 'zoneType' | 'text' | 'custom',
+    ) => {
       if (!singleSelected) return
       if (kind === 'custom') {
         updateAsset(singleSelected.id, {
@@ -876,6 +913,17 @@ export default function PlannerApp() {
 
   return (
     <div className={`planner-shell mode-${mode}`}>
+      {isLoadModalOpen && (
+        <LoadLayoutModal
+          slots={slots}
+          onClose={onCloseLoadModal}
+          onLoadSlot={loadSlot}
+          onDeleteSlot={deleteSlot}
+          onRenameSlot={renameSlot}
+          onLoadFile={importLayoutFromFile}
+          onLoadCurrent={handleLoadCurrentAutoSlot}
+        />
+      )}
       <header className="top-bar">
         <div className="toolbar-group">
           <span className="toolbar-title">Factory Planning Studio</span>
@@ -980,8 +1028,16 @@ export default function PlannerApp() {
           <button type="button" onClick={onSaveLayout}>
             Speichern
           </button>
-          <button type="button" onClick={onLoadLayout}>
+          {mode === 'edit' && (
+            <button type="button" onClick={onSaveSlot}>
+              Als Slot
+            </button>
+          )}
+          <button type="button" onClick={onOpenLoadModal}>
             Laden
+          </button>
+          <button type="button" onClick={onExportLayout}>
+            Export
           </button>
           {mode === 'edit' && (
             <button type="button" className="danger" onClick={onRemoveSelected}>
@@ -1289,6 +1345,19 @@ export default function PlannerApp() {
                 />
 
                 <h3>Info</h3>
+                {singleSelected.geometry.kind === 'text' && (
+                  <label className="metadata-field">
+                    Textinhalt
+                    <input
+                      maxLength={160}
+                      value={singleSelected.metadata.text ?? ''}
+                      placeholder="Label"
+                      onChange={(event) =>
+                        updateSingleMetadata('text', event.target.value, 'text')
+                      }
+                    />
+                  </label>
+                )}
                 <label className="metadata-field">
                   Name
                   <input
