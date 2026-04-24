@@ -338,12 +338,51 @@ input {
 
 .mode-switch {
   display: inline-flex;
+  align-items: center;
   gap: 0;
   padding: 2px;
   border: 1px solid #2a3c54;
   background: #0f1b29;
   border-radius: 0.7rem;
   margin-right: 0.35rem;
+  transition: border-color 220ms ease, box-shadow 220ms ease;
+}
+
+.mode-switch.mode-view {
+  border-color: #3d8bfd;
+  box-shadow: 0 0 0 1px rgba(61, 139, 253, 0.35), 0 0 16px rgba(61, 139, 253, 0.18);
+}
+
+.mode-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.18rem 0.55rem;
+  margin-right: 2px;
+  margin-left: 2px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  border-radius: 0.45rem;
+  color: #0b121d;
+  background: linear-gradient(180deg, #b6d4ff, #6ea8ff);
+  box-shadow: 0 0 0 1px rgba(12, 20, 30, 0.4) inset;
+  transition: background 220ms ease, color 220ms ease, box-shadow 220ms ease;
+}
+
+.mode-badge[data-mode='view'] {
+  background: linear-gradient(180deg, #ffd666, #f0a500);
+  color: #1a1306;
+}
+
+.mode-badge::before {
+  content: '';
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.8;
 }
 
 .mode-switch button {
@@ -365,9 +404,34 @@ input {
   color: #f4fbff;
 }
 
+.workspace {
+  transition: grid-template-columns 280ms ease, background 280ms ease;
+}
+
 .workspace.view-mode {
-  grid-template-columns: 1fr;
+  grid-template-columns: 0 1fr 0;
   background: radial-gradient(circle at top left, #12202e 0%, #050a11 75%);
+}
+
+.workspace.view-mode .scene-wrapper {
+  cursor: pointer;
+}
+
+.panel {
+  transition:
+    opacity 220ms ease,
+    padding 280ms ease,
+    border-color 280ms ease,
+    transform 220ms ease;
+}
+
+.workspace.view-mode .panel {
+  opacity: 0;
+  transform: translateY(-4px);
+  pointer-events: none;
+  padding: 0;
+  border-color: transparent;
+  overflow: hidden;
 }
 
 .view-hint-bar {
@@ -392,6 +456,17 @@ input {
   font-weight: 600;
 }
 
+@keyframes asset-info-enter {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -8px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
 .asset-info-modal {
   position: absolute;
   top: 1.2rem;
@@ -399,6 +474,8 @@ input {
   transform: translateX(-50%);
   z-index: 20;
   width: min(480px, 92vw);
+  max-height: calc(100vh - 9rem);
+  overflow-y: auto;
   background: rgba(14, 24, 35, 0.78);
   color: #eef4fb;
   border: 1px solid rgba(110, 150, 200, 0.3);
@@ -410,6 +487,8 @@ input {
   padding: 1rem 1.15rem;
   display: grid;
   gap: 0.7rem;
+  animation: asset-info-enter 180ms ease-out;
+  cursor: default;
 }
 
 .asset-info-header {

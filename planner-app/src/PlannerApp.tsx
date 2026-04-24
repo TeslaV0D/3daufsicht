@@ -880,7 +880,10 @@ export default function PlannerApp() {
         <div className="toolbar-group">
           <span className="toolbar-title">Factory Planning Studio</span>
 
-          <div className="mode-switch">
+          <div className={`mode-switch mode-${mode}`}>
+            <span className="mode-badge" data-mode={mode} aria-live="polite">
+              {mode === 'edit' ? 'EDIT MODE' : 'VIEW MODE'}
+            </span>
             <button
               type="button"
               className={mode === 'edit' ? 'active' : ''}
@@ -989,44 +992,42 @@ export default function PlannerApp() {
       </header>
 
       <div className={`workspace${mode === 'view' ? ' view-mode' : ''}`}>
-        {mode === 'edit' && (
-          <aside className="panel left">
-            <h2>Asset-Bibliothek</h2>
-            <p className="panel-hint">Kategorie waehlen und per Klick in der Szene platzieren.</p>
-            <label className="upload-field">
-              Eigene Assets hochladen (GLB/GLTF)
-              <input
-                type="file"
-                accept=".glb,.gltf,model/gltf-binary,model/gltf+json"
-                onChange={onUploadAsset}
-              />
-            </label>
-            {Object.entries(groupedTemplates).map(([category, list]) => (
-              <div key={category} className="asset-group">
-                <h3>{category}</h3>
-                {list.map((template) => (
-                  <button
-                    type="button"
-                    key={template.type}
-                    className={
-                      tool === 'place' && activeTemplateType === template.type ? 'active' : ''
-                    }
-                    onClick={() => {
-                      setSelectedTemplateType(template.type)
-                      changeTool('place')
-                    }}
-                  >
-                    <span>{template.label}</span>
-                    <small>
-                      {template.geometry.kind} |{' '}
-                      {template.scale.map((v) => v.toFixed(1)).join(' x ')} m
-                    </small>
-                  </button>
-                ))}
-              </div>
-            ))}
-          </aside>
-        )}
+        <aside className="panel left" aria-hidden={mode === 'view'}>
+          <h2>Asset-Bibliothek</h2>
+          <p className="panel-hint">Kategorie waehlen und per Klick in der Szene platzieren.</p>
+          <label className="upload-field">
+            Eigene Assets hochladen (GLB/GLTF)
+            <input
+              type="file"
+              accept=".glb,.gltf,model/gltf-binary,model/gltf+json"
+              onChange={onUploadAsset}
+            />
+          </label>
+          {Object.entries(groupedTemplates).map(([category, list]) => (
+            <div key={category} className="asset-group">
+              <h3>{category}</h3>
+              {list.map((template) => (
+                <button
+                  type="button"
+                  key={template.type}
+                  className={
+                    tool === 'place' && activeTemplateType === template.type ? 'active' : ''
+                  }
+                  onClick={() => {
+                    setSelectedTemplateType(template.type)
+                    changeTool('place')
+                  }}
+                >
+                  <span>{template.label}</span>
+                  <small>
+                    {template.geometry.kind} |{' '}
+                    {template.scale.map((v) => v.toFixed(1)).join(' x ')} m
+                  </small>
+                </button>
+              ))}
+            </div>
+          ))}
+        </aside>
 
         <main className="scene-wrapper">
           {mode === 'view' && infoAsset && (
@@ -1147,9 +1148,8 @@ export default function PlannerApp() {
           )}
         </main>
 
-        {mode === 'edit' && (
-          <aside className="panel right">
-            <h2>Inspector</h2>
+        <aside className="panel right" aria-hidden={mode === 'view'}>
+          <h2>Inspector</h2>
             {singleSelected ? (
               <div className="inspector-content">
                 <p className="selected-title">
@@ -1359,8 +1359,7 @@ export default function PlannerApp() {
                 </p>
               </div>
             )}
-          </aside>
-        )}
+        </aside>
       </div>
     </div>
   )
