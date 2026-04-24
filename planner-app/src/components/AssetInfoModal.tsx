@@ -67,25 +67,6 @@ export default function AssetInfoModal({ asset, onClose }: AssetInfoModalProps) 
 
       <p className="asset-info-description">{description}</p>
 
-      <div className="asset-info-meta">
-        <div>
-          <span className="asset-info-label">Typ</span>
-          <span>{asset.type}</span>
-        </div>
-        <div>
-          <span className="asset-info-label">Form</span>
-          <span>{asset.geometry.kind}</span>
-        </div>
-        <div>
-          <span className="asset-info-label">Position</span>
-          <span>{asset.position.map((v) => v.toFixed(1)).join(' / ')}</span>
-        </div>
-        <div>
-          <span className="asset-info-label">Skalierung</span>
-          <span>{asset.scale.map((v) => v.toFixed(1)).join(' / ')}</span>
-        </div>
-      </div>
-
       {customEntries.length > 0 && (
         <div className="asset-info-custom">
           <h4>Details</h4>

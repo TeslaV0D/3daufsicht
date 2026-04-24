@@ -1,7 +1,9 @@
 .planner-shell {
   display: flex;
-  min-height: 100vh;
+  height: 100vh;
+  max-height: 100vh;
   flex-direction: column;
+  overflow: hidden;
   color: #dfe7f3;
   background: radial-gradient(circle at top left, #152130 0%, #090e14 60%);
 }
@@ -10,8 +12,10 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  padding: 0.8rem 1rem;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  padding: 0.7rem 1rem;
+  flex: 0 0 auto;
   border-bottom: 1px solid #223247;
   background: linear-gradient(180deg, rgba(17, 28, 40, 0.98), rgba(10, 15, 22, 0.92));
   backdrop-filter: blur(8px);
@@ -65,8 +69,10 @@ button.danger {
 .workspace {
   display: grid;
   grid-template-columns: 280px 1fr 320px;
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
+  height: 100%;
+  overflow: hidden;
 }
 
 .panel {
@@ -178,10 +184,15 @@ button.danger {
 .scene-wrapper {
   position: relative;
   min-height: 0;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
 }
 
 .scene-wrapper canvas {
   display: block;
+  width: 100% !important;
+  height: 100% !important;
 }
 
 .status-bar {
@@ -651,12 +662,13 @@ textarea {
 @media (max-width: 980px) {
   .workspace {
     grid-template-columns: 1fr;
-    grid-template-rows: auto minmax(420px, 1fr) auto;
+    grid-template-rows: minmax(0, auto) minmax(0, 1fr) minmax(0, auto);
   }
 
   .panel {
     border-right: 0;
     border-bottom: 1px solid #223247;
+    max-height: 35vh;
   }
 
   .panel.right {

@@ -1116,18 +1116,22 @@ export default function PlannerApp() {
             )}
 
             <OrbitControls
+              key={`orbit-${mode}`}
               ref={orbitRef}
               makeDefault
               enablePan
               enableZoom
+              enableRotate
               enableDamping
-              dampingFactor={0.08}
+              dampingFactor={mode === 'view' ? 0.1 : 0.08}
               screenSpacePanning
               zoomToCursor
-              minDistance={6}
-              maxDistance={85}
+              minDistance={mode === 'view' ? 4 : 6}
+              maxDistance={mode === 'view' ? 120 : 85}
               minPolarAngle={0.2}
               maxPolarAngle={Math.PI / 2 - 0.03}
+              rotateSpeed={mode === 'view' ? 0.85 : 1}
+              zoomSpeed={mode === 'view' ? 0.9 : 1}
             />
           </Canvas>
 
