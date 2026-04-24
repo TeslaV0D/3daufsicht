@@ -1,30 +1,60 @@
-# Factory Planning Studio (MVP+)
+# Factory Planning Studio
 
-Eine interaktive 3D-Planungsapplikation im Stil von City-Skylines/SIMS fuer Hallen- und Flaechenplanung.
+Interaktive 3D-Planungsapplikation im Stil von City-Skylines/SIMS fuer Hallen- und Flaechenplanung.
 
 ## Enthaltene Features
 
-- 3D Szene mit Hallen-Optik (HDRI-Licht, Schatten, Boden, Waende) und moderner UI
-- Kamera-Steuerung mit Zoom/Pan/Orbit
-- Kamera-Presets: Perspektive, Top, Front, Seite
-- Asset-Bibliothek mit Kategorien (u. a. Produktion, Logistik, Personal, Formen)
-- Produktionstemplates: Produktionslinie, Hubwagen, Angestellte, Kisten
-- Mehrere Formtypen: Box/Rechteck, Kreis, Rhombus, Zylinder, Kegel, Kugel, Hexagon
-- Platzieren von Assets per Klick auf die Flaeche
-- STRG/CMD fuer freie Platzierung ohne Grid-Snap
-- Einzel- und Mehrfachauswahl (STRG / CMD)
-- Loeschen-Button + Entf/Backspace
-- Transform-Gizmo fuer XYZ bewegen und rotieren
-- Snapping beim Verschieben (standard), freie Bewegung mit STRG/CMD
-- Snapping beim Rotieren (standard), freie Rotation mit STRG/CMD
-- Inspector fuer Position, Rotation X/Y/Z (Grad), Groesse (Breite/Hoehe/Laenge), Farbe und Asset-Metadaten
-- Eigener, gestylter Farb-Dialog (Swatches, RGB, Hex) statt Browser-Standard-Picker
-- Ghost-Placement Preview (halbtransparent/gruenlich beim Platzieren)
-- Layout lokal speichern/laden (localStorage)
-- Eigene 3D-Assets (GLB/GLTF) lokal hochladen und platzieren
-- Undo/Redo Historie mit STRG/CMD+Z und STRG/CMD+Y
-- Copy/Paste fuer ausgewaehlte Assets mit STRG/CMD+C und STRG/CMD+V
-- Multi-Selection kann gemeinsam verschoben/gedreht werden
+### Modi
+
+- **Edit-Modus**: volle Bearbeitung (Platzieren, Gizmos, Inspector, Library).
+- **Praesentationsmodus (View Mode)**: read-only, Klick auf Asset oeffnet ein semantisches Info-Popup (nur Name, Beschreibung, Kategorie, Custom Metadata — keine Transform-Daten).
+- Mode-Badge (`EDIT MODE` / `VIEW MODE`), weichere Kamera und staerkeres Lighting im View Mode.
+
+### 3D Szene
+
+- Hallen-Optik mit HDRI-Licht (`warehouse`), Schatten, Boden und Waenden.
+- Orbit-Kamera mit `enableDamping`, `zoomToCursor`, Kamera-Presets (Perspektive / Top / Front / Seite).
+- Ghost-Placement Preview beim Platzieren.
+- Hover-Feedback (leichter Scale- und Glow-Effekt) stabil dank `onPointerEnter` / `onPointerLeave`.
+
+### Unified Asset System
+
+- Alles ist ein `Asset` (`type`, `category`, `position`, `rotation`, `scale`, `color`, `geometry`, `metadata`, `visual`).
+- Templates in Kategorien:
+  - **Primitive 3D**: Box, Sphere, Cylinder, Cone, Torus, Hexagon
+  - **Primitive 2D**: Plane, Circle, Ring
+  - **Produktion**: Produktionslinie, Arbeitsplatz, Angestellte
+  - **Logistik**: Regalblock, Hubwagen, Kisten
+  - **Zonen** (Plane-Assets mit Opacity): Produktion, Lager, Sicherheit
+  - **Wege**: Gehweg, Fahrweg
+  - **Labels**: editierbare 3D-Texte
+  - **Eigene Assets**: GLB/GLTF Upload
+
+### Editieren
+
+- Mehrere Formtypen, alle ueber Inspector anpassbar (Groesse, Farbe, Metadaten).
+- Einzel- und Mehrfachauswahl (`STRG/CMD + Klick`).
+- Transform-Gizmo: Bewegen / Drehen / Skalieren.
+- Inspector: Position, Rotation (Grad), Skalierung, Farbe, Name, Beschreibung, Zone-Typ, Custom Metadata, **Textinhalt** fuer Label-Assets.
+- Ghost-Placement, Snap-Toggle mit `STRG/CMD`.
+- Undo/Redo, Copy/Paste.
+
+### Persistenz
+
+- **Auto-Speichern** (`Speichern`): aktuelles Layout in `localStorage` (`factory-layout`, versioniert).
+- **Layout-Slots** (`Als Slot`): beliebig viele benannte Slots in `factory-layout-slots`.
+- **Lade-Dialog** (`Laden`):
+  - Auto-Slot laden.
+  - Liste gespeicherter Slots (Laden, Umbenennen, Loeschen).
+  - Externe `.json` Datei auswaehlen und importieren.
+- **Export** (`Export`): aktuelles Layout als `.json` Datei herunterladen.
+- **Import**: robuste Validierung (Position/Rotation/Scale als finite Zahlen, Fallbacks).
+
+### UI
+
+- Feste App-Hoehe, kein Seiten-Scroll.
+- Panels bleiben im View Mode gemountet (Visibility per CSS), damit der Inspector nach Mode-Wechseln nicht verschwindet.
+- Modal-Animationen (Scale + Fade).
 
 ## Lokale Entwicklung
 
@@ -37,26 +67,24 @@ App oeffnen unter: `http://localhost:5173`
 
 ## Eigene Assets hochladen und benutzen
 
-1. In der linken Asset-Bibliothek auf **"Eigenes Asset"** klicken.
-2. Eine Datei vom Typ **`.glb`** oder **`.gltf`** auswaehlen.
-3. Label, Kategorie und Groesse (X/Y/Z in Meter) eingeben.
-4. Auf **"Asset zur Bibliothek hinzufuegen"** klicken.
-5. Das neue Asset erscheint in der Bibliothek und kann wie alle anderen platziert werden.
+1. In der linken Asset-Bibliothek auf **"Eigene Assets hochladen (GLB/GLTF)"** klicken.
+2. Datei vom Typ `.glb` oder `.gltf` auswaehlen.
+3. Das neue Asset-Template erscheint in der Kategorie **Eigene Assets** und ist direkt platzierbar.
 
 Hinweis:
-- Upload ist aktuell lokal im Browser (kein Server-Upload).
+- Upload ist lokal im Browser (kein Server-Upload).
 - GLTF kann externe Dateien referenzieren; fuer den einfachsten Ablauf `.glb` nutzen.
 
 ## Wichtige Shortcuts
 
 - `STRG/CMD + Klick`: Mehrfachauswahl
-- `STRG/CMD`: freie Platzierung / freie Bewegung
-- `STRG/CMD`: freie Rotation im Rotate-Modus
+- `STRG/CMD`: freie Platzierung / freie Bewegung / freie Rotation
 - `Entf/Backspace`: Auswahl loeschen
 - `STRG/CMD + Z`: Undo
-- `STRG/CMD + Y` oder `STRG/CMD + SHIFT + Z`: Redo
+- `STRG/CMD + Y` oder `STRG/CMD + Shift + Z`: Redo
 - `STRG/CMD + C`: Auswahl kopieren
 - `STRG/CMD + V`: Kopierte Assets einfuegen
+- `Escape`: Info-Popup / Lade-Dialog schliessen, Platzierung abbrechen
 
 ## Produktion testen
 

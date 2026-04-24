@@ -40,6 +40,11 @@ export interface AssetMetadata {
   name?: string
   description?: string
   zoneType?: string
+  /**
+   * Text content for text/label assets. Rendered by the label primitive
+   * when present; falls back to a placeholder otherwise.
+   */
+  text?: string
   customData?: Record<string, string>
 }
 
@@ -166,6 +171,7 @@ export function sanitizeMetadata(value: unknown): AssetMetadata {
       name: typeof entry.name === 'string' ? entry.name : undefined,
       description: typeof entry.description === 'string' ? entry.description : undefined,
       zoneType: typeof entry.zoneType === 'string' ? entry.zoneType : undefined,
+      text: typeof entry.text === 'string' ? entry.text : undefined,
       customData,
     }
   }

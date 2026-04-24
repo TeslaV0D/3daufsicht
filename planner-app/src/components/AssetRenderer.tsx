@@ -199,7 +199,8 @@ function GeometryMesh({
           {stdMaterial}
         </mesh>
       )
-    case 'text':
+    case 'text': {
+      const labelText = asset.metadata.text ?? params.text ?? 'Label'
       return (
         <Text
           fontSize={params.fontSize ?? 0.5}
@@ -209,9 +210,10 @@ function GeometryMesh({
           outlineWidth={0.02}
           outlineColor="#0b1220"
         >
-          {params.text ?? 'Label'}
+          {labelText}
         </Text>
       )
+    }
     case 'custom': {
       const modelUrl = params.modelUrl
       if (!modelUrl) {
@@ -304,11 +306,11 @@ export default function AssetRenderer({
   const eventProps = {
     onClick: (event: ThreeEvent<MouseEvent>) => onClick?.(event, asset),
     onPointerDown: (event: ThreeEvent<PointerEvent>) => onPointerDown?.(event, asset),
-    onPointerOver: (event: ThreeEvent<PointerEvent>) => {
+    onPointerEnter: (event: ThreeEvent<PointerEvent>) => {
       event.stopPropagation()
       onPointerOver?.(event, asset)
     },
-    onPointerOut: (event: ThreeEvent<PointerEvent>) => {
+    onPointerLeave: (event: ThreeEvent<PointerEvent>) => {
       event.stopPropagation()
       onPointerOut?.(event, asset)
     },

@@ -309,9 +309,13 @@ export const ASSET_TEMPLATES: AssetTemplate[] = [
     scale: [1, 1, 1],
     geometry: {
       kind: 'text',
-      params: { text: 'Label', fontSize: 0.6 },
+      params: { fontSize: 0.6 },
     },
-    metadata: { name: 'Text-Label', description: 'Frei editierbares Text-Label.' },
+    metadata: {
+      name: 'Text-Label',
+      description: 'Frei editierbares Text-Label.',
+      text: 'Label',
+    },
   },
 ]
 
