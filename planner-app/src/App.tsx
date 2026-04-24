@@ -316,6 +316,44 @@ function AssetMesh({
   onTransform,
 }: AssetMeshProps) {
   const meshRef = useRef<Mesh>(null!)
+  const isDraggingRef = useRef(false)
+
+  const commitTransform = useCallback(() => {
+    const currentMesh = meshRef.current
+    const currentPosition: Vector3Tuple = [
+      round2(currentMesh.position.x),
+      round2(currentMesh.position.y),
+      round2(currentMesh.position.z),
+    ]
+    const currentRotation: Vector3Tuple = [
+      round2(currentMesh.rotation.x),
+      round2(currentMesh.rotation.y),
+      round2(currentMesh.rotation.z),
+    ]
+    onTransform(asset.id, currentPosition, currentRotation)
+  }, [asset.id, onTransform])
+
+  const finishDragging = useCallback(() => {
+    if (!isDraggingRef.current) {
+      return
+    }
+    isDraggingRef.current = false
+    if (orbitRef.current) {
+      orbitRef.current.enabled = true
+    }
+    commitTransform()
+  }, [commitTransform, orbitRef])
+
+  useEffect(() => {
+    const onWindowPointerUp = () => finishDragging()
+    const onWindowBlur = () => finishDragging()
+    window.addEventListener('pointerup', onWindowPointerUp)
+    window.addEventListener('blur', onWindowBlur)
+    return () => {
+      window.removeEventListener('pointerup', onWindowPointerUp)
+      window.removeEventListener('blur', onWindowBlur)
+    }
+  }, [finishDragging])
 
   return (
     <group>
@@ -345,29 +383,12 @@ function AssetMesh({
           object={meshRef}
           mode={transformMode}
           onMouseDown={() => {
+            isDraggingRef.current = true
             if (orbitRef.current) {
               orbitRef.current.enabled = false
             }
           }}
-          onMouseUp={() => {
-            if (orbitRef.current) {
-              orbitRef.current.enabled = true
-            }
-          }}
-          onObjectChange={() => {
-            const currentMesh = meshRef.current
-            const currentPosition: Vector3Tuple = [
-              round2(currentMesh.position.x),
-              round2(currentMesh.position.y),
-              round2(currentMesh.position.z),
-            ]
-            const currentRotation: Vector3Tuple = [
-              round2(currentMesh.rotation.x),
-              round2(currentMesh.rotation.y),
-              round2(currentMesh.rotation.z),
-            ]
-            onTransform(asset.id, currentPosition, currentRotation)
-          }}
+          onMouseUp={finishDragging}
         />
       )}
     </group>
