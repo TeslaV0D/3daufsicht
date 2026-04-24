@@ -7,14 +7,18 @@ Eine interaktive 3D-Planungsapplikation im Stil von City-Skylines/SIMS fuer Hall
 - 3D Szene mit Grid und moderner Dark-UI
 - Kamera-Steuerung mit Zoom/Pan/Orbit
 - Kamera-Presets: Perspektive, Top, Front, Seite
-- Asset-Bibliothek mit Kategorien
-- Mehrere Formtypen: Rechteck/Box, Rhombus, Zylinder, Kegel, Kugel, Hexagon
+- Asset-Bibliothek mit Kategorien (u. a. Produktion, Logistik, Personal, Formen)
+- Produktionstemplates: Produktionslinie, Hubwagen, Angestellte, Kisten
+- Mehrere Formtypen: Box/Rechteck, Kreis, Rhombus, Zylinder, Kegel, Kugel, Hexagon
 - Platzieren von Assets per Klick auf die Flaeche
 - ALT fuer freie Platzierung ohne Grid-Snap
 - Einzel- und Mehrfachauswahl (STRG / CMD)
 - Loeschen-Button + Entf/Backspace
 - Transform-Gizmo fuer XYZ bewegen und rotieren
+- Snapping beim Verschieben (standard), freie Bewegung mit ALT
+- Snapping beim Rotieren (standard), freie Rotation mit STRG/CMD
 - Inspector fuer Position, Rotation X/Y/Z (Grad), Groesse (Breite/Hoehe/Laenge), Farbe und Asset-Metadaten
+- Eigener, gestylter Farb-Dialog (Swatches, RGB, Hex) statt Browser-Standard-Picker
 - Layout lokal speichern/laden (localStorage)
 - Eigene 3D-Assets (GLB/GLTF) lokal hochladen und platzieren
 - Undo/Redo Historie mit STRG/CMD+Z und STRG/CMD+Y
@@ -45,7 +49,8 @@ Hinweis:
 ## Wichtige Shortcuts
 
 - `STRG/CMD + Klick`: Mehrfachauswahl
-- `ALT`: Frei platzieren ohne Grid-Snap
+- `ALT`: freie Platzierung / freie Bewegung
+- `STRG/CMD`: freie Rotation im Rotate-Modus
 - `Entf/Backspace`: Auswahl loeschen
 - `STRG/CMD + Z`: Undo
 - `STRG/CMD + Y` oder `STRG/CMD + SHIFT + Z`: Redo
@@ -58,15 +63,6 @@ Hinweis:
 npm run lint
 npm run build
 ```
-
-## Wichtige Shortcuts
-
-- `ALT`: freie Platzierung / freie Verschiebung
-- `CTRL/CMD`: Mehrfachauswahl per Klick
-- `CTRL/CMD + Z`: Undo
-- `CTRL/CMD + SHIFT + Z` oder `CTRL/CMD + Y`: Redo
-- `CTRL/CMD + C`: Auswahl kopieren
-- `CTRL/CMD + V`: Einfuegen
 
 ## Tech Stack
 
