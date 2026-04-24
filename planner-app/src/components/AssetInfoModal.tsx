@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import type { Asset } from '../types/asset'
 
 export interface AssetInfoModalProps {
@@ -6,6 +7,30 @@ export interface AssetInfoModalProps {
 }
 
 export default function AssetInfoModal({ asset, onClose }: AssetInfoModalProps) {
+  const modalRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target
+      if (!(target instanceof Node)) return
+      if (modalRef.current?.contains(target)) return
+      onClose()
+    }
+
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose()
+      }
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+    window.addEventListener('keydown', handleKey)
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      window.removeEventListener('keydown', handleKey)
+    }
+  }, [onClose])
+
   const name = asset.metadata.name ?? asset.type
   const description = asset.metadata.description ?? 'Keine Beschreibung vorhanden.'
   const zoneType = asset.metadata.zoneType
@@ -13,7 +38,14 @@ export default function AssetInfoModal({ asset, onClose }: AssetInfoModalProps) 
   const customEntries = Object.entries(customData)
 
   return (
-    <div className="asset-info-modal" role="dialog" aria-labelledby="asset-info-title">
+    <div
+      className="asset-info-modal"
+      role="dialog"
+      aria-labelledby="asset-info-title"
+      ref={modalRef}
+      key={asset.id}
+      onMouseDown={(event) => event.stopPropagation()}
+    >
       <div className="asset-info-header">
         <div className="asset-info-color-pill" style={{ backgroundColor: asset.color }} />
         <div className="asset-info-title-block">
@@ -23,7 +55,12 @@ export default function AssetInfoModal({ asset, onClose }: AssetInfoModalProps) 
             {zoneType ? ` - ${zoneType}` : ''}
           </p>
         </div>
-        <button type="button" className="asset-info-close" onClick={onClose} aria-label="Schliessen">
+        <button
+          type="button"
+          className="asset-info-close"
+          onClick={onClose}
+          aria-label="Schliessen"
+        >
           x
         </button>
       </div>
@@ -41,15 +78,11 @@ export default function AssetInfoModal({ asset, onClose }: AssetInfoModalProps) 
         </div>
         <div>
           <span className="asset-info-label">Position</span>
-          <span>
-            {asset.position.map((v) => v.toFixed(1)).join(' / ')}
-          </span>
+          <span>{asset.position.map((v) => v.toFixed(1)).join(' / ')}</span>
         </div>
         <div>
           <span className="asset-info-label">Skalierung</span>
-          <span>
-            {asset.scale.map((v) => v.toFixed(1)).join(' / ')}
-          </span>
+          <span>{asset.scale.map((v) => v.toFixed(1)).join(' / ')}</span>
         </div>
       </div>
 
