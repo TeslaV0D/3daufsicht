@@ -57,12 +57,12 @@ npm run lint
 
 - **Favorit-Farben:** Im erweiterten Farbwähler einzelne Favoriten mit **×** entfernen (mit kurzer Bestätigung); `localStorage` wird aktualisiert.
 - **Multi-Platzieren:** Toolbar-Button **Multi** im Platzier-Modus: mehrere Ghosts für bereits gesetzte Positionen, Fokus optional bei bestehender Auswahl; **ESC** beendet den Multi-Modus.
-- **Beleuchtungs-Panel:** Gruppen mit Überschriften, Trennlinien, Preset-Dropdown + kompakte Buttons; klarere Hierarchie.
+- **Beleuchtungs-Panel:** Gruppen mit Überschriften, Trennlinien; **Licht-Presets** nur als direkte Buttons (kein Dropdown).
 - **Skalierung:** Für **Custom-/Import-Assets** feinere Dezimalstellen (6) am Slider/Inspector.
 - **Fokus:** Kurze Sperre für Boden-Klicks nach Gizmo-Drag verhindert versehentliches Deselektieren; **ESC** im Edit-Modus leert die Auswahl (wenn kein Multi-Modus aktiv).
-- **Performance:** Inspector „Performance“ — HUD (FPS, Draw-Calls, Geometrien, optional JS-Heap in Chrome), max. Pixel-Ratio, **Instancing** für identische opake Boxen ohne Decals (ein `InstancedMesh` pro Gruppe), **Distanz-Culling**, **virtuelle Bibliotheks-Liste** (`react-window` `List` ab konfigurierbarem Schwellwert), LOD-Hinweis, Schatten-Metadaten-Toggle.
+- **Performance:** Inspector „Performance“ — HUD (FPS, Draw-Calls, Geometrien, optional JS-Heap in Chrome), max. Pixel-Ratio, **Instancing (Opt-in, standard aus)** für identische opake Boxen ohne Decals (ein `InstancedMesh` pro Gruppe; kann Klick-Selektion für diese Objekte einschränken), **Distanz-Culling**, **virtuelle Bibliotheks-Liste** (`react-window` `List` ab konfigurierbarem Schwellwert), LOD-Hinweis, Schatten-Metadaten-Toggle.
 - **Text-Labels:** **`BillboardTextLabel`** mit Canvas-Textur; **Textfarbe** und **Hintergrundfarbe** jeweils mit vollem **`ColorPickerPopover`** (wie andere Objekte, inkl. Favoriten); Hintergrund optional mit **Transparenz**; keine doppelte Material-Farbe für Text-Assets im Inspector.
-- **Perspektive:** ausschließlich Toolbar **Ansicht** — Standard-Ansichten, Live-Slider (nur Perspektive), eingebaute Presets, **eigene Presets** in `localStorage`; keine View-Controls mehr im Inspector.
+- **Ansicht / Kamera:** Toolbar **Ansicht** — **Perspektive** mit Live-Slidern, eingebauten und **eigenen Presets** (`localStorage`); **Top, Front, Seite** mit eigenen Slidern (Höhe, FOV, Abstände, Offsets), Werte werden im Layout mit **`axisViewCameras`** gespeichert.
 - **Backward Compatibility:** `version: 8`, `layoutFormatSemver: "1.2.0"`, `finalizeImportedPayload` beim Laden/Import.
 
 ### Bibliothek & Gruppen (Feinschliff)
@@ -74,7 +74,7 @@ npm run lint
 
 - Realistische Beleuchtung mit HDRI-Umgebung (`warehouse`), konfigurierbare Schatten, optional Fog/Hintergrund/Exposure/Bloom; View-Mode mit zusaetzlichem Fill-Light.
 - Hallenboden in Betonoptik, dezentes Grid, Hallenrahmen mit Rueck- und Seitenwaenden.
-- Orbit-Kamera mit Damping, Zoom-To-Cursor, Kamera-Presets (Perspektive, Top, Front, Seite).
+- Orbit-Kamera mit Damping, Zoom-To-Cursor; feste Preset-Richtungen plus **anpassbare Achsenansichten** (gespeichert pro Top/Front/Seite).
 - Ghost-Placement-Vorschau beim Platzieren.
 - Hover-Feedback ueber Pointer-Enter/Leave mit kurzem Debounce beim Verlassen, damit Submesh-Wechsel die Animation nicht neu starten.
 

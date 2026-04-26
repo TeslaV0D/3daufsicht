@@ -412,6 +412,27 @@ Ergebnis: beide Checks erfolgreich.
 
 - Auswahl bleibt nach dem Loslassen der Maustaste stabil; Klick-Logik bleibt konsistent bei **pointerdown** für Assets und Boden.
 
+## Stand 27: Instancing Opt-in, Achsen-Kameraeinstellungen, Licht-Presets UI
+
+### Performance / Instancing
+
+- **`useInstancing`** Standard: **aus** (`DEFAULT_PERFORMANCE`); **`sanitizePerformanceSettings`**: nur bei `useInstancing === true` aktiv (explizites Opt-in).
+- Kurzer Hinweistext im Performance-Panel zu Trade-off (Performance vs. Selektion).
+
+### Ansicht (Top / Front / Seite)
+
+- Neuer persistierter Block **`axisViewCameras`** (`TopViewCameraSettings`, `FrontViewCameraSettings`, `SideViewCameraSettings`) in `plannerUi.ts`, Speicher/Import über **`StoredPayload`** und **`finalizeImportedPayload`**.
+- **`AnimatedCameraRig`** / **`canvasCamera`**: Achsenansichten aus **`topViewToRig` / `frontViewToRig` / `sideViewToRig`** statt fester Preset-Werte.
+- **Ansicht-Menü:** pro aktiver Achsenansicht Slider + **Reset**; Perspektive unverändert inkl. Custom-Presets.
+
+### Beleuchtung
+
+- **Preset-Dropdown** im Beleuchtungs-Toolbar-Panel entfernt; nur noch **Preset-Buttons** (Standard, Studio, …).
+
+### Kurzüberblick
+
+- Standardmäßig alle Objekte normal selektierbar; Instancing nur bei Bedarf; feinere Kamera-Kontrolle für technische Ansichten; schlankeres Licht-Preset-UI.
+
 ## Offene optionale Erweiterungen
 
 - Box-Selection fuer Mehrfachauswahl.
