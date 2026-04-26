@@ -270,6 +270,27 @@ Ergebnis: beide Checks erfolgreich.
 
 - Projekt-Chronik nur noch in dieser Datei **`IMPLEMENTATION_PROGRESS.md`** (Root). Der Ordner **`docs/`** wurde entfernt.
 
+## Stand 17: Fog, erweiterte Beleuchtung, Atmosphäre
+
+### Abgeschlossen
+
+- **Fog-Steuerung** im Beleuchtungs-Menü: Ein/Aus, Farbe, Dichte (exponentiell), Start/Ende (linear), Umschaltung Linear / exponentiell (`Fog` / `FogExp2`); Szene-Hintergrund und Fog aus `lighting` (kein hardcodiertes Canvas-Fog mehr).
+- **Beleuchtungs-Optionen erweitert**:
+  - Mehrere Lichter: Primary (sphärisch: Elevation, Azimut, Distanz), Secondary optional, Fill optional (Position gegenüber Primary), Ambient.
+  - **Light-Presets**: Studio, Natural, Dramatic, Evening, Night (+ Custom).
+  - **Schatten**: Qualität Low/Medium/High, Intensität (Dunkelheit), Weichzeichner (0–3), Shadow-Kamera-Größe, Bias; Lift-Light für weichere Schatten bei niedriger Schatten-Intensität.
+  - **Atmosphäre**: Hintergrundfarbe, Exposure (`toneMappingExposure`), Gamma (Skalierung der Licht-/HDRI-Stärke), optionales Bloom (`@react-three/postprocessing`).
+- Abhängigkeit: `postprocessing`, `@react-three/postprocessing` (Bloom).
+- **Live-Update** über React-State; **Save/Load** über bestehendes `lighting`-Feld und `sanitizeLighting`.
+
+### Lighting Features (Kurz)
+
+- Fünf Light-Presets für schnelle Anpassung.
+- Mehrere Lichter für ausgewogenere Szene-Beleuchtung.
+- Fog für Tiefenwirkung.
+- Atmosphäre: Exposure, Gamma, Bloom, Hintergrund.
+- Hinweis bei mehreren aktiven Zusatzlichtern (Performance).
+
 ## Offene optionale Erweiterungen
 
 - Box-Selection fuer Mehrfachauswahl.
