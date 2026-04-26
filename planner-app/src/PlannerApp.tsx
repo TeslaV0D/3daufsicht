@@ -3108,10 +3108,8 @@ export default function PlannerApp() {
             shadows
             camera={{ position: CAMERA_PRESETS[cameraView].position, fov: 48 }}
           >
-            <color attach="background" args={[mode === 'view' ? '#0f1b29' : '#d2dae3']} />
-            {lighting.fogEnabled ? (
-              <fog attach="fog" args={[lighting.fogColor, lighting.fogNear, lighting.fogFar]} />
-            ) : null}
+            <SceneAtmosphere settings={lighting} />
+            <PostFxBloom enabled={lighting.bloomEnabled} intensity={lighting.bloomIntensity} />
             <Lighting settings={lighting} presentation={mode === 'view'} />
             <AnimatedCameraRig preset={cameraView} orbitRef={orbitRef} />
             <FactoryFloor

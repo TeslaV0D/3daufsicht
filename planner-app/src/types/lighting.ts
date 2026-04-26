@@ -59,11 +59,6 @@ export interface LightingSettings {
   bloomIntensity: number
 
   environmentIntensity: number
-  /** Szene-Nebel (persistiert mit Layout). */
-  fogEnabled: boolean
-  fogColor: string
-  fogNear: number
-  fogFar: number
 }
 
 const SHADOW_QUALITY_TO_MAP: Record<ShadowQualityPreset, 512 | 1024 | 2048> = {
@@ -154,11 +149,11 @@ export const DEFAULT_LIGHTING: LightingSettings = {
   shadowCameraSize: 100,
   shadowBias: 0.0002,
 
-  fogEnabled: false,
-  fogColor: '#d2dae3',
+  fogEnabled: true,
+  fogColor: '#b8c4d4',
   fogDensity: 0.35,
-  fogNear: 1,
-  fogFar: 100,
+  fogNear: 55,
+  fogFar: 145,
   fogType: 'linear',
 
   backgroundColor: '#d2dae3',
@@ -169,10 +164,6 @@ export const DEFAULT_LIGHTING: LightingSettings = {
   bloomIntensity: 0.3,
 
   environmentIntensity: 1,
-  fogEnabled: true,
-  fogColor: '#b8c4d4',
-  fogNear: 55,
-  fogFar: 145,
 }
 
 /** Full preset overrides (merged onto a fresh default clone in the UI). */
@@ -457,10 +448,10 @@ export function sanitizeLighting(value: unknown): LightingSettings {
     base.fogDensity = clamp(e.fogDensity, 0, 1)
   }
   if (typeof e.fogNear === 'number' && Number.isFinite(e.fogNear)) {
-    base.fogNear = clamp(e.fogNear, 0, 100)
+    base.fogNear = clamp(e.fogNear, 1, 500)
   }
   if (typeof e.fogFar === 'number' && Number.isFinite(e.fogFar)) {
-    base.fogFar = clamp(e.fogFar, 5, 500)
+    base.fogFar = clamp(e.fogFar, 5, 800)
   }
   if (e.fogType === 'linear' || e.fogType === 'exponential') {
     base.fogType = e.fogType
@@ -483,18 +474,20 @@ export function sanitizeLighting(value: unknown): LightingSettings {
   if (typeof e.environmentIntensity === 'number' && Number.isFinite(e.environmentIntensity)) {
     base.environmentIntensity = clamp(e.environmentIntensity, 0, 3)
   }
-  if (typeof e.fogEnabled === 'boolean') {
-    base.fogEnabled = e.fogEnabled
+  const hasSph =
+    typeof e.primaryDistance === 'number' &&
+    Number.isFinite(e.primaryDistance) &&
+    typeof e.primaryElevationDeg === 'number' &&
+    Number.isFinite(e.primaryElevationDeg) &&
+    typeof e.primaryAzimuthDeg === 'number' &&
+    Number.isFinite(e.primaryAzimuthDeg)
+  if (!hasSph) {
+    const sph = cartesianToSpherical(base.mainPosition)
+    base.primaryDistance = sph.distance
+    base.primaryElevationDeg = sph.elevationDeg
+    base.primaryAzimuthDeg = sph.azimuthDeg
   }
-  if (typeof e.fogColor === 'string') {
-    base.fogColor = sanitizeColor(e.fogColor)
-  }
-  if (typeof e.fogNear === 'number' && Number.isFinite(e.fogNear)) {
-    base.fogNear = clamp(e.fogNear, 1, 500)
-  }
-  if (typeof e.fogFar === 'number' && Number.isFinite(e.fogFar)) {
-    base.fogFar = clamp(e.fogFar, 5, 800)
-  }
+  base.mainPosition = [...getMainLightPosition(base)] as Vector3Tuple
   if (base.fogFar <= base.fogNear) {
     base.fogFar = base.fogNear + 10
   }

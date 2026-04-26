@@ -1,6 +1,13 @@
 import ColorPickerPopover from './ColorPickerPopover'
 import InfoIcon from './InfoIcon'
-import { cloneLighting, DEFAULT_LIGHTING, type LightingSettings } from '../types/lighting'
+import {
+  cloneLighting,
+  DEFAULT_LIGHTING,
+  shadowMapSizeForQuality,
+  sphericalToCartesian,
+  type LightingSettings,
+  type SecondaryLightType,
+} from '../types/lighting'
 import { sanitizeColor } from '../types/asset'
 import { FIELD_DESC } from '../ui/fieldDescriptions'
 
@@ -98,11 +105,6 @@ export default function LightingToolbarPanel({
     })
   }
 
-  const activeExtra =
-    (lighting.secondaryEnabled ? 1 : 0) + (lighting.fillEnabled ? 1 : 0)
-  const tooBright = lighting.mainIntensity > 2.65 && lighting.exposure > 1.35
-  const tooDark = lighting.mainIntensity < 0.25 && lighting.ambientIntensity < 0.12
-
   return (
     <div className="lighting-toolbar-panel">
       <div className="lighting-presets-wrap">
@@ -158,6 +160,7 @@ export default function LightingToolbarPanel({
           value={lighting.mainIntensity}
           onChange={(e) => setLighting({ mainIntensity: Number(e.target.value) })}
         />
+      </label>
 
       <label className="opacity-slider-field">
         <span className="inspector-inline-label">
@@ -523,86 +526,11 @@ export default function LightingToolbarPanel({
         </label>
       </div>
 
-      {lighting.mainType === 'spot' && (
-        <>
-          <label className="opacity-slider-field">
-            <span className="inspector-inline-label">
-              Spot-Winkel ({lighting.spotAngle.toFixed(2)})
-              <InfoIcon title={FIELD_DESC.lightingSpotAngle} />
-            </span>
-            <input
-              type="range"
-              min={0.2}
-              max={1.1}
-              step={0.02}
-              value={lighting.spotAngle}
-              onChange={(e) => setLighting({ spotAngle: Number(e.target.value) })}
-            />
-            {lighting.fogType === 'exponential' ? (
-              <label className="opacity-slider-field">
-                Fog-Dichte ({lighting.fogDensity.toFixed(2)})
-                <input
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.02}
-                  value={lighting.fogDensity}
-                  onChange={(e) => custom({ fogDensity: Number(e.target.value) })}
-                />
-              </label>
-            ) : (
-              <p className="lighting-hint">Linearer Fog: Dichte über Start/Ende.</p>
-            )}
-            <label className="opacity-slider-field">
-              Fog-Start ({lighting.fogNear.toFixed(1)} m)
-              <input
-                type="range"
-                min={0}
-                max={100}
-                step={0.5}
-                value={lighting.fogNear}
-                onChange={(e) => custom({ fogNear: Number(e.target.value) })}
-              />
-            </label>
-            <label className="opacity-slider-field">
-              Fog-Ende ({lighting.fogFar.toFixed(1)} m)
-              <input
-                type="range"
-                min={5}
-                max={500}
-                step={5}
-                value={lighting.fogFar}
-                onChange={(e) => custom({ fogFar: Number(e.target.value) })}
-              />
-            </label>
-            <label className="lighting-field">
-              Fog-Typ
-              <div className="lighting-radio-row">
-                <label className="lighting-radio">
-                  <input
-                    type="radio"
-                    name="fogType"
-                    checked={lighting.fogType === 'linear'}
-                    onChange={() => custom({ fogType: 'linear' })}
-                  />
-                  Linear
-                </label>
-                <label className="lighting-radio">
-                  <input
-                    type="radio"
-                    name="fogType"
-                    checked={lighting.fogType === 'exponential'}
-                    onChange={() => custom({ fogType: 'exponential' })}
-                  />
-                  Exponential
-                </label>
-              </div>
-            </label>
-          </>
-        ) : null}
-
+      <div className="lighting-section">
+        <p className="lighting-section-title">Atmosphäre</p>
         <ColorPickerPopover
           label="Hintergrund"
+          hint="Farbe hinter der Szene (Canvas-Hintergrund)."
           value={lighting.backgroundColor}
           onCommit={(c) => custom({ backgroundColor: sanitizeColor(c) })}
         />
@@ -638,10 +566,7 @@ export default function LightingToolbarPanel({
         </label>
         {lighting.bloomEnabled ? (
           <label className="opacity-slider-field">
-            <span className="inspector-inline-label">
-              Penumbra ({lighting.spotPenumbra.toFixed(2)})
-              <InfoIcon title={FIELD_DESC.lightingSpotPenumbra} />
-            </span>
+            Bloom-Stärke ({lighting.bloomIntensity.toFixed(2)})
             <input
               type="range"
               min={0}
@@ -653,7 +578,10 @@ export default function LightingToolbarPanel({
           </label>
         ) : null}
         <label className="opacity-slider-field">
-          HDRI-Umgebung ({lighting.environmentIntensity.toFixed(2)})
+          <span className="inspector-inline-label">
+            HDRI-Stärke ({lighting.environmentIntensity.toFixed(2)})
+            <InfoIcon title={FIELD_DESC.lightingEnvironmentIntensity} />
+          </span>
           <input
             type="range"
             min={0}
@@ -664,67 +592,6 @@ export default function LightingToolbarPanel({
           />
         </label>
       </div>
-
-      <label className="checkbox-field">
-        <input
-          type="checkbox"
-          checked={lighting.castShadow}
-          onChange={(e) => setLighting({ castShadow: e.target.checked })}
-        />
-        <span className="inspector-inline-label">
-          Schatten
-          <InfoIcon title={FIELD_DESC.lightingCastShadow} />
-        </span>
-      </label>
-
-      <label className="metadata-field">
-        <span className="inspector-inline-label">
-          Schatten-Kartengröße
-          <InfoIcon title={FIELD_DESC.lightingShadowMapSize} />
-        </span>
-        <select
-          value={lighting.shadowMapSize}
-          onChange={(e) =>
-            setLighting({
-              shadowMapSize: Number(e.target.value) as 512 | 1024 | 2048,
-            })
-          }
-        >
-          <option value={512}>512</option>
-          <option value={1024}>1024</option>
-          <option value={2048}>2048</option>
-        </select>
-      </label>
-
-      <label className="opacity-slider-field">
-        <span className="inspector-inline-label">
-          Schatten-Weichzeichner ({lighting.shadowRadius.toFixed(1)})
-          <InfoIcon title={FIELD_DESC.lightingShadowRadius} />
-        </span>
-        <input
-          type="range"
-          min={0}
-          max={10}
-          step={0.25}
-          value={lighting.shadowRadius}
-          onChange={(e) => setLighting({ shadowRadius: Number(e.target.value) })}
-        />
-      </label>
-
-      <label className="opacity-slider-field">
-        <span className="inspector-inline-label">
-          HDRI-Stärke ({lighting.environmentIntensity.toFixed(2)})
-          <InfoIcon title={FIELD_DESC.lightingEnvironmentIntensity} />
-        </span>
-        <input
-          type="range"
-          min={0}
-          max={2.5}
-          step={0.05}
-          value={lighting.environmentIntensity}
-          onChange={(e) => setLighting({ environmentIntensity: Number(e.target.value) })}
-        />
-      </label>
 
       <p className="lighting-subheading inspector-inline-label">
         Nebel
@@ -738,6 +605,42 @@ export default function LightingToolbarPanel({
         />
         <span>Nebel aktiv</span>
       </label>
+      <label className="lighting-field">
+        <span className="inspector-inline-label">Nebel-Typ</span>
+        <div className="lighting-radio-row">
+          <label className="lighting-radio">
+            <input
+              type="radio"
+              name="fogTypeToolbar"
+              checked={lighting.fogType === 'linear'}
+              onChange={() => custom({ fogType: 'linear' })}
+            />
+            Linear
+          </label>
+          <label className="lighting-radio">
+            <input
+              type="radio"
+              name="fogTypeToolbar"
+              checked={lighting.fogType === 'exponential'}
+              onChange={() => custom({ fogType: 'exponential' })}
+            />
+            Exponential
+          </label>
+        </div>
+      </label>
+      {lighting.fogType === 'exponential' ? (
+        <label className="opacity-slider-field">
+          Nebel-Dichte ({lighting.fogDensity.toFixed(2)})
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.02}
+            value={lighting.fogDensity}
+            onChange={(e) => custom({ fogDensity: Number(e.target.value) })}
+          />
+        </label>
+      ) : null}
       <ColorPickerPopover
         label="Nebelfarbe"
         hint={FIELD_DESC.lightingFogColor}
