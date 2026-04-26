@@ -1065,6 +1065,8 @@ export default function PlannerApp() {
   const [multiPlaceMode, setMultiPlaceMode] = useState(false)
   const [multiPlaceGhostPositions, setMultiPlaceGhostPositions] = useState<Vector3Tuple[]>([])
   const transformSuppressFloorUntilRef = useRef(0)
+  /** Nach Asset-Pick kurz keinen Boden-Klick werten (Schutz vor verzögerten Events / doppelten Pfaden). */
+  const assetPointerSuppressFloorUntilRef = useRef(0)
   const [isCtrlPressed, setIsCtrlPressed] = useState(false)
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const hoverLeaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -1513,9 +1515,11 @@ export default function PlannerApp() {
             ? selectedIds.filter((id) => id !== asset.id)
             : [...selectedIds, asset.id],
         )
+        assetPointerSuppressFloorUntilRef.current = Date.now() + 400
         return
       }
       setSelectedIds([asset.id])
+      assetPointerSuppressFloorUntilRef.current = Date.now() + 400
     },
     [mode, selectedIds, setSelectedIds, tool],
   )
@@ -1605,6 +1609,9 @@ export default function PlannerApp() {
         return
       }
       if (Date.now() < transformSuppressFloorUntilRef.current) {
+        return
+      }
+      if (Date.now() < assetPointerSuppressFloorUntilRef.current) {
         return
       }
       setSelectedIds([])

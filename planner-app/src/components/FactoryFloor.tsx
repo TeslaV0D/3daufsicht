@@ -30,7 +30,9 @@ export default function FactoryFloor({
           const point = event.point
           onHover([point.x, point.y, point.z])
         },
-        onClick: (event: ThreeEvent<MouseEvent>) => {
+        /** pointerdown (not click): avoids deselect on mouseup after the picked mesh unmounts (e.g. instancing → gizmo path). */
+        onPointerDown: (event: ThreeEvent<PointerEvent>) => {
+          if (event.button !== 0) return
           event.stopPropagation()
           const point = event.point
           onAction([point.x, point.y, point.z])
