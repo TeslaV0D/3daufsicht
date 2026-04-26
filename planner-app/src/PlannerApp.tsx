@@ -32,6 +32,8 @@ import FactoryFloor from './components/FactoryFloor'
 import InfoIcon from './components/InfoIcon'
 import Lighting from './components/Lighting'
 import LightingToolbarPanel from './components/LightingToolbarPanel'
+import PostFxBloom from './components/PostFxBloom'
+import SceneAtmosphere from './components/SceneAtmosphere'
 import LoadLayoutModal from './components/LoadLayoutModal'
 import ScenePlacementRaycast from './components/ScenePlacementRaycast'
 import CustomMetadataRowEditModal from './components/CustomMetadataRowEditModal'
@@ -1052,7 +1054,7 @@ export default function PlannerApp() {
     pop.style.transition = 'none'
 
     const update = () => {
-      applyToolbarPopoverLayout(lightingButtonRef.current, lightingPopoverRef.current, 380)
+      applyToolbarPopoverLayout(lightingButtonRef.current, lightingPopoverRef.current, 448)
     }
     update()
     update()

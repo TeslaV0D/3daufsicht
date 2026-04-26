@@ -59,7 +59,7 @@ npm run lint
 
 ### 3D-Szene
 
-- Realistische Beleuchtung mit HDRI-Umgebung (`warehouse`), Schatten in der gesamten Szene, View-Mode mit staerkerem Lighting und zusaetzlichem Fill-Light.
+- Realistische Beleuchtung mit HDRI-Umgebung (`warehouse`), konfigurierbare Schatten, optional Fog/Hintergrund/Exposure/Bloom; View-Mode mit zusaetzlichem Fill-Light.
 - Hallenboden in Betonoptik, dezentes Grid, Hallenrahmen mit Rueck- und Seitenwaenden.
 - Orbit-Kamera mit Damping, Zoom-To-Cursor, Kamera-Presets (Perspektive, Top, Front, Seite).
 - Ghost-Placement-Vorschau beim Platzieren.
@@ -158,7 +158,12 @@ npm run lint
 
 ### Beleuchtung
 
-- Toolbar **„Beleuchtung“** (Edit-Modus): Hauptlicht-Typ (Directional / Point / Spot), Intensitäten, Farben, Position, Schatten, HDRI-Stärke, Presets.
+- Toolbar **„Beleuchtung“** (Edit-Modus): erweitertes Panel mit Live-Update.
+- **Light-Presets**: Studio, Natural, Dramatic, Evening, Night (plus Custom).
+- **Mehrere Lichter**: Primary (Richtung per Elevation/Azimut/Distanz), optionales Secondary (Point / Spot / Directional), optionales Fill (automatisch gegenüber dem Hauptlicht), Ambient.
+- **Schatten**: Ein/Aus, Qualität Low/Medium/High (512²–2048²), Intensität/Dunkelheit, Weichzeichner, Shadow-Kamera-Größe, Bias.
+- **Atmosphäre**: Hintergrundfarbe, **Exposure**, **Gamma** (wirkt auf Licht- und HDRI-Stärke), optionales **Bloom** (Postprocessing).
+- **Fog / Nebel**: Ein/Aus, Farbe, **Linear** (Start/Ende in m) oder **Exponentiell** (Dichte 0–1), gespeichert im Workspace.
 - Das Beleuchtungs-Popover liegt per **Z-Index** über der 3D-Arbeitsfläche; globale Modals (z. B. Layout laden, Tastenkürzel) bleiben darüber.
 - Einstellungen werden mit dem Workspace gespeichert (Feld `lighting` in JSON / `localStorage`; Layout-Version siehe `STORAGE_VERSION` im Store).
 
