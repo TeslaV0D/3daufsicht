@@ -1822,3 +1822,97 @@ textarea {
   color: #8fa6c4;
   margin-top: 0.15rem;
 }
+
+/* Beleuchtungs-Panel (erweitert) */
+.lighting-toolbar-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  max-width: 100%;
+}
+
+.lighting-section {
+  padding: 0.45rem 0;
+  border-top: 1px solid rgba(110, 150, 200, 0.2);
+}
+
+.lighting-section:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.lighting-section-title {
+  margin: 0 0 0.4rem;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #8faed4;
+}
+
+.lighting-preset-select select {
+  width: 100%;
+  margin-top: 0.25rem;
+}
+
+.lighting-hint {
+  margin: 0.25rem 0 0;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: #7a93b5;
+}
+
+.lighting-hint--warn {
+  color: #e8c96a;
+}
+
+.lighting-hint--perf {
+  color: #c9a0e8;
+}
+
+.lighting-swatch-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  margin: 0.25rem 0 0.15rem;
+}
+
+.lighting-swatch-label {
+  font-size: 0.72rem;
+  color: #8fa6c4;
+  margin-right: 0.25rem;
+}
+
+.lighting-swatch-btn {
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 0.28rem;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.lighting-swatch-btn:hover {
+  filter: brightness(1.08);
+}
+
+.lighting-section--actions {
+  border-top: 1px solid rgba(110, 150, 200, 0.28);
+  padding-top: 0.55rem;
+}
+
+.lighting-reset-btn {
+  width: 100%;
+  padding: 0.45rem 0.5rem;
+  border-radius: 0.4rem;
+  border: 1px solid rgba(110, 150, 200, 0.45);
+  background: rgba(30, 48, 68, 0.85);
+  color: #dce6f5;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.lighting-reset-btn:hover {
+  background: rgba(40, 62, 88, 0.95);
+}

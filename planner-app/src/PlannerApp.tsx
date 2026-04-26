@@ -31,6 +31,8 @@ import ExportLayoutModal from './components/ExportLayoutModal'
 import FactoryFloor from './components/FactoryFloor'
 import Lighting from './components/Lighting'
 import LightingToolbarPanel from './components/LightingToolbarPanel'
+import PostFxBloom from './components/PostFxBloom'
+import SceneAtmosphere from './components/SceneAtmosphere'
 import LoadLayoutModal from './components/LoadLayoutModal'
 import ScenePlacementRaycast from './components/ScenePlacementRaycast'
 import ShortcutsModal from './components/ShortcutsModal'
@@ -69,7 +71,7 @@ const LIBRARY_SECTION_EXPANDED_STORAGE_KEY = 'factory-library-section-expanded-v
 const TEMPLATE_DRAG_MIME = 'application/x-factory-template-type'
 const HOVER_POINTER_OUT_DEBOUNCE_MS = 50
 const TOOLBAR_POPOVER_GAP = 8
-const TOOLBAR_POPOVER_MAX_H = 480
+const TOOLBAR_POPOVER_MAX_H = 560
 
 function computeToolbarPopoverPosition(
   anchor: DOMRect,
@@ -781,7 +783,7 @@ export default function PlannerApp() {
     pop.style.transition = 'none'
 
     const update = () => {
-      applyToolbarPopoverLayout(lightingButtonRef.current, lightingPopoverRef.current, 380)
+      applyToolbarPopoverLayout(lightingButtonRef.current, lightingPopoverRef.current, 448)
     }
     update()
     update()
@@ -2617,11 +2619,8 @@ export default function PlannerApp() {
             shadows
             camera={{ position: CAMERA_PRESETS[cameraView].position, fov: 48 }}
           >
-            <color attach="background" args={[mode === 'view' ? '#0f1b29' : '#d2dae3']} />
-            <fog
-              attach="fog"
-              args={[mode === 'view' ? '#0f1b29' : '#d2dae3', 55, 145]}
-            />
+            <SceneAtmosphere settings={lighting} />
+            <PostFxBloom enabled={lighting.bloomEnabled} intensity={lighting.bloomIntensity} />
             <Lighting settings={lighting} presentation={mode === 'view'} />
             <AnimatedCameraRig preset={cameraView} orbitRef={orbitRef} />
             <FactoryFloor
