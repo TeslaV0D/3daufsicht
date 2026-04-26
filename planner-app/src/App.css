@@ -1472,6 +1472,60 @@ textarea {
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
+.color-favorites-heading {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+  margin: 0.5rem 0 0.2rem;
+}
+
+.color-favorites-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-height: 11rem;
+  overflow-y: auto;
+}
+
+.color-favorite-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+}
+
+.color-favorite-remove {
+  flex-shrink: 0;
+  width: 1.35rem;
+  height: 1.35rem;
+  padding: 0;
+  line-height: 1;
+  border-radius: 0.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 80, 80, 0.2);
+  color: #ffb4b4;
+  cursor: pointer;
+  font-size: 1rem;
+}
+
+.color-favorite-remove:hover {
+  background: rgba(255, 80, 80, 0.35);
+}
+
+.color-favorite-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: rgba(255, 255, 255, 0.82);
+}
+
 .shortcuts-fab {
   position: fixed;
   bottom: 20px;
@@ -1693,6 +1747,107 @@ textarea {
 .toolbar-more-menu button[role='menuitem']:disabled {
   opacity: 0.38;
   cursor: not-allowed;
+}
+
+.toolbar-popover--anchored.view-menu-popover {
+  overflow-y: auto;
+  padding: 0.45rem 0.35rem 0.55rem;
+  background: rgba(14, 24, 35, 0.98);
+  border: 1px solid rgba(110, 150, 200, 0.35);
+  border-radius: 0.65rem;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
+  max-width: 22rem;
+}
+
+.view-menu-popover button[role='menuitemradio'] {
+  display: block;
+  width: calc(100% - 0.1rem);
+  margin: 0.08rem 0.05rem;
+  text-align: left;
+  font-size: 0.84rem;
+  border-radius: 0.45rem;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #e2ebf7;
+  padding: 0.4rem 0.55rem;
+  cursor: pointer;
+}
+
+.view-menu-popover button[role='menuitemradio']:hover {
+  background: rgba(77, 171, 247, 0.12);
+  border-color: rgba(77, 171, 247, 0.25);
+}
+
+.view-menu-item-active {
+  background: rgba(77, 171, 247, 0.15);
+  border-color: rgba(77, 171, 247, 0.35);
+}
+
+.view-menu-slider {
+  padding: 0.15rem 0.45rem 0.35rem;
+  margin: 0;
+}
+
+.view-menu-preset-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.35rem;
+  padding: 0.25rem 0.45rem 0.5rem;
+}
+
+.view-menu-custom-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding: 0.15rem 0.45rem 0.45rem;
+}
+
+.view-menu-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0.35rem 0.45rem 0.25rem;
+}
+
+.view-menu-hint {
+  padding: 0.35rem 0.5rem 0.5rem;
+  margin: 0;
+}
+
+.library-virtual-template-row {
+  box-sizing: border-box;
+}
+
+.library-virtual-template-row .asset-template-block {
+  margin: 0 0.15rem;
+}
+
+.library-template-virtual-list {
+  margin: 0.15rem 0 0;
+}
+
+.inspector-toolbar-hint {
+  margin: 0 0 0.65rem;
+  font-size: 0.82rem;
+}
+
+.inspector-perf-footnote {
+  margin: 0.65rem 0 0;
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.inspector-label-style-panel {
+  margin: 0.5rem 0 0.75rem;
+  padding: 0.45rem 0.35rem;
+  border-radius: 0.45rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.inspector-label-bg-hint {
+  margin: 0 0 0.5rem;
+  font-size: 0.78rem;
 }
 
 /* Vorlagen-Details (Abschnitte) */
@@ -2274,6 +2429,78 @@ textarea {
 .lighting-panel-help-icon {
   flex-shrink: 0;
   margin-top: 0.2rem;
+}
+
+.lighting-panel-section {
+  margin-bottom: 0.15rem;
+}
+
+h4.lighting-panel-section-title {
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0.35rem 0 0.5rem;
+  letter-spacing: 0.02em;
+  color: #e8eef5;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+p.lighting-panel-section-title {
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0.5rem 0 0.35rem;
+  letter-spacing: 0.02em;
+  color: #e8eef5;
+}
+
+.lighting-panel-divider {
+  border: none;
+  border-top: 1px solid #333;
+  margin: 0.55rem 0;
+}
+
+.lighting-panel-nested {
+  margin-left: 12px;
+}
+
+.lighting-preset-select-row {
+  margin-bottom: 0.35rem;
+}
+
+.lighting-preset-dropdown {
+  width: 100%;
+  max-width: 100%;
+}
+
+.lighting-presets.lighting-presets--compact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.inspector-global-blocks {
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.inspector-panel-section-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 0.4rem;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.inspector-perspective-panel .opacity-slider-field,
+.inspector-performance-panel .opacity-slider-field {
+  margin-bottom: 0.35rem;
+}
+
+.inspector-perspective-actions {
+  margin-top: 0.35rem;
 }
 
 .details-dt-with-hint {

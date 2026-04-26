@@ -1,8 +1,12 @@
-import { useFrame, useThree } from '@react-three/fiber'
+import { useFrame, useThree, type RootState } from '@react-three/fiber'
 import { useEffect, useRef, type RefObject } from 'react'
-import { Vector3 } from 'three'
+import { PerspectiveCamera, Vector3 } from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
-import type { CameraViewPreset } from '../types/plannerUi'
+import {
+  perspectiveToPosition,
+  type CameraViewPreset,
+  type PerspectiveCameraSettings,
+} from '../types/plannerUi'
 import type { Vector3Tuple } from 'three'
 
 const DURATION_MS = 500
@@ -19,9 +23,11 @@ export { CAMERA_PRESETS }
 export default function AnimatedCameraRig({
   preset,
   orbitRef,
+  perspectiveCamera,
 }: {
   preset: CameraViewPreset
   orbitRef: RefObject<OrbitControlsImpl | null>
+  perspectiveCamera: PerspectiveCameraSettings | null
 }) {
   const { camera } = useThree()
   const fromPos = useRef(new Vector3())
@@ -29,6 +35,7 @@ export default function AnimatedCameraRig({
   const toPos = useRef(new Vector3())
   const toTarget = useRef(new Vector3())
   const startTime = useRef<number | null>(null)
+  const desiredFov = useRef(48)
 
   useEffect(() => {
     const p = CAMERA_PRESETS[preset]
@@ -39,18 +46,34 @@ export default function AnimatedCameraRig({
     } else {
       fromTarget.current.set(...p.target)
     }
-    toPos.current.set(...p.position)
-    toTarget.current.set(...p.target)
+    desiredFov.current =
+      preset === 'perspective' && perspectiveCamera ? perspectiveCamera.fov : 48
+    if (preset === 'perspective' && perspectiveCamera) {
+      const pos = perspectiveToPosition(perspectiveCamera)
+      toPos.current.set(...pos)
+      toTarget.current.set(...perspectiveCamera.target)
+    } else {
+      toPos.current.set(...p.position)
+      toTarget.current.set(...p.target)
+    }
     startTime.current = performance.now()
-  }, [preset, camera, orbitRef])
+  }, [preset, perspectiveCamera, camera, orbitRef])
 
-  useFrame(() => {
+  useFrame((state: RootState) => {
+    const cam = state.camera
+    if (cam instanceof PerspectiveCamera) {
+      const tf = desiredFov.current
+      if (Math.abs(cam.fov - tf) > 0.02) {
+        cam.fov = tf
+        cam.updateProjectionMatrix()
+      }
+    }
     const ctr = orbitRef.current
     if (!ctr || startTime.current === null) return
     const raw = (performance.now() - startTime.current) / DURATION_MS
     const t = Math.min(1, raw)
     const ease = 1 - (1 - t) ** 3
-    camera.position.lerpVectors(fromPos.current, toPos.current, ease)
+    cam.position.lerpVectors(fromPos.current, toPos.current, ease)
     ctr.target.lerpVectors(fromTarget.current, toTarget.current, ease)
     ctr.update()
     if (t >= 1) startTime.current = null

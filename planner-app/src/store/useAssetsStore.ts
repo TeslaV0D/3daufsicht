@@ -15,10 +15,15 @@ import {
   sanitizeFloor,
   type FloorSettings,
 } from '../types/floor'
+import { LAYOUT_FORMAT_SEMVER } from '../config/layoutFormat'
 import {
   type CameraViewPreset,
   normalizeCameraViewPreset,
+  type PerformanceSettings,
+  type PerspectiveCameraSettings,
   type PlannerShellMode,
+  sanitizePerformanceSettings,
+  sanitizePerspectiveCamera,
 } from '../types/plannerUi'
 import {
   cloneLighting,
@@ -43,13 +48,15 @@ import {
 
 export const STORAGE_KEY = 'factory-layout'
 export const STORAGE_SLOTS_KEY = 'factory-layout-slots'
-export const STORAGE_VERSION = 7
+export const STORAGE_VERSION = 8
 const MAX_HISTORY = 50
 
 export type LayoutExportKind = 'workspace' | 'complete'
 
 export interface StoredPayload {
   version: number
+  /** Semantische Version für Migrationen (z. B. „1.2.0“) */
+  layoutFormatSemver?: string
   assets: Asset[]
   customTemplates?: AssetTemplate[]
   floor?: FloorSettings
@@ -57,6 +64,8 @@ export interface StoredPayload {
   uiMode?: PlannerShellMode
   lighting?: LightingSettings
   libraryOrganization?: LibraryOrganizationState
+  perspectiveCamera?: PerspectiveCameraSettings
+  performanceSettings?: PerformanceSettings
   /** Gesetzt bei Datei-Export: Workspace nur Szene, complete = volles Projekt */
   exportKind?: LayoutExportKind
   /** Bearbeiten vs. Präsentation (nur bei `complete`) */
@@ -81,6 +90,24 @@ function mergeCustomTemplatesForImport(
     byType.set(t.type, t)
   }
   return Array.from(byType.values())
+}
+
+function clonePerspective(s: PerspectiveCameraSettings): PerspectiveCameraSettings {
+  return {
+    ...s,
+    target: [s.target[0], s.target[1], s.target[2]],
+  }
+}
+
+/** Fehlende Felder ergänzen, Schema auf STORAGE_VERSION heben (Backward Compatibility). */
+export function finalizeImportedPayload(p: StoredPayload): StoredPayload {
+  return {
+    ...p,
+    version: STORAGE_VERSION,
+    layoutFormatSemver: LAYOUT_FORMAT_SEMVER,
+    perspectiveCamera: clonePerspective(sanitizePerspectiveCamera(p.perspectiveCamera)),
+    performanceSettings: sanitizePerformanceSettings(p.performanceSettings),
+  }
 }
 
 function duplicateLibraryTemplate(
@@ -165,6 +192,10 @@ export interface AssetsStore {
   setFloor: (patch: Partial<FloorSettings>) => void
   cameraView: CameraViewPreset
   setCameraView: (preset: CameraViewPreset) => void
+  perspectiveCamera: PerspectiveCameraSettings
+  setPerspectiveCamera: (patch: Partial<PerspectiveCameraSettings>) => void
+  performanceSettings: PerformanceSettings
+  setPerformanceSettings: (patch: Partial<PerformanceSettings>) => void
   lighting: LightingSettings
   setLighting: (patch: Partial<LightingSettings>) => void
   selectedIds: string[]
@@ -237,7 +268,7 @@ function parseStoredPayload(raw: string | null): StoredPayload | null {
       const assets = parsed
         .map((value) => sanitizeAsset(value))
         .filter((a): a is Asset => a !== null)
-      return {
+      return finalizeImportedPayload({
         version: 1,
         assets,
         floor: { ...DEFAULT_FLOOR },
@@ -245,7 +276,7 @@ function parseStoredPayload(raw: string | null): StoredPayload | null {
         uiMode: undefined,
         lighting: cloneLighting(DEFAULT_LIGHTING),
         libraryOrganization: cloneLibraryOrganization(DEFAULT_LIBRARY_ORGANIZATION),
-      }
+      })
     }
     if (!parsed || typeof parsed !== 'object') return null
     const entry = parsed as Record<string, unknown>
@@ -284,8 +315,10 @@ function parseStoredPayload(raw: string | null): StoredPayload | null {
       if (Object.keys(o).length > 0) librarySectionExpanded = o
     }
 
-    return {
-      version: typeof entry.version === 'number' ? entry.version : STORAGE_VERSION,
+    const rawPerspective = entry.perspectiveCamera
+    const rawPerf = entry.performanceSettings
+    return finalizeImportedPayload({
+      version: typeof entry.version === 'number' ? entry.version : 1,
       assets,
       customTemplates,
       floor: sanitizeFloor(entry.floor),
@@ -296,7 +329,13 @@ function parseStoredPayload(raw: string | null): StoredPayload | null {
       exportKind,
       shellMode: sanitizeUiMode(entry.shellMode),
       librarySectionExpanded,
-    }
+      ...(rawPerspective && typeof rawPerspective === 'object'
+        ? { perspectiveCamera: rawPerspective as PerspectiveCameraSettings }
+        : {}),
+      ...(rawPerf && typeof rawPerf === 'object'
+        ? { performanceSettings: rawPerf as PerformanceSettings }
+        : {}),
+    })
   } catch {
     return null
   }
@@ -323,8 +362,10 @@ function loadSlots(): LayoutSlot[] {
         const customTemplates = Array.isArray(payloadEntry.customTemplates)
           ? (payloadEntry.customTemplates as AssetTemplate[])
           : undefined
-        const payload: StoredPayload = {
-          version: typeof payloadEntry.version === 'number' ? payloadEntry.version : STORAGE_VERSION,
+        const rawPerspective = payloadEntry.perspectiveCamera
+        const rawPerf = payloadEntry.performanceSettings
+        const payload = finalizeImportedPayload({
+          version: typeof payloadEntry.version === 'number' ? payloadEntry.version : 1,
           assets: sanitizedAssets,
           customTemplates,
           floor: sanitizeFloor(payloadEntry.floor),
@@ -332,7 +373,13 @@ function loadSlots(): LayoutSlot[] {
           uiMode: sanitizeUiMode(payloadEntry.uiMode),
           lighting: sanitizeLighting(payloadEntry.lighting),
           libraryOrganization: sanitizeLibraryOrganization(payloadEntry.libraryOrganization),
-        }
+          ...(rawPerspective && typeof rawPerspective === 'object'
+            ? { perspectiveCamera: rawPerspective as PerspectiveCameraSettings }
+            : {}),
+          ...(rawPerf && typeof rawPerf === 'object'
+            ? { performanceSettings: rawPerf as PerformanceSettings }
+            : {}),
+        })
         return {
           id: e.id,
           name: e.name,
@@ -372,6 +419,8 @@ export interface InitialPlannerState {
   uiMode: PlannerShellMode
   lighting: LightingSettings
   libraryOrganization: LibraryOrganizationState
+  perspectiveCamera: PerspectiveCameraSettings
+  performanceSettings: PerformanceSettings
 }
 
 export function loadInitialPlannerState(): InitialPlannerState {
@@ -385,6 +434,8 @@ export function loadInitialPlannerState(): InitialPlannerState {
     libraryOrganization: ensureEigeneAssetsUserGroup(
       cloneLibraryOrganization(DEFAULT_LIBRARY_ORGANIZATION),
     ),
+    perspectiveCamera: clonePerspective(sanitizePerspectiveCamera(undefined)),
+    performanceSettings: sanitizePerformanceSettings(undefined),
   }
   if (typeof localStorage === 'undefined') {
     return fallback
@@ -402,6 +453,8 @@ export function loadInitialPlannerState(): InitialPlannerState {
       libraryOrganization: ensureEigeneAssetsUserGroup(
         mergeLibraryOrgWithUserTemplates(stored.libraryOrganization, customTemplates),
       ),
+      perspectiveCamera: clonePerspective(sanitizePerspectiveCamera(stored.perspectiveCamera)),
+      performanceSettings: sanitizePerformanceSettings(stored.performanceSettings),
     }
   }
   return fallback
@@ -421,6 +474,12 @@ export function useAssetsStore(): AssetsStore {
   )
   const [floor, setFloorState] = useState<FloorSettings>(() => cloneFloor(initial.floor))
   const [cameraView, setCameraViewState] = useState<CameraViewPreset>(initial.cameraView)
+  const [perspectiveCamera, setPerspectiveCameraState] = useState<PerspectiveCameraSettings>(
+    () => clonePerspective(initial.perspectiveCamera),
+  )
+  const [performanceSettings, setPerformanceSettingsState] = useState<PerformanceSettings>(
+    () => ({ ...initial.performanceSettings }),
+  )
   const [lighting, setLightingState] = useState<LightingSettings>(() =>
     cloneLighting(initial.lighting),
   )
@@ -505,6 +564,20 @@ export function useAssetsStore(): AssetsStore {
 
   const setCameraView = useCallback((preset: CameraViewPreset) => {
     setCameraViewState(preset)
+  }, [])
+
+  const setPerspectiveCamera = useCallback((patch: Partial<PerspectiveCameraSettings>) => {
+    setPerspectiveCameraState((prev) => {
+      const next = { ...prev, ...patch }
+      if (patch.target) {
+        next.target = [patch.target[0], patch.target[1], patch.target[2]]
+      }
+      return next
+    })
+  }, [])
+
+  const setPerformanceSettings = useCallback((patch: Partial<PerformanceSettings>) => {
+    setPerformanceSettingsState((p) => ({ ...p, ...patch }))
   }, [])
 
   const setLighting = useCallback(
@@ -1001,18 +1074,29 @@ export function useAssetsStore(): AssetsStore {
     try {
       const payload: StoredPayload = {
         version: STORAGE_VERSION,
+        layoutFormatSemver: LAYOUT_FORMAT_SEMVER,
         assets: assetsRef.current,
         customTemplates,
         floor: cloneFloor(floor),
         cameraView,
         lighting: cloneLighting(lighting),
         libraryOrganization: cloneLibraryOrganization(libraryOrganization),
+        perspectiveCamera: clonePerspective(perspectiveCamera),
+        performanceSettings: { ...performanceSettings },
       }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
     } catch (error) {
       console.error('Failed to save layout', error)
     }
-  }, [cameraView, customTemplates, floor, lighting, libraryOrganization])
+  }, [
+    cameraView,
+    customTemplates,
+    floor,
+    lighting,
+    libraryOrganization,
+    perspectiveCamera,
+    performanceSettings,
+  ])
 
   const load = useCallback((): boolean => {
     try {
@@ -1027,6 +1111,8 @@ export function useAssetsStore(): AssetsStore {
       setLightingState(
         cloneLighting(parsed.lighting ? sanitizeLighting(parsed.lighting) : DEFAULT_LIGHTING),
       )
+      setPerspectiveCameraState(clonePerspective(sanitizePerspectiveCamera(parsed.perspectiveCamera)))
+      setPerformanceSettingsState(sanitizePerformanceSettings(parsed.performanceSettings))
       const ct = parsed.customTemplates ?? []
       setCustomTemplates(ct)
       setLibraryOrganizationState(
@@ -1044,6 +1130,8 @@ export function useAssetsStore(): AssetsStore {
   const reset = useCallback(() => {
     setFloorState({ ...DEFAULT_FLOOR })
     setCameraViewState('perspective')
+    setPerspectiveCameraState(clonePerspective(sanitizePerspectiveCamera(undefined)))
+    setPerformanceSettingsState(sanitizePerformanceSettings(undefined))
     setLightingState(cloneLighting(DEFAULT_LIGHTING))
     setLibraryOrganizationState(
       ensureEigeneAssetsUserGroup(cloneLibraryOrganization(DEFAULT_LIBRARY_ORGANIZATION)),
@@ -1054,11 +1142,14 @@ export function useAssetsStore(): AssetsStore {
   const buildPayload = useCallback((): StoredPayload => {
     return {
       version: STORAGE_VERSION,
+      layoutFormatSemver: LAYOUT_FORMAT_SEMVER,
       assets: cloneAssets(assetsRef.current),
       floor: cloneFloor(floor),
       cameraView,
       lighting: cloneLighting(lighting),
       libraryOrganization: cloneLibraryOrganization(libraryOrganization),
+      perspectiveCamera: clonePerspective(perspectiveCamera),
+      performanceSettings: { ...performanceSettings },
       customTemplates: customTemplates.map((template) => ({
         ...template,
         scale: [...template.scale] as Vector3Tuple,
@@ -1075,7 +1166,7 @@ export function useAssetsStore(): AssetsStore {
         visual: template.visual ? { ...template.visual } : undefined,
       })),
     }
-  }, [cameraView, customTemplates, floor, lighting, libraryOrganization])
+  }, [cameraView, customTemplates, floor, lighting, libraryOrganization, perspectiveCamera, performanceSettings])
 
   const buildWorkspacePayload = useCallback((): StoredPayload => {
     const scene = assetsRef.current
@@ -1099,14 +1190,17 @@ export function useAssetsStore(): AssetsStore {
       }))
     return {
       version: STORAGE_VERSION,
+      layoutFormatSemver: LAYOUT_FORMAT_SEMVER,
       exportKind: 'workspace',
       assets: cloneAssets(scene),
       floor: cloneFloor(floor),
       cameraView,
       lighting: cloneLighting(lighting),
+      perspectiveCamera: clonePerspective(perspectiveCamera),
+      performanceSettings: { ...performanceSettings },
       ...(neededCustom.length > 0 ? { customTemplates: neededCustom } : {}),
     }
-  }, [cameraView, customTemplates, floor, lighting])
+  }, [cameraView, customTemplates, floor, lighting, perspectiveCamera, performanceSettings])
 
   const applyPayload = useCallback((payload: StoredPayload) => {
     const ct = payload.customTemplates ?? []
@@ -1119,6 +1213,8 @@ export function useAssetsStore(): AssetsStore {
     setLightingState(
       cloneLighting(payload.lighting ? sanitizeLighting(payload.lighting) : DEFAULT_LIGHTING),
     )
+    setPerspectiveCameraState(clonePerspective(sanitizePerspectiveCamera(payload.perspectiveCamera)))
+    setPerformanceSettingsState(sanitizePerformanceSettings(payload.performanceSettings))
     setCustomTemplates(ct)
     setLibraryOrganizationState(
       ensureEigeneAssetsUserGroup(
@@ -1150,6 +1246,8 @@ export function useAssetsStore(): AssetsStore {
     setLightingState(
       cloneLighting(payload.lighting ? sanitizeLighting(payload.lighting) : DEFAULT_LIGHTING),
     )
+    setPerspectiveCameraState(clonePerspective(sanitizePerspectiveCamera(payload.perspectiveCamera)))
+    setPerformanceSettingsState(sanitizePerformanceSettings(payload.performanceSettings))
   }, [])
 
   const saveSlot = useCallback(
@@ -1255,14 +1353,14 @@ export function useAssetsStore(): AssetsStore {
             .map((a) => sanitizeAsset(a))
             .filter((a): a is Asset => a !== null)
           if (assets.length === 0) return { ok: false }
-          payload = {
+          payload = finalizeImportedPayload({
             version: 1,
             assets,
             floor: { ...DEFAULT_FLOOR },
             cameraView: normalizeCameraViewPreset(undefined),
             lighting: cloneLighting(DEFAULT_LIGHTING),
             libraryOrganization: cloneLibraryOrganization(DEFAULT_LIBRARY_ORGANIZATION),
-          }
+          })
         } else if (data && typeof data === 'object') {
           const entry = data as Record<string, unknown>
           const rawAssets = Array.isArray(entry.assets) ? entry.assets : []
@@ -1290,8 +1388,10 @@ export function useAssetsStore(): AssetsStore {
             }
             if (Object.keys(o).length > 0) librarySectionExpanded = o
           }
-          payload = {
-            version: typeof entry.version === 'number' ? entry.version : STORAGE_VERSION,
+          const rawPerspective = entry.perspectiveCamera
+          const rawPerf = entry.performanceSettings
+          payload = finalizeImportedPayload({
+            version: typeof entry.version === 'number' ? entry.version : 1,
             assets,
             customTemplates,
             floor: sanitizeFloor(entry.floor),
@@ -1303,7 +1403,13 @@ export function useAssetsStore(): AssetsStore {
             shellMode:
               sanitizeUiMode(entry.shellMode) ?? sanitizeUiMode(entry.uiMode),
             librarySectionExpanded,
-          }
+            ...(rawPerspective && typeof rawPerspective === 'object'
+              ? { perspectiveCamera: rawPerspective as PerspectiveCameraSettings }
+              : {}),
+            ...(rawPerf && typeof rawPerf === 'object'
+              ? { performanceSettings: rawPerf as PerformanceSettings }
+              : {}),
+          })
         }
         if (!payload) return { ok: false }
         if (payload.exportKind === 'workspace') {
@@ -1354,6 +1460,10 @@ export function useAssetsStore(): AssetsStore {
     setFloor,
     cameraView,
     setCameraView,
+    perspectiveCamera,
+    setPerspectiveCamera,
+    performanceSettings,
+    setPerformanceSettings,
     lighting,
     setLighting,
     selectedIds,

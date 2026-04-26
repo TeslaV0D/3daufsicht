@@ -107,8 +107,34 @@ export default function LightingToolbarPanel({
 
   return (
     <div className="lighting-toolbar-panel">
-      <div className="lighting-presets-wrap">
-        <div className="lighting-presets">
+      <section className="lighting-panel-section">
+        <h4 className="lighting-panel-section-title">
+          Licht-Preset
+          <InfoIcon title={FIELD_DESC.lightingPresets} className="lighting-panel-help-icon" />
+        </h4>
+        <label className="lighting-field lighting-preset-select-row">
+          <span className="inspector-inline-label">Preset</span>
+          <select
+            className="lighting-preset-dropdown"
+            value=""
+            aria-label="Licht-Preset wählen"
+            onChange={(e) => {
+              const name = e.target.value
+              e.target.value = ''
+              if (!name) return
+              if (name === 'Standard') setLighting(cloneLighting(DEFAULT_LIGHTING))
+              else setLighting({ ...cloneLighting(DEFAULT_LIGHTING), ...PRESETS[name] })
+            }}
+          >
+            <option value="">Schnell wählen…</option>
+            {Object.keys(PRESETS).map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="lighting-presets lighting-presets--compact">
           {Object.keys(PRESETS).map((name) => (
             <button
               key={name}
@@ -124,78 +150,59 @@ export default function LightingToolbarPanel({
             </button>
           ))}
         </div>
-        <InfoIcon title={FIELD_DESC.lightingPresets} className="lighting-panel-help-icon" />
-      </div>
+      </section>
 
-      <label className="lighting-field">
-        <span className="inspector-inline-label">
-          Lichttyp
-          <InfoIcon title={FIELD_DESC.lightingMainType} />
-        </span>
-        <div className="lighting-radio-row">
-          {(['directional', 'point', 'spot'] as const).map((t) => (
-            <label key={t} className="lighting-radio">
-              <input
-                type="radio"
-                name="mainLightType"
-                checked={lighting.mainType === t}
-                onChange={() => setLighting({ mainType: t })}
-              />
-              {t === 'directional' ? 'Directional' : t === 'point' ? 'Point' : 'Spot'}
-            </label>
-          ))}
-        </div>
-      </label>
+      <hr className="lighting-panel-divider" />
 
-      <label className="opacity-slider-field">
-        <span className="inspector-inline-label">
-          Hauptlicht ({lighting.mainIntensity.toFixed(2)})
-          <InfoIcon title={FIELD_DESC.lightingMainIntensity} />
-        </span>
-        <input
-          type="range"
-          min={0}
-          max={3}
-          step={0.05}
-          value={lighting.mainIntensity}
-          onChange={(e) => setLighting({ mainIntensity: Number(e.target.value) })}
+      <section className="lighting-panel-section">
+        <h4 className="lighting-panel-section-title">Hauptlicht (Primary)</h4>
+        <label className="lighting-field">
+          <span className="inspector-inline-label">
+            Lichttyp
+            <InfoIcon title={FIELD_DESC.lightingMainType} />
+          </span>
+          <div className="lighting-radio-row">
+            {(['directional', 'point', 'spot'] as const).map((t) => (
+              <label key={t} className="lighting-radio">
+                <input
+                  type="radio"
+                  name="mainLightType"
+                  checked={lighting.mainType === t}
+                  onChange={() => setLighting({ mainType: t })}
+                />
+                {t === 'directional' ? 'Directional' : t === 'point' ? 'Point' : 'Spot'}
+              </label>
+            ))}
+          </div>
+        </label>
+
+        <label className="opacity-slider-field">
+          <span className="inspector-inline-label">
+            Intensität ({lighting.mainIntensity.toFixed(2)})
+            <InfoIcon title={FIELD_DESC.lightingMainIntensity} />
+          </span>
+          <input
+            type="range"
+            min={0}
+            max={3}
+            step={0.05}
+            value={lighting.mainIntensity}
+            onChange={(e) => setLighting({ mainIntensity: Number(e.target.value) })}
+          />
+        </label>
+
+        <ColorPickerPopover
+          label="Farbe"
+          hint={FIELD_DESC.lightingMainColor}
+          value={lighting.mainColor}
+          onCommit={(c) => setLighting({ mainColor: sanitizeColor(c) })}
         />
-      </label>
 
-      <label className="opacity-slider-field">
-        <span className="inspector-inline-label">
-          Umgebung ({lighting.ambientIntensity.toFixed(2)})
-          <InfoIcon title={FIELD_DESC.lightingAmbientIntensity} />
-        </span>
-        <input
-          type="range"
-          min={0}
-          max={1.5}
-          step={0.02}
-          value={lighting.ambientIntensity}
-          onChange={(e) => setLighting({ ambientIntensity: Number(e.target.value) })}
-        />
-      </label>
-
-      <ColorPickerPopover
-        label="Lichtfarbe"
-        hint={FIELD_DESC.lightingMainColor}
-        value={lighting.mainColor}
-        onCommit={(c) => setLighting({ mainColor: sanitizeColor(c) })}
-      />
-
-      <ColorPickerPopover
-        label="Umgebungsfarbe"
-        hint={FIELD_DESC.lightingAmbientColor}
-        value={lighting.ambientColor}
-        onCommit={(c) => setLighting({ ambientColor: sanitizeColor(c) })}
-      />
-
-      <p className="lighting-subheading inspector-inline-label">
-        Lichtposition (m)
-        <InfoIcon title={FIELD_DESC.lightingPosition} />
-      </p>
-      <div className="vector-grid lighting-mini-grid">
+        <p className="lighting-subheading inspector-inline-label lighting-panel-nested">
+          Position (Kugelkoordinaten)
+          <InfoIcon title={FIELD_DESC.lightingPosition} />
+        </p>
+        <div className="vector-grid lighting-mini-grid lighting-panel-nested">
         <label className="metadata-field">
           X
           <input
@@ -263,9 +270,13 @@ export default function LightingToolbarPanel({
           </>
         )}
       </div>
+      </section>
 
+      <hr className="lighting-panel-divider" />
+
+      <section className="lighting-panel-section">
       <div className="lighting-section">
-        <p className="lighting-section-title">Secondary (optional)</p>
+        <p className="lighting-section-title lighting-panel-section-title">Secondary (optional)</p>
         <label className="checkbox-field">
           <input
             type="checkbox"
@@ -406,7 +417,7 @@ export default function LightingToolbarPanel({
       </div>
 
       <div className="lighting-section">
-        <p className="lighting-section-title">Fill (gegenüber Primary)</p>
+        <p className="lighting-section-title lighting-panel-section-title">Fill (gegenüber Primary)</p>
         <label className="checkbox-field">
           <input
             type="checkbox"
@@ -439,7 +450,7 @@ export default function LightingToolbarPanel({
       </div>
 
       <div className="lighting-section">
-        <p className="lighting-section-title">Ambient</p>
+        <p className="lighting-section-title lighting-panel-section-title">Ambient</p>
         <label className="opacity-slider-field">
           Intensität ({lighting.ambientIntensity.toFixed(2)})
           <input
@@ -459,7 +470,7 @@ export default function LightingToolbarPanel({
       </div>
 
       <div className="lighting-section">
-        <p className="lighting-section-title">Schatten</p>
+        <p className="lighting-section-title lighting-panel-section-title">Schatten</p>
         <label className="checkbox-field">
           <input
             type="checkbox"
@@ -527,7 +538,7 @@ export default function LightingToolbarPanel({
       </div>
 
       <div className="lighting-section">
-        <p className="lighting-section-title">Atmosphäre</p>
+        <p className="lighting-section-title lighting-panel-section-title">Atmosphäre</p>
         <ColorPickerPopover
           label="Hintergrund"
           hint="Farbe hinter der Szene (Canvas-Hintergrund)."
@@ -593,8 +604,8 @@ export default function LightingToolbarPanel({
         </label>
       </div>
 
-      <p className="lighting-subheading inspector-inline-label">
-        Nebel
+      <p className="lighting-subheading inspector-inline-label lighting-panel-section-title">
+        Nebel (Fog)
         <InfoIcon title={FIELD_DESC.lightingFogToggle} />
       </p>
       <label className="checkbox-field">
@@ -675,6 +686,7 @@ export default function LightingToolbarPanel({
           onChange={(e) => setLighting({ fogFar: Number(e.target.value) })}
         />
       </label>
+    </section>
     </div>
   )
 }

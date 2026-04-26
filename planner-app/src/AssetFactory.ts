@@ -1,6 +1,7 @@
 import type { Asset, AssetMetadata, AssetTemplate, GeometryKind, ModelFormat } from './types/asset'
 import {
   cloneAsset,
+  DEFAULT_TEXT_LABEL_STYLE,
   FALLBACK_COLOR,
   isFiniteNumber,
   sanitizeMetadata,
@@ -329,7 +330,7 @@ export const ASSET_TEMPLATES: AssetTemplate[] = [
     scale: [1, 1, 1],
     geometry: {
       kind: 'text',
-      params: { fontSize: 0.6 },
+      params: { fontSize: 0.6, labelStyle: { ...DEFAULT_TEXT_LABEL_STYLE } },
     },
     metadata: {
       name: 'Text-Label',

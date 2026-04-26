@@ -12,6 +12,70 @@ export type GeometryKind =
   | 'text'
   | 'custom'
 
+export type ModelFormat = 'gltf' | 'glb' | 'stl' | 'obj' | 'fbx'
+
+/** Hintergrund für 3D-Text-Labels (Canvas-Textur). */
+export type TextLabelBackgroundMode = 'none' | 'light' | 'dark' | 'custom'
+
+export interface TextLabelStyle {
+  background: TextLabelBackgroundMode
+  /** Nur bei background === 'custom' (Hex #RRGGBB) */
+  backgroundColor?: string
+  backgroundOpacity?: number
+  paddingPx?: number
+  borderRadiusPx?: number
+  textColor?: string
+  /** Pixelgröße auf dem Canvas (nicht Welt) */
+  fontPx?: number
+  fontWeight?: 'normal' | 'bold'
+  outline: boolean
+  textShadow: boolean
+}
+
+export const DEFAULT_TEXT_LABEL_STYLE: TextLabelStyle = {
+  background: 'light',
+  backgroundOpacity: 0.82,
+  paddingPx: 10,
+  borderRadiusPx: 6,
+  textColor: '#0b1220',
+  fontPx: 28,
+  fontWeight: 'bold',
+  outline: false,
+  textShadow: true,
+}
+
+export function mergeLabelStyle(partial?: Partial<TextLabelStyle>): TextLabelStyle {
+  return { ...DEFAULT_TEXT_LABEL_STYLE, ...partial }
+}
+
+export function sanitizeTextLabelStyle(value: unknown): TextLabelStyle | undefined {
+  if (!value || typeof value !== 'object') return undefined
+  const o = value as Record<string, unknown>
+  const bg = o.background
+  const background: TextLabelBackgroundMode =
+    bg === 'none' || bg === 'light' || bg === 'dark' || bg === 'custom' ? bg : 'light'
+  const fontWeight = o.fontWeight === 'normal' || o.fontWeight === 'bold' ? o.fontWeight : undefined
+  return mergeLabelStyle({
+    background,
+    backgroundColor: typeof o.backgroundColor === 'string' ? o.backgroundColor : undefined,
+    backgroundOpacity:
+      typeof o.backgroundOpacity === 'number' && Number.isFinite(o.backgroundOpacity)
+        ? o.backgroundOpacity
+        : undefined,
+    paddingPx:
+      typeof o.paddingPx === 'number' && Number.isFinite(o.paddingPx) ? o.paddingPx : undefined,
+    borderRadiusPx:
+      typeof o.borderRadiusPx === 'number' && Number.isFinite(o.borderRadiusPx)
+        ? o.borderRadiusPx
+        : undefined,
+    textColor: typeof o.textColor === 'string' ? o.textColor : undefined,
+    fontPx: typeof o.fontPx === 'number' && Number.isFinite(o.fontPx) ? o.fontPx : undefined,
+    fontWeight,
+    outline: o.outline === true,
+    textShadow: o.textShadow !== false,
+  })
+}
+
 export interface GeometryParams {
   width?: number
   height?: number
@@ -28,11 +92,11 @@ export interface GeometryParams {
   heightSegments?: number
   text?: string
   fontSize?: number
+  /** Styling für geometry.kind === 'text' */
+  labelStyle?: TextLabelStyle
   modelUrl?: string
   modelFormat?: ModelFormat
 }
-
-export type ModelFormat = 'gltf' | 'glb' | 'stl' | 'obj' | 'fbx'
 
 export type MaterialMode = 'original' | 'override'
 
@@ -223,8 +287,14 @@ export function sanitizeGeometry(value: unknown): AssetGeometry {
   if (value && typeof value === 'object') {
     const entry = value as Record<string, unknown>
     const kind = isGeometryKind(entry.kind) ? entry.kind : 'box'
-    const params: GeometryParams =
+    const rawParams =
       entry.params && typeof entry.params === 'object' ? { ...(entry.params as GeometryParams) } : {}
+    const params: GeometryParams = { ...rawParams }
+    if (kind === 'text') {
+      params.labelStyle = sanitizeTextLabelStyle(rawParams.labelStyle) ?? DEFAULT_TEXT_LABEL_STYLE
+    } else {
+      delete params.labelStyle
+    }
     return { kind, params }
   }
   return { kind: 'box', params: {} }

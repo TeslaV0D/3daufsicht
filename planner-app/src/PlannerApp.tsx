@@ -1,6 +1,8 @@
 import { Canvas, type ThreeEvent } from '@react-three/fiber'
+import { List, type RowComponentProps } from 'react-window'
 import { Html, OrbitControls, TransformControls } from '@react-three/drei'
 import {
+  Fragment,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -24,6 +26,9 @@ import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 
 import './App.css'
 import AnimatedCameraRig, { CAMERA_PRESETS } from './components/AnimatedCameraRig'
+import DistanceCullWrap from './components/DistanceCullWrap'
+import InstancedBoxBatch from './components/InstancedBoxBatch'
+import PerformanceHud from './components/PerformanceHud'
 import AssetInfoModal from './components/AssetInfoModal'
 import AssetRenderer, { GhostAssetRenderer } from './components/AssetRenderer'
 import ColorPickerPopover from './components/ColorPickerPopover'
@@ -41,6 +46,11 @@ import SaveAssetFromSceneModal from './components/SaveAssetFromSceneModal'
 import ShortcutsModal from './components/ShortcutsModal'
 import TemplatePreviewDialog from './components/TemplatePreviewDialog'
 
+import {
+  loadPerspectiveCustomPresets,
+  newPerspectivePresetId,
+  savePerspectiveCustomPresets,
+} from './perspectiveCustomPresets'
 import { dismissTopColorPickerEscape } from './colorPickerEscapeStack'
 import { createAssetFromTemplate, geometryKindSupports2D } from './AssetFactory'
 import { useAssetsStore, type LayoutExportKind } from './store/useAssetsStore'
@@ -54,14 +64,28 @@ import type {
   MaterialMode,
   ModelFormat,
 } from './types/asset'
-import { getCustomRows, newCustomFieldId, resolveAssetOpacity, sanitizeColor } from './types/asset'
+import {
+  DEFAULT_TEXT_LABEL_STYLE,
+  getCustomRows,
+  mergeLabelStyle,
+  newCustomFieldId,
+  resolveAssetOpacity,
+  sanitizeColor,
+  type TextLabelStyle,
+} from './types/asset'
 import type { CameraViewPreset } from './types/plannerUi'
+import {
+  perspectivePresetDefaults,
+  perspectiveToPosition,
+  sanitizePerspectiveCamera,
+} from './types/plannerUi'
 import {
   alignAssetsXZ,
   distributeCentersX,
   distributeCentersZ,
   snapAssetsToGrid,
 } from './scene/assetAlignment'
+import { computeInstancedBoxBatches, instancedAssetIdSet } from './scene/instancedBoxGrouping'
 import {
   fetchGifBufferFromDataUrl,
   MAX_GIF_DECAL_FRAMES,
@@ -103,6 +127,74 @@ const DECAL_SIDE_OPTIONS: { id: AssetDecalSide; label: string }[] = [
   { id: 'right', label: 'Rechts' },
   { id: 'all', label: 'Alle Seiten' },
 ]
+
+type LibraryTemplateVirtualRowData = {
+  sectionAccent: string
+  templates: AssetTemplate[]
+  tool: PlannerTool
+  activeTemplateType: string | null
+  setLibraryDropTargetKey: (key: string | null) => void
+  setFloorInspectorOpen: (open: boolean) => void
+  setSelectedTemplateType: (type: string) => void
+  changeTool: (t: PlannerTool) => void
+  openLibraryTemplateMenu: (e: ReactMouseEvent<HTMLElement>, templateType: string) => void
+}
+
+function LibraryTemplateVirtualRow({
+  index,
+  style,
+  sectionAccent,
+  templates,
+  tool,
+  activeTemplateType,
+  setLibraryDropTargetKey,
+  setFloorInspectorOpen,
+  setSelectedTemplateType,
+  changeTool,
+  openLibraryTemplateMenu,
+}: RowComponentProps<LibraryTemplateVirtualRowData>) {
+  const template = templates[index]!
+  return (
+    <div style={style} className="library-virtual-template-row">
+      <div
+        className="asset-template-block"
+        style={{ borderLeft: `4px solid ${sectionAccent}` }}
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.setData(TEMPLATE_DRAG_MIME, template.type)
+          e.dataTransfer.effectAllowed = 'move'
+        }}
+        onDragEnd={() => setLibraryDropTargetKey(null)}
+      >
+        <div className="asset-template-row">
+          <button
+            type="button"
+            className={`asset-template-select${
+              tool === 'place' && activeTemplateType === template.type ? ' active' : ''
+            }`}
+            onClick={() => {
+              setFloorInspectorOpen(false)
+              setSelectedTemplateType(template.type)
+              changeTool('place')
+            }}
+          >
+            <span>{template.label}</span>
+          </button>
+          <button
+            type="button"
+            className="library-template-menu-btn"
+            title="Optionen"
+            aria-label={`Optionen für ${template.label}`}
+            onClick={(e) => openLibraryTemplateMenu(e, template.type)}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            ⋮
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 function computeToolbarPopoverPosition(
   anchor: DOMRect,
@@ -635,6 +727,8 @@ interface SingleTransformGizmoProps {
   translationSnap?: number
   orbitRef: RefObject<OrbitControlsImpl | null>
   onCommit: (id: string, patch: Partial<Asset>) => void
+  /** Verhindert Boden-Klicks direkt nach Gizmo-Interaktion (Fokus / Auswahl). */
+  onTransformPointerChange?: (pointerDown: boolean) => void
   children?: React.ReactNode
 }
 
@@ -645,6 +739,7 @@ function SingleTransformGizmo({
   translationSnap,
   orbitRef,
   onCommit,
+  onTransformPointerChange,
   children,
 }: SingleTransformGizmoProps) {
   const groupRef = useRef<Group>(null!)
@@ -683,7 +778,8 @@ function SingleTransformGizmo({
       Math.max(roundScaleVal(group.scale.z), 0.01),
     ]
     onCommit(asset.id, { position: nextPosition, rotation: nextRotation, scale: nextScale })
-  }, [asset.id, mode, onCommit, orbitRef, translationSnap])
+    onTransformPointerChange?.(false)
+  }, [asset.id, mode, onCommit, onTransformPointerChange, orbitRef, translationSnap])
 
   useEffect(() => {
     const onPointerUp = () => finishDrag()
@@ -718,6 +814,7 @@ function SingleTransformGizmo({
         scaleSnap={null}
         onMouseDown={() => {
           draggingRef.current = true
+          onTransformPointerChange?.(true)
           if (orbitRef.current) orbitRef.current.enabled = false
         }}
         onMouseUp={finishDrag}
@@ -733,6 +830,7 @@ interface MultiTransformGizmoProps {
   translationSnap?: number
   orbitRef: RefObject<OrbitControlsImpl | null>
   onCommit: (updates: Array<{ id: string; patch: Partial<Asset> }>) => void
+  onTransformPointerChange?: (pointerDown: boolean) => void
 }
 
 function MultiTransformGizmo({
@@ -742,6 +840,7 @@ function MultiTransformGizmo({
   translationSnap,
   orbitRef,
   onCommit,
+  onTransformPointerChange,
 }: MultiTransformGizmoProps) {
   const pivotRef = useRef<Group>(null!)
   const draggingRef = useRef(false)
@@ -828,7 +927,8 @@ function MultiTransformGizmo({
 
     onCommit(updates)
     dragStartRef.current = null
-  }, [onCommit, orbitRef])
+    onTransformPointerChange?.(false)
+  }, [onCommit, onTransformPointerChange, orbitRef])
 
   useEffect(() => {
     const onPointerUp = () => finishDrag()
@@ -857,6 +957,7 @@ function MultiTransformGizmo({
         onMouseDown={() => {
           const pivot = pivotRef.current
           draggingRef.current = true
+          onTransformPointerChange?.(true)
           if (orbitRef.current) orbitRef.current.enabled = false
           dragStartRef.current = {
             pivotPosition: pivot.position.clone(),
@@ -887,6 +988,9 @@ export default function PlannerApp() {
   const [transformMode, setTransformMode] = useState<TransformMode>('translate')
   const [selectedTemplateType, setSelectedTemplateType] = useState<string | null>(null)
   const [previewPosition, setPreviewPosition] = useState<Vector3Tuple | null>(null)
+  const [multiPlaceMode, setMultiPlaceMode] = useState(false)
+  const [multiPlaceGhostPositions, setMultiPlaceGhostPositions] = useState<Vector3Tuple[]>([])
+  const transformSuppressFloorUntilRef = useRef(0)
   const [isCtrlPressed, setIsCtrlPressed] = useState(false)
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const hoverLeaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -907,6 +1011,11 @@ export default function PlannerApp() {
   const toolsMenuButtonRef = useRef<HTMLButtonElement>(null)
   const toolsPopoverRef = useRef<HTMLDivElement>(null)
   const [toolsMenuOpen, setToolsMenuOpen] = useState(false)
+  const viewMenuRef = useRef<HTMLDivElement>(null)
+  const viewMenuButtonRef = useRef<HTMLButtonElement>(null)
+  const viewPopoverRef = useRef<HTMLDivElement>(null)
+  const [viewMenuOpen, setViewMenuOpen] = useState(false)
+  const [perspectiveCustomPresets, setPerspectiveCustomPresets] = useState(loadPerspectiveCustomPresets)
   const [newGroupDialogOpen, setNewGroupDialogOpen] = useState(false)
   const [newGroupNameDraft, setNewGroupNameDraft] = useState('')
   const [libraryDropTargetKey, setLibraryDropTargetKey] = useState<string | null>(null)
@@ -940,6 +1049,10 @@ export default function PlannerApp() {
     setFloor,
     cameraView,
     setCameraView,
+    perspectiveCamera,
+    setPerspectiveCamera,
+    performanceSettings,
+    setPerformanceSettings,
     lighting,
     setLighting,
     selectedIds,
@@ -987,6 +1100,17 @@ export default function PlannerApp() {
     () => resolvedTemplates.find((template) => template.type === activeTemplateType) ?? null,
     [activeTemplateType, resolvedTemplates],
   )
+
+  const canvasCamera = useMemo(() => {
+    if (cameraView === 'perspective') {
+      return {
+        position: perspectiveToPosition(perspectiveCamera) as Vector3Tuple,
+        fov: perspectiveCamera.fov,
+      }
+    }
+    const p = CAMERA_PRESETS[cameraView]
+    return { position: p.position, fov: 48 }
+  }, [cameraView, perspectiveCamera])
 
   const customTemplateTypeSet = useMemo(
     () => new Set(customTemplates.map((t) => t.type)),
@@ -1043,6 +1167,47 @@ export default function PlannerApp() {
       pop.style.pointerEvents = ''
     }
   }, [toolsMenuOpen])
+
+  useEffect(() => {
+    if (!viewMenuOpen) return
+    const onDown = (e: PointerEvent) => {
+      const el = viewMenuRef.current
+      if (el && !el.contains(e.target as Node)) setViewMenuOpen(false)
+    }
+    window.addEventListener('pointerdown', onDown)
+    return () => window.removeEventListener('pointerdown', onDown)
+  }, [viewMenuOpen])
+
+  useLayoutEffect(() => {
+    if (!viewMenuOpen) return
+    const pop = viewPopoverRef.current
+    if (!pop) return
+
+    pop.style.opacity = '0'
+    pop.style.pointerEvents = 'none'
+    pop.style.transition = 'none'
+
+    const update = () => {
+      applyToolbarPopoverLayout(viewMenuButtonRef.current, viewPopoverRef.current, 380)
+    }
+    update()
+    update()
+
+    const fadeRaf = requestAnimationFrame(() => {
+      pop.style.transition = 'opacity 0.15s ease-out'
+      pop.style.opacity = '1'
+      pop.style.pointerEvents = 'auto'
+    })
+
+    window.addEventListener('resize', update)
+    return () => {
+      cancelAnimationFrame(fadeRaf)
+      window.removeEventListener('resize', update)
+      pop.style.transition = ''
+      pop.style.opacity = ''
+      pop.style.pointerEvents = ''
+    }
+  }, [viewMenuOpen])
 
   useLayoutEffect(() => {
     if (!lightingPanelOpen) return
@@ -1153,6 +1318,21 @@ export default function PlannerApp() {
   )
   const singleSelected = selectedAssets.length === 1 ? selectedAssets[0] : null
 
+  const instancedBoxBatches = useMemo(
+    () =>
+      computeInstancedBoxBatches(assets, {
+        useInstancing: performanceSettings.useInstancing,
+        selectedIds,
+        hoveredId,
+      }),
+    [assets, performanceSettings.useInstancing, selectedIds, hoveredId],
+  )
+
+  const instancedAssetIds = useMemo(
+    () => instancedAssetIdSet(instancedBoxBatches),
+    [instancedBoxBatches],
+  )
+
   const zoneTypeSuggestions = useMemo(() => {
     const set = new Set<string>()
     for (const id of ['production', 'storage', 'safety', 'walkway', 'vehicle-path']) {
@@ -1207,6 +1387,7 @@ export default function PlannerApp() {
     setFloorInspectorOpen(false)
     setLightingPanelOpen(false)
     setToolsMenuOpen(false)
+    setViewMenuOpen(false)
     setLibraryMenu(null)
   }, [])
 
@@ -1220,14 +1401,22 @@ export default function PlannerApp() {
     return () => document.removeEventListener('mousedown', onDocPointer)
   }, [libraryMenu])
 
+  const onTransformPointerChange = useCallback((pointerDown: boolean) => {
+    if (pointerDown) transformSuppressFloorUntilRef.current = 0
+    else transformSuppressFloorUntilRef.current = Date.now() + 220
+  }, [])
+
   const changeTool = useCallback((nextTool: PlannerTool) => {
     setTool(nextTool)
     setHoveredId(null)
     setFloorInspectorOpen(false)
     setLightingPanelOpen(false)
     setToolsMenuOpen(false)
+    setViewMenuOpen(false)
     if (nextTool !== 'place') {
       setPreviewPosition(null)
+      setMultiPlaceMode(false)
+      setMultiPlaceGhostPositions([])
     }
   }, [])
 
@@ -1252,6 +1441,31 @@ export default function PlannerApp() {
       setSelectedIds([asset.id])
     },
     [mode, selectedIds, setSelectedIds, tool],
+  )
+
+  const onInstancedBoxPointerDown = useCallback(
+    (assetId: string, event: ThreeEvent<PointerEvent>) => {
+      const asset = assets.find((a) => a.id === assetId)
+      if (!asset) return
+      event.stopPropagation()
+      if (mode === 'view') {
+        setInfoAssetId(asset.id)
+        return
+      }
+      if (tool === 'place') return
+      setFloorInspectorOpen(false)
+      const multi = event.ctrlKey || event.metaKey
+      if (multi) {
+        setSelectedIds(
+          selectedIds.includes(asset.id)
+            ? selectedIds.filter((id) => id !== asset.id)
+            : [...selectedIds, asset.id],
+        )
+        return
+      }
+      setSelectedIds([asset.id])
+    },
+    [assets, mode, selectedIds, setSelectedIds, tool],
   )
 
   const onAssetContextMenu = useCallback(
@@ -1305,8 +1519,14 @@ export default function PlannerApp() {
       if (tool === 'place' && activeTemplate) {
         const position = resolvePlacementPosition(point, isCtrlPressed, activeTemplate, floor)
         const asset = createAssetFromTemplate(activeTemplate, { position })
-        addAsset(asset)
+        addAsset(asset, !multiPlaceMode)
         recordRecentTemplatePlacement(activeTemplate.type)
+        if (multiPlaceMode) {
+          setMultiPlaceGhostPositions((prev) => [...prev, position].slice(-16))
+        }
+        return
+      }
+      if (Date.now() < transformSuppressFloorUntilRef.current) {
         return
       }
       setSelectedIds([])
@@ -1318,6 +1538,7 @@ export default function PlannerApp() {
       floor,
       isCtrlPressed,
       mode,
+      multiPlaceMode,
       recordRecentTemplatePlacement,
       setSelectedIds,
       tool,
@@ -1673,6 +1894,11 @@ export default function PlannerApp() {
           setToolsMenuOpen(false)
           return
         }
+        if (viewMenuOpen) {
+          event.preventDefault()
+          setViewMenuOpen(false)
+          return
+        }
         if (lightingPanelOpen) {
           event.preventDefault()
           setLightingPanelOpen(false)
@@ -1689,6 +1915,12 @@ export default function PlannerApp() {
           event.preventDefault()
           return
         }
+        if (multiPlaceMode) {
+          event.preventDefault()
+          setMultiPlaceMode(false)
+          setMultiPlaceGhostPositions([])
+          return
+        }
         if (mode === 'view') {
           event.preventDefault()
           changeMode('edit')
@@ -1697,6 +1929,7 @@ export default function PlannerApp() {
         event.preventDefault()
         changeTool('select')
         setInfoAssetId(null)
+        setSelectedIds([])
         return
       }
 
@@ -1868,12 +2101,14 @@ export default function PlannerApp() {
     librarySearchInput,
     lightingPanelOpen,
     mode,
+    multiPlaceMode,
     newGroupDialogOpen,
     onRemoveSelected,
     paste,
     redo,
     selectedAssets,
     setCameraView,
+    setSelectedIds,
     shortcutsOpen,
     templateDetailsDialog,
     templateGroupDialog,
@@ -1882,6 +2117,7 @@ export default function PlannerApp() {
     toggleFavoriteTemplateType,
     tool,
     toolsMenuOpen,
+    viewMenuOpen,
     undo,
     updateAssets,
   ])
@@ -2026,6 +2262,225 @@ export default function PlannerApp() {
     return resolvedTemplates.find((t) => t.type === libraryMenu.templateType) ?? null
   }, [libraryMenu, resolvedTemplates])
 
+  function renderViewMenuDropdown() {
+    return (
+      <div className="toolbar-dropdown-wrap toolbar-view-menu-wrap" ref={viewMenuRef}>
+        <button
+          ref={viewMenuButtonRef}
+          type="button"
+          className={viewMenuOpen ? 'active' : ''}
+          aria-expanded={viewMenuOpen}
+          aria-haspopup="true"
+          onClick={() => {
+            setViewMenuOpen((o) => !o)
+            setToolsMenuOpen(false)
+            setLightingPanelOpen(false)
+          }}
+        >
+          👁 Ansicht
+        </button>
+        {viewMenuOpen ? (
+          <div
+            ref={viewPopoverRef}
+            className="toolbar-popover view-menu-popover toolbar-popover--anchored"
+            role="menu"
+            aria-label="Ansicht und Kamera"
+          >
+            <div className="toolbar-more-menu-heading">Standard-Ansichten</div>
+            {(['perspective', 'top', 'front', 'side'] as const).map((preset) => (
+              <button
+                key={preset}
+                type="button"
+                role="menuitemradio"
+                aria-checked={cameraView === preset}
+                className={cameraView === preset ? 'view-menu-item-active' : ''}
+                onClick={() => {
+                  setCameraView(preset)
+                }}
+              >
+                {preset === 'perspective'
+                  ? 'Perspektive'
+                  : preset === 'top'
+                    ? 'Top (Draufsicht)'
+                    : preset === 'front'
+                      ? 'Front (Vorne)'
+                      : 'Seite'}
+              </button>
+            ))}
+            {cameraView === 'perspective' ? (
+              <>
+                <div className="toolbar-more-menu-heading">Perspektive</div>
+                <label className="opacity-slider-field view-menu-slider">
+                  <span className="inspector-inline-label">Höhe (m)</span>
+                  <input
+                    type="range"
+                    min={-5}
+                    max={35}
+                    step={0.5}
+                    value={perspectiveCamera.height}
+                    onChange={(e) =>
+                      setPerspectiveCamera({
+                        height: Number(e.target.value),
+                        subPreset: 'custom',
+                      })
+                    }
+                  />
+                  <span className="slider-value-hint">{perspectiveCamera.height.toFixed(1)}</span>
+                </label>
+                <label className="opacity-slider-field view-menu-slider">
+                  <span className="inspector-inline-label">Entfernung (m)</span>
+                  <input
+                    type="range"
+                    min={8}
+                    max={90}
+                    step={0.5}
+                    value={perspectiveCamera.distance}
+                    onChange={(e) =>
+                      setPerspectiveCamera({
+                        distance: Number(e.target.value),
+                        subPreset: 'custom',
+                      })
+                    }
+                  />
+                  <span className="slider-value-hint">{perspectiveCamera.distance.toFixed(1)}</span>
+                </label>
+                <label className="opacity-slider-field view-menu-slider">
+                  <span className="inspector-inline-label">FOV (°)</span>
+                  <input
+                    type="range"
+                    min={20}
+                    max={80}
+                    step={1}
+                    value={perspectiveCamera.fov}
+                    onChange={(e) =>
+                      setPerspectiveCamera({
+                        fov: Number(e.target.value),
+                        subPreset: 'custom',
+                      })
+                    }
+                  />
+                  <span className="slider-value-hint">{perspectiveCamera.fov.toFixed(0)}</span>
+                </label>
+                <label className="opacity-slider-field view-menu-slider">
+                  <span className="inspector-inline-label">Elevation (°)</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={89}
+                    step={1}
+                    value={perspectiveCamera.elevationDeg}
+                    onChange={(e) =>
+                      setPerspectiveCamera({
+                        elevationDeg: Number(e.target.value),
+                        subPreset: 'custom',
+                      })
+                    }
+                  />
+                  <span className="slider-value-hint">
+                    {perspectiveCamera.elevationDeg.toFixed(0)}
+                  </span>
+                </label>
+                <label className="opacity-slider-field view-menu-slider">
+                  <span className="inspector-inline-label">Azimut (°)</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={360}
+                    step={1}
+                    value={perspectiveCamera.azimuthDeg}
+                    onChange={(e) =>
+                      setPerspectiveCamera({
+                        azimuthDeg: Number(e.target.value),
+                        subPreset: 'custom',
+                      })
+                    }
+                  />
+                  <span className="slider-value-hint">{perspectiveCamera.azimuthDeg.toFixed(0)}</span>
+                </label>
+                <div className="toolbar-more-menu-heading">Perspektive-Presets</div>
+                <div className="view-menu-preset-grid">
+                  {(
+                    [
+                      ['standard', 'Standard'],
+                      ['elevated', 'Erhöht'],
+                      ['birdsEye', 'Vogel'],
+                      ['isometric', 'Isometrisch'],
+                    ] as const
+                  ).map(([id, label]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      className="toolbar-btn secondary"
+                      onClick={() => {
+                        setCameraView('perspective')
+                        setPerspectiveCamera(perspectivePresetDefaults(id))
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {perspectiveCustomPresets.length > 0 ? (
+                  <div className="view-menu-custom-presets">
+                    {perspectiveCustomPresets.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        className="toolbar-btn secondary"
+                        onClick={() => {
+                          setCameraView('perspective')
+                          setPerspectiveCamera(sanitizePerspectiveCamera(p.settings))
+                        }}
+                      >
+                        {p.name}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                <div className="view-menu-actions-row">
+                  <button
+                    type="button"
+                    className="toolbar-btn secondary"
+                    onClick={() => {
+                      setCameraView('perspective')
+                      setPerspectiveCamera(perspectivePresetDefaults('standard'))
+                    }}
+                  >
+                    Reset
+                  </button>
+                  <button
+                    type="button"
+                    className="toolbar-btn secondary"
+                    onClick={() => {
+                      const name = window.prompt('Name für Perspektive-Preset:', 'Mein Preset')
+                      if (name == null || !name.trim()) return
+                      const next = [
+                        ...perspectiveCustomPresets,
+                        {
+                          id: newPerspectivePresetId(),
+                          name: name.trim().slice(0, 80),
+                          settings: sanitizePerspectiveCamera(perspectiveCamera),
+                        },
+                      ]
+                      setPerspectiveCustomPresets(next)
+                      savePerspectiveCustomPresets(next)
+                    }}
+                  >
+                    Als Preset speichern…
+                  </button>
+                </div>
+              </>
+            ) : (
+              <p className="view-menu-hint subtle-hint">
+                Perspektive-Einstellungen sind nur in der Perspektive-Ansicht aktiv.
+              </p>
+            )}
+          </div>
+        ) : null}
+      </div>
+    )
+  }
+
   return (
     <div className={`planner-shell mode-${mode}`}>
       {isLoadModalOpen && (
@@ -2104,6 +2559,19 @@ export default function PlannerApp() {
               >
                 Platzieren
               </button>
+              <button
+                type="button"
+                className={tool === 'place' && multiPlaceMode ? 'active' : ''}
+                disabled={tool !== 'place' || !activeTemplate}
+                title="Mehrere gleiche Assets nacheinander setzen (ESC beenden)"
+                onClick={() => {
+                  if (tool !== 'place') return
+                  setMultiPlaceMode((m) => !m)
+                  setMultiPlaceGhostPositions([])
+                }}
+              >
+                Multi
+              </button>
             </ButtonGroup>
             <ToolbarSeparator />
             <ButtonGroup>
@@ -2175,6 +2643,7 @@ export default function PlannerApp() {
                 onClick={() => {
                   setToolsMenuOpen((o) => !o)
                   setLightingPanelOpen(false)
+                  setViewMenuOpen(false)
                 }}
               >
                 ⋮ Werkzeuge
@@ -2312,6 +2781,8 @@ export default function PlannerApp() {
               ))}
             </ButtonGroup>
 
+            {renderViewMenuDropdown()}
+
             <ToolbarSeparator />
 
             <div className="toolbar-dropdown-wrap toolbar-lighting-wrap" ref={lightingBarRef}>
@@ -2323,6 +2794,7 @@ export default function PlannerApp() {
                   setLightingPanelOpen((o) => !o)
                   setFloorInspectorOpen(false)
                   setToolsMenuOpen(false)
+                  setViewMenuOpen(false)
                 }}
               >
                 Beleuchtung
@@ -2394,6 +2866,7 @@ export default function PlannerApp() {
                 </button>
               ))}
             </ButtonGroup>
+            {renderViewMenuDropdown()}
           </>
         )}
       </header>
@@ -2539,45 +3012,76 @@ export default function PlannerApp() {
                       <InfoIcon title={FIELD_DESC.libraryRecentsEmpty} />
                     </p>
                   ) : null}
-                  {section.templates.map((template) => (
-                    <div
-                      key={`${section.sectionKey}-${template.type}`}
-                      className="asset-template-block"
-                      style={{ borderLeft: `4px solid ${sectionAccent}` }}
-                      draggable
-                      onDragStart={(e) => {
-                        e.dataTransfer.setData(TEMPLATE_DRAG_MIME, template.type)
-                        e.dataTransfer.effectAllowed = 'move'
-                      }}
-                      onDragEnd={() => setLibraryDropTargetKey(null)}
-                    >
-                      <div className="asset-template-row">
-                        <button
-                          type="button"
-                          className={`asset-template-select${
-                            tool === 'place' && activeTemplateType === template.type ? ' active' : ''
-                          }`}
-                          onClick={() => {
-                            setFloorInspectorOpen(false)
-                            setSelectedTemplateType(template.type)
-                            changeTool('place')
-                          }}
-                        >
-                          <span>{template.label}</span>
-                        </button>
-                        <button
-                          type="button"
-                          className="library-template-menu-btn"
-                          title="Optionen"
-                          aria-label={`Optionen für ${template.label}`}
-                          onClick={(e) => openLibraryTemplateMenu(e, template.type)}
-                          onPointerDown={(e) => e.stopPropagation()}
-                        >
-                          ⋮
-                        </button>
+                  {!expanded ||
+                  !performanceSettings.virtualLibraryScroll ||
+                  section.templates.length < performanceSettings.virtualLibraryThreshold ? (
+                    section.templates.map((template) => (
+                      <div
+                        key={`${section.sectionKey}-${template.type}`}
+                        className="asset-template-block"
+                        style={{ borderLeft: `4px solid ${sectionAccent}` }}
+                        draggable
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData(TEMPLATE_DRAG_MIME, template.type)
+                          e.dataTransfer.effectAllowed = 'move'
+                        }}
+                        onDragEnd={() => setLibraryDropTargetKey(null)}
+                      >
+                        <div className="asset-template-row">
+                          <button
+                            type="button"
+                            className={`asset-template-select${
+                              tool === 'place' && activeTemplateType === template.type
+                                ? ' active'
+                                : ''
+                            }`}
+                            onClick={() => {
+                              setFloorInspectorOpen(false)
+                              setSelectedTemplateType(template.type)
+                              changeTool('place')
+                            }}
+                          >
+                            <span>{template.label}</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="library-template-menu-btn"
+                            title="Optionen"
+                            aria-label={`Optionen für ${template.label}`}
+                            onClick={(e) => openLibraryTemplateMenu(e, template.type)}
+                            onPointerDown={(e) => e.stopPropagation()}
+                          >
+                            ⋮
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))
+                  ) : (
+                    <List<LibraryTemplateVirtualRowData>
+                      className="library-template-virtual-list"
+                      style={{
+                        height: Math.min(
+                          520,
+                          section.templates.length * performanceSettings.libraryRowHeight,
+                        ),
+                        width: '100%',
+                      }}
+                      rowCount={section.templates.length}
+                      rowHeight={performanceSettings.libraryRowHeight}
+                      rowComponent={LibraryTemplateVirtualRow}
+                      rowProps={{
+                        sectionAccent,
+                        templates: section.templates,
+                        tool,
+                        activeTemplateType,
+                        setLibraryDropTargetKey,
+                        setFloorInspectorOpen,
+                        setSelectedTemplateType,
+                        changeTool,
+                        openLibraryTemplateMenu,
+                      }}
+                    />
+                  )}
                 </div>
               </div>
             )
@@ -3106,12 +3610,18 @@ export default function PlannerApp() {
 
           <Canvas
             shadows
-            camera={{ position: CAMERA_PRESETS[cameraView].position, fov: 48 }}
+            dpr={[1, performanceSettings.maxDpr]}
+            camera={{ position: canvasCamera.position, fov: canvasCamera.fov }}
           >
             <SceneAtmosphere settings={lighting} />
             <PostFxBloom enabled={lighting.bloomEnabled} intensity={lighting.bloomIntensity} />
             <Lighting settings={lighting} presentation={mode === 'view'} />
-            <AnimatedCameraRig preset={cameraView} orbitRef={orbitRef} />
+            <PerformanceHud visible={performanceSettings.showHud && mode === 'edit'} />
+            <AnimatedCameraRig
+              preset={cameraView}
+              orbitRef={orbitRef}
+              perspectiveCamera={cameraView === 'perspective' ? perspectiveCamera : null}
+            />
             <FactoryFloor
               floor={floor}
               isPresentation={mode === 'view'}
@@ -3127,15 +3637,30 @@ export default function PlannerApp() {
               />
             )}
 
+            {instancedBoxBatches.map((batch) => (
+              <InstancedBoxBatch
+                key={batch.key}
+                assets={batch.assets}
+                width={batch.width}
+                height={batch.height}
+                depth={batch.depth}
+                distanceCullEnabled={performanceSettings.distanceCullEnabled}
+                distanceCullMeters={performanceSettings.distanceCullMeters}
+                onInstancePointerDown={onInstancedBoxPointerDown}
+              />
+            ))}
+
             {assets.map((asset) => {
               const isOnlySingleEditSelection =
                 mode === 'edit' && singleSelected?.id === asset.id && !singleSelected.isLocked
               if (isOnlySingleEditSelection) {
                 return null
               }
-              return (
+              if (instancedAssetIds.has(asset.id)) {
+                return null
+              }
+              const renderer = (
                 <AssetRenderer
-                  key={asset.id}
                   asset={asset}
                   isSelected={selectedIds.includes(asset.id)}
                   isHovered={hoveredId === asset.id}
@@ -3147,6 +3672,21 @@ export default function PlannerApp() {
                   onPointerOut={onAssetPointerOut}
                 />
               )
+              return (
+                <Fragment key={asset.id}>
+                  {performanceSettings.distanceCullEnabled ? (
+                    <DistanceCullWrap
+                      enabled
+                      maxMeters={performanceSettings.distanceCullMeters}
+                      center={asset.position}
+                    >
+                      {renderer}
+                    </DistanceCullWrap>
+                  ) : (
+                    renderer
+                  )}
+                </Fragment>
+              )
             })}
 
             {mode === 'edit' && singleSelected && !singleSelected.isLocked && (
@@ -3156,6 +3696,7 @@ export default function PlannerApp() {
                 isCtrlPressed={isCtrlPressed}
                 orbitRef={orbitRef}
                 translationSnap={gizmoTranslateSnap}
+                onTransformPointerChange={onTransformPointerChange}
                 onCommit={(id, patch) => updateAsset(id, patch)}
               >
                 <AssetRenderer
@@ -3180,9 +3721,20 @@ export default function PlannerApp() {
                 isCtrlPressed={isCtrlPressed}
                 orbitRef={orbitRef}
                 translationSnap={gizmoTranslateSnap}
+                onTransformPointerChange={onTransformPointerChange}
                 onCommit={(updates) => updateAssets(updates)}
               />
             )}
+
+            {multiPlaceMode &&
+              activeTemplate &&
+              multiPlaceGhostPositions.map((pos, i) => (
+                <GhostAssetRenderer
+                  key={`multi-ghost-${i}-${pos[0]}-${pos[1]}-${pos[2]}`}
+                  asset={createAssetFromTemplate(activeTemplate, { position: pos })}
+                  opacityMultiplier={0.42}
+                />
+              ))}
 
             {ghostAsset && activeTemplate && (
               <group>
@@ -3235,6 +3787,138 @@ export default function PlannerApp() {
 
         <aside className="panel right" aria-hidden={mode === 'view'}>
           <h2>Inspector</h2>
+          <div className="inspector-global-blocks">
+            <p className="subtle-hint inspector-toolbar-hint">
+              Kamera & Perspektive: Toolbar → <strong>Ansicht</strong>.
+            </p>
+            <section className="inspector-performance-panel">
+              <h3 className="inspector-panel-section-title">Performance</h3>
+              <label className="checkbox-field">
+                <input
+                  type="checkbox"
+                  checked={performanceSettings.showHud}
+                  onChange={(e) => setPerformanceSettings({ showHud: e.target.checked })}
+                />
+                <span>FPS / Draw-Calls / Speicher (Chrome)</span>
+              </label>
+              <label className="opacity-slider-field">
+                <span className="inspector-inline-label">Max. Pixel-Ratio</span>
+                <input
+                  type="range"
+                  min={1}
+                  max={3}
+                  step={0.5}
+                  value={performanceSettings.maxDpr}
+                  onChange={(e) =>
+                    setPerformanceSettings({ maxDpr: Number(e.target.value) })
+                  }
+                />
+                <span className="slider-value-hint">{performanceSettings.maxDpr.toFixed(1)}</span>
+              </label>
+              <label className="checkbox-field">
+                <input
+                  type="checkbox"
+                  checked={performanceSettings.lodHintEnabled}
+                  onChange={(e) =>
+                    setPerformanceSettings({ lodHintEnabled: e.target.checked })
+                  }
+                />
+                <span>LOD-Hinweis (für große Szenen)</span>
+              </label>
+              <label className="checkbox-field">
+                <input
+                  type="checkbox"
+                  checked={performanceSettings.useInstancing}
+                  onChange={(e) =>
+                    setPerformanceSettings({ useInstancing: e.target.checked })
+                  }
+                />
+                <span>Instancing (gleiche Boxen, 1 Draw-Call pro Gruppe)</span>
+              </label>
+              <label className="checkbox-field">
+                <input
+                  type="checkbox"
+                  checked={performanceSettings.distanceCullEnabled}
+                  onChange={(e) =>
+                    setPerformanceSettings({ distanceCullEnabled: e.target.checked })
+                  }
+                />
+                <span>Distanz-Culling (Rendering)</span>
+              </label>
+              <label className="opacity-slider-field">
+                <span className="inspector-inline-label">Max. Distanz (m)</span>
+                <input
+                  type="range"
+                  min={80}
+                  max={800}
+                  step={10}
+                  value={performanceSettings.distanceCullMeters}
+                  onChange={(e) =>
+                    setPerformanceSettings({ distanceCullMeters: Number(e.target.value) })
+                  }
+                  disabled={!performanceSettings.distanceCullEnabled}
+                />
+                <span className="slider-value-hint">
+                  {performanceSettings.distanceCullMeters}
+                </span>
+              </label>
+              <label className="checkbox-field">
+                <input
+                  type="checkbox"
+                  checked={performanceSettings.virtualLibraryScroll}
+                  onChange={(e) =>
+                    setPerformanceSettings({ virtualLibraryScroll: e.target.checked })
+                  }
+                />
+                <span>Virtuelle Bibliotheks-Liste (react-window)</span>
+              </label>
+              <label className="metadata-field">
+                <span className="inspector-inline-label">Ab Schwellwert (Templates)</span>
+                <input
+                  type="number"
+                  min={4}
+                  max={200}
+                  step={1}
+                  value={performanceSettings.virtualLibraryThreshold}
+                  onChange={(e) =>
+                    setPerformanceSettings({
+                      virtualLibraryThreshold: Number(e.target.value),
+                    })
+                  }
+                  disabled={!performanceSettings.virtualLibraryScroll}
+                />
+              </label>
+              <label className="opacity-slider-field">
+                <span className="inspector-inline-label">Zeilenhöhe (px)</span>
+                <input
+                  type="range"
+                  min={40}
+                  max={76}
+                  step={2}
+                  value={performanceSettings.libraryRowHeight}
+                  onChange={(e) =>
+                    setPerformanceSettings({ libraryRowHeight: Number(e.target.value) })
+                  }
+                  disabled={!performanceSettings.virtualLibraryScroll}
+                />
+                <span className="slider-value-hint">{performanceSettings.libraryRowHeight}</span>
+              </label>
+              <label className="checkbox-field">
+                <input
+                  type="checkbox"
+                  checked={performanceSettings.shadowOptimize}
+                  onChange={(e) =>
+                    setPerformanceSettings({ shadowOptimize: e.target.checked })
+                  }
+                />
+                <span>Schatten-Optimierung (vorbereitet / Metadaten)</span>
+              </label>
+              <p className="subtle-hint inspector-perf-footnote">
+                Frustum-Culling nutzt three.js pro Objekt. Bei Instancing ist die Kugel grob — pro
+                Instanz zusätzlich Distanz-Culling in der Batch.
+              </p>
+            </section>
+          </div>
             {singleSelected ? (
               <div
                 className={`inspector-content${singleSelected.isLocked ? ' inspector-asset-locked' : ''}`}
@@ -3400,6 +4084,14 @@ export default function PlannerApp() {
                   Skalierung
                   <InfoIcon title={FIELD_DESC.transformScaleHint} />
                 </h4>
+                {(() => {
+                  const scaleDigits =
+                    singleSelected.geometry.kind === 'custom' ||
+                    customTemplateTypeSet.has(singleSelected.type)
+                      ? 6
+                      : 4
+                  return (
+                    <>
                 <label className="opacity-slider-field">
                   <span className="inspector-inline-label">
                     Alle Achsen gleich
@@ -3416,7 +4108,7 @@ export default function PlannerApp() {
                         singleSelected.scale[1] +
                         singleSelected.scale[2]) /
                         3,
-                      4,
+                      scaleDigits,
                     )}
                     onChange={(event) => {
                       const v = Number(event.target.value)
@@ -3429,7 +4121,7 @@ export default function PlannerApp() {
                         singleSelected.scale[1] +
                         singleSelected.scale[2]) /
                         3,
-                      4,
+                      scaleDigits,
                     )}
                   </span>
                 </label>
@@ -3437,7 +4129,7 @@ export default function PlannerApp() {
                   <NumericInput
                     label="Breite (X)"
                     value={singleSelected.scale[0]}
-                    fractionDigits={4}
+                    fractionDigits={scaleDigits}
                     disabled={singleSelected.isLocked}
                     onCommit={(value) =>
                       updateAsset(singleSelected.id, {
@@ -3452,7 +4144,7 @@ export default function PlannerApp() {
                   <NumericInput
                     label="Höhe (Y)"
                     value={singleSelected.scale[1]}
-                    fractionDigits={4}
+                    fractionDigits={scaleDigits}
                     disabled={singleSelected.isLocked}
                     onCommit={(value) =>
                       updateAsset(singleSelected.id, {
@@ -3467,7 +4159,7 @@ export default function PlannerApp() {
                   <NumericInput
                     label="Länge (Z)"
                     value={singleSelected.scale[2]}
-                    fractionDigits={4}
+                    fractionDigits={scaleDigits}
                     disabled={singleSelected.isLocked}
                     onCommit={(value) =>
                       updateAsset(singleSelected.id, {
@@ -3480,6 +4172,9 @@ export default function PlannerApp() {
                     }
                   />
                 </div>
+                    </>
+                  )
+                })()}
 
                 <h3 className="inspector-inline-label">
                   Material
@@ -3838,20 +4533,164 @@ export default function PlannerApp() {
                   Info
                   <InfoIcon title={FIELD_DESC.inspectorInfoSection} />
                 </h3>
-                {singleSelected.geometry.kind === 'text' && (
-                  <label className="metadata-field">
-                    <span className="inspector-inline-label">
-                      Textinhalt
-                      <InfoIcon title={FIELD_DESC.textContent} />
-                    </span>
-                    <input
-                      maxLength={160}
-                      value={singleSelected.metadata.text ?? ''}
-                      placeholder="Label"
-                      onChange={(event) => patchSimpleMetadata('text', event.target.value)}
-                    />
-                  </label>
-                )}
+                {singleSelected.geometry.kind === 'text' &&
+                  (() => {
+                    const ls = mergeLabelStyle(singleSelected.geometry.params.labelStyle)
+                    const patchLs = (partial: Partial<TextLabelStyle>) => {
+                      updateAsset(singleSelected.id, {
+                        geometry: {
+                          ...singleSelected.geometry,
+                          params: {
+                            ...singleSelected.geometry.params,
+                            labelStyle: mergeLabelStyle({ ...ls, ...partial }),
+                          },
+                        },
+                      })
+                    }
+                    return (
+                      <>
+                        <label className="metadata-field">
+                          <span className="inspector-inline-label">
+                            Textinhalt
+                            <InfoIcon title={FIELD_DESC.textContent} />
+                          </span>
+                          <input
+                            maxLength={160}
+                            value={singleSelected.metadata.text ?? ''}
+                            placeholder="Label"
+                            onChange={(event) => patchSimpleMetadata('text', event.target.value)}
+                          />
+                        </label>
+                        <div className="inspector-label-style-panel">
+                          <h4 className="inspector-subheading">Text-Label (Lesbarkeit)</h4>
+                          <p className="subtle-hint inspector-label-bg-hint">
+                            Hintergrund über Canvas-Textur; wirkt auf alle Text-Instanzen dieses Typs
+                            gemäß Vorlage.
+                          </p>
+                          <span className="inspector-inline-label">Hintergrund</span>
+                          <div className="decal-side-grid">
+                            {(
+                              [
+                                ['none', 'Aus'],
+                                ['light', 'Hell'],
+                                ['dark', 'Dunkel'],
+                                ['custom', 'Farbe…'],
+                              ] as const
+                            ).map(([id, label]) => (
+                              <label key={id} className="decal-side-radio">
+                                <input
+                                  type="radio"
+                                  name={`label-bg-${singleSelected.id}`}
+                                  checked={ls.background === id}
+                                  onChange={() => patchLs({ background: id })}
+                                />
+                                {label}
+                              </label>
+                            ))}
+                          </div>
+                          {ls.background === 'custom' ? (
+                            <label className="metadata-field">
+                              <span className="inspector-inline-label">Hintergrundfarbe</span>
+                              <input
+                                type="text"
+                                value={ls.backgroundColor ?? '#ffffff'}
+                                onChange={(e) => patchLs({ backgroundColor: e.target.value })}
+                              />
+                            </label>
+                          ) : null}
+                          <label className="opacity-slider-field">
+                            <span className="inspector-inline-label">
+                              Hintergrund-Deckkraft (
+                              {Math.round((ls.backgroundOpacity ?? 0.8) * 100)}%)
+                            </span>
+                            <input
+                              type="range"
+                              min={0}
+                              max={100}
+                              value={Math.round((ls.backgroundOpacity ?? 0.8) * 100)}
+                              onChange={(e) =>
+                                patchLs({ backgroundOpacity: Number(e.target.value) / 100 })
+                              }
+                            />
+                          </label>
+                          <label className="opacity-slider-field">
+                            <span className="inspector-inline-label">Padding (px)</span>
+                            <input
+                              type="range"
+                              min={2}
+                              max={28}
+                              step={1}
+                              value={ls.paddingPx ?? DEFAULT_TEXT_LABEL_STYLE.paddingPx}
+                              onChange={(e) => patchLs({ paddingPx: Number(e.target.value) })}
+                            />
+                            <span className="slider-value-hint">{ls.paddingPx}</span>
+                          </label>
+                          <label className="opacity-slider-field">
+                            <span className="inspector-inline-label">Eckenradius (px)</span>
+                            <input
+                              type="range"
+                              min={0}
+                              max={24}
+                              step={1}
+                              value={ls.borderRadiusPx ?? DEFAULT_TEXT_LABEL_STYLE.borderRadiusPx}
+                              onChange={(e) => patchLs({ borderRadiusPx: Number(e.target.value) })}
+                            />
+                            <span className="slider-value-hint">{ls.borderRadiusPx}</span>
+                          </label>
+                          <label className="metadata-field">
+                            <span className="inspector-inline-label">Textfarbe</span>
+                            <input
+                              type="text"
+                              value={ls.textColor ?? DEFAULT_TEXT_LABEL_STYLE.textColor}
+                              onChange={(e) => patchLs({ textColor: e.target.value })}
+                            />
+                          </label>
+                          <label className="opacity-slider-field">
+                            <span className="inspector-inline-label">Schrift (Canvas px)</span>
+                            <input
+                              type="range"
+                              min={16}
+                              max={48}
+                              step={1}
+                              value={ls.fontPx ?? DEFAULT_TEXT_LABEL_STYLE.fontPx}
+                              onChange={(e) => patchLs({ fontPx: Number(e.target.value) })}
+                            />
+                            <span className="slider-value-hint">{ls.fontPx}</span>
+                          </label>
+                          <label className="metadata-field">
+                            <span className="inspector-inline-label">Schriftstärke</span>
+                            <select
+                              value={ls.fontWeight ?? 'bold'}
+                              onChange={(e) =>
+                                patchLs({
+                                  fontWeight: e.target.value === 'normal' ? 'normal' : 'bold',
+                                })
+                              }
+                            >
+                              <option value="normal">Normal</option>
+                              <option value="bold">Fett</option>
+                            </select>
+                          </label>
+                          <label className="checkbox-field">
+                            <input
+                              type="checkbox"
+                              checked={ls.textShadow !== false}
+                              onChange={(e) => patchLs({ textShadow: e.target.checked })}
+                            />
+                            <span>Textschatten</span>
+                          </label>
+                          <label className="checkbox-field">
+                            <input
+                              type="checkbox"
+                              checked={ls.outline === true}
+                              onChange={(e) => patchLs({ outline: e.target.checked })}
+                            />
+                            <span>Kontur (Outline)</span>
+                          </label>
+                        </div>
+                      </>
+                    )
+                  })()}
                 <InspectorCoreMetadataFields
                   key={singleSelected.id}
                   asset={singleSelected}

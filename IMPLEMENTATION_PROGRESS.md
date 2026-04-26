@@ -328,6 +328,40 @@ Ergebnis: beide Checks erfolgreich.
 - Vollständig leerbare Standard-Metadaten + anpassbare Hilfetexte pro Custom-Feld.
 - Nebel editierbar und im Layout gespeichert.
 
+## Stand 22: Favoriten löschen, Multi-Ghost, Beleuchtung-Layout, Perspektive, Migration 1.2.0
+
+### Abgeschlossen
+
+- **Favorit-Farben entfernen:** `ColorPickerPopover` – Liste mit Swatch, Label, **×**; Bestätigungsdialog; `localStorage` unter `factory-color-favorites`.
+- **Multi-Platzieren:** State `multiPlaceMode` + bis zu 16 gespeicherte Platzierungs-Positionen als zusätzliche `GhostAssetRenderer` (reduzierte Opazität); `addAsset(..., false)` im Multi-Modus; **ESC** beendet Multi ohne die übrige ESC-Kette zu vermischen.
+- **Beleuchtungs-Menü:** Sektionen (Preset mit Dropdown + Buttons, Hauptlicht, Weitere Lichter, Schatten, Atmosphäre, Nebel), `lighting-panel-divider`, typografische Überschriften.
+- **Custom-Skalierung:** Bis zu **6** Nachkommastellen im Inspector für `geometry.kind === 'custom'` bzw. Typen aus `customTemplates`.
+- **Fokus-Retention:** `transformSuppressFloorUntilRef` + `onTransformPointerChange` an Single-/Multi-Gizmo; Boden-Aktion nach Gizmo wird kurz ignoriert; **ESC** im Edit-Modus: `setSelectedIds([])` (wenn nicht Multi aktiv).
+- **Performance:** `PerformanceSettings` im Store/Payload; `PerformanceHud` (FPS, Draw calls, Geometrien); `Canvas` `dpr={[1, maxDpr]}`; Inspector-Toggles.
+- **Billboard-Labels:** `Billboard` um `Text` in `AssetRenderer`.
+- **Perspektive:** `PerspectiveCameraSettings` + `perspectiveToPosition` / Presets; `AnimatedCameraRig` + initiale `Canvas`-Kamera; Inspector-Panel bei Ansicht Perspektive.
+- **Backward compatibility:** `STORAGE_VERSION` **8**, `layoutFormatSemver` **1.2.0**, `finalizeImportedPayload` in `parseStoredPayload`, Slots und `importLayoutFromData`.
+
+### Kurzüberblick
+
+- Layout-Dateien und `localStorage` können ältere `version`-Werte tragen; beim Laden werden fehlende Felder ergänzt. Siehe **`MIGRATION_GUIDE.md`**.
+
+## Stand 23: Ansicht-Menü, große Szenen, Label-Hintergründe
+
+### Abgeschlossen
+
+- **Toolbar „Ansicht“:** Popover wie Werkzeuge/Beleuchtung — Kameras (Perspektive/Top/Front/Seite), Perspektive-Slider, Presets (Standard, Erhöht, Vogel, Isometrisch), Reset, **Custom-Presets** (`perspectiveCustomPresets.ts` / `localStorage`); auch im View Mode; Inspector nur noch Kurzhinweis.
+- **Instancing:** `computeInstancedBoxBatches` + `InstancedBoxBatch` — gleiche Box-Vorlage + gleiche `geometry.params`, opak, ohne Decals, nicht selektiert/gehovered; Klicks mit `instanceId`; optional **Distanz-Culling** pro Instanz in der Batch; `frustumCulled={false}` wegen dynamischer Instanzen.
+- **Bibliothek:** `react-window` **v2** `List` mit fester Zeilenhöhe ab `virtualLibraryThreshold`; Schwellwert und Zeilenhöhe im Performance-Panel.
+- **Distanz-Culling:** `DistanceCullWrap` um nicht-instanziierte `AssetRenderer`; Schalter + Max-Distanz im Inspector.
+- **Performance-HUD:** optional **JS Heap (MB)** wenn `performance.memory` verfügbar (Chrome).
+- **Text-Labels:** Inspector-Sektion **Text-Label (Lesbarkeit)** — Hintergrund-Modus, Custom-Farbe, Deckkraft, Padding, Radius, Textfarbe, Canvas-Schriftgröße, Stärke, Schatten, Outline (`TextLabelStyle` / `mergeLabelStyle`).
+
+### Kurzüberblick
+
+- Schnelle Kamera- und Perspektive-Bedienung aus der Toolbar; eigene Kamera-Presets speicherbar.
+- Weniger Draw-Calls bei vielen gleichen Kisten/Boxen; flüssigere Bibliothek bei langen Listen; Distanz-Culling ohne Selektions-/Gizmo-Logik zu ändern.
+
 ## Offene optionale Erweiterungen
 
 - Box-Selection fuer Mehrfachauswahl.

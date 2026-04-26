@@ -16,6 +16,7 @@
     "gifuct-js": "^2.1.2",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
+    "react-window": "^2.2.7",
     "three": "^0.184.0",
     "tinycolor2": "^1.6.0"
   },
@@ -24,6 +25,7 @@
     "@types/node": "^24.12.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@types/react-window": "^1.8.8",
     "@types/tinycolor2": "^1.4.6",
     "@vitejs/plugin-react": "^6.0.1",
     "eslint": "^10.2.1",

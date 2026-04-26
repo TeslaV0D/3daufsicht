@@ -1,5 +1,5 @@
 import { Suspense, useLayoutEffect, useMemo } from 'react'
-import { Text, useGLTF } from '@react-three/drei'
+import { useGLTF } from '@react-three/drei'
 import { useLoader, type ThreeEvent } from '@react-three/fiber'
 import {
   Box3,
@@ -19,6 +19,7 @@ import { CATEGORY_ZONES } from '../AssetFactory'
 import type { Asset, GeometryParams } from '../types/asset'
 import { resolveAssetOpacity } from '../types/asset'
 import AssetDecalPlanes from './AssetDecalPlanes'
+import BillboardTextLabel from './BillboardTextLabel'
 
 export interface AssetRendererProps {
   asset: Asset
@@ -174,6 +175,7 @@ function buildMaterialConfig(
   isHovered: boolean,
   ghost: boolean,
   selectionAccent?: string,
+  ghostOpacityMul = 1,
 ): MaterialConfig {
   const baseOpacity = resolveAssetOpacity(asset)
   const explicitTransparent = asset.visual?.transparent ?? baseOpacity < 1
@@ -198,7 +200,7 @@ function buildMaterialConfig(
           ? asset.color
           : (asset.visual?.emissive ?? '#000000')
   const emissiveIntensity = ghost
-    ? 0.42
+    ? 0.42 * ghostOpacityMul
     : isSelected
       ? locked
         ? 0.2
@@ -212,7 +214,7 @@ function buildMaterialConfig(
           : 0
   return {
     color: surfaceColor,
-    opacity: ghost ? 0.74 : baseOpacity,
+    opacity: ghost ? Math.min(1, 0.74 * ghostOpacityMul) : baseOpacity,
     transparent: ghost ? true : explicitTransparent,
     emissive,
     emissiveIntensity,
@@ -504,17 +506,21 @@ function GeometryMesh({
       )
     case 'text': {
       const labelText = asset.metadata.text ?? params.text ?? 'Label'
+      const ls = params.labelStyle
+      if (!ls) {
+        return (
+          <mesh>
+            <boxGeometry args={[0.01, 0.01, 0.01]} />
+            <meshBasicMaterial visible={false} />
+          </mesh>
+        )
+      }
       return (
-        <Text
-          fontSize={params.fontSize ?? 0.5}
-          color={material.color}
-          anchorX="center"
-          anchorY="middle"
-          outlineWidth={0.02}
-          outlineColor="#0b1220"
-        >
-          {labelText}
-        </Text>
+        <BillboardTextLabel
+          text={labelText}
+          fontSizeWorld={params.fontSize ?? 0.5}
+          labelStyle={ls}
+        />
       )
     }
     case 'custom': {
@@ -750,8 +756,22 @@ function HoverOutline({ asset }: { asset: Asset }) {
   }
 }
 
-export function GhostAssetRenderer({ asset }: { asset: Asset }) {
-  const material = buildMaterialConfig(asset, false, false, true, undefined)
+export function GhostAssetRenderer({
+  asset,
+  opacityMultiplier = 1,
+}: {
+  asset: Asset
+  /** Zusätzliche Transparenz für Multi-Preview (0–1 skaliert die Ghost-Deckkraft). */
+  opacityMultiplier?: number
+}) {
+  const material = buildMaterialConfig(
+    asset,
+    false,
+    false,
+    true,
+    undefined,
+    opacityMultiplier,
+  )
   return (
     <group position={asset.position} rotation={asset.rotation} scale={asset.scale}>
       <GeometryMesh

@@ -168,6 +168,19 @@ export default function ColorPickerPopover({
     })
   }, [draft])
 
+  const removeFavorite = useCallback((timestamp: number) => {
+    if (
+      !window.confirm('Farbe wirklich aus Favoriten entfernen?')
+    ) {
+      return
+    }
+    setFavorites((prev) => {
+      const next = prev.filter((e) => e.timestamp !== timestamp)
+      persistFavorites(next)
+      return next
+    })
+  }, [])
+
   const gridRef = useRef<HTMLDivElement>(null)
   const hueRef = useRef<HTMLDivElement>(null)
 
@@ -256,18 +269,41 @@ export default function ColorPickerPopover({
                 &#9733; Favorit
               </button>
             </div>
-            <div className="color-favorites-swatches">
-              {favorites.map((f) => (
-                <button
-                  key={`${f.color}-${f.timestamp}`}
-                  type="button"
-                  className="color-swatch color-swatch-fav"
-                  style={{ backgroundColor: f.color }}
-                  title={f.color}
-                  onClick={() => commit(f.color)}
-                />
-              ))}
+            <div className="color-favorites-heading" aria-hidden="true">
+              Favoriten
             </div>
+            <ul className="color-favorites-list">
+              {favorites.map((f) => (
+                <li key={`${f.color}-${f.timestamp}`} className="color-favorite-row">
+                  <button
+                    type="button"
+                    className="color-swatch color-swatch-fav"
+                    style={{ backgroundColor: f.color }}
+                    title={f.color}
+                    onClick={() => commit(f.color)}
+                  />
+                  <button
+                    type="button"
+                    className="color-favorite-remove"
+                    title="Aus Favoriten entfernen"
+                    aria-label={`Favorit ${f.color} entfernen`}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      removeFavorite(f.timestamp)
+                    }}
+                  >
+                    ×
+                  </button>
+                  <span className="color-favorite-label">
+                    {f.label?.trim() ||
+                      (() => {
+                        const n = tinycolor(f.color).toName()
+                        return typeof n === 'string' && n ? n : f.color.toUpperCase()
+                      })()}
+                  </span>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
       </div>
