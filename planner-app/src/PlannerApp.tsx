@@ -34,6 +34,8 @@ import Lighting from './components/Lighting'
 import LightingToolbarPanel from './components/LightingToolbarPanel'
 import LoadLayoutModal from './components/LoadLayoutModal'
 import ScenePlacementRaycast from './components/ScenePlacementRaycast'
+import CustomMetadataRowEditModal from './components/CustomMetadataRowEditModal'
+import SaveAssetFromSceneModal from './components/SaveAssetFromSceneModal'
 import ShortcutsModal from './components/ShortcutsModal'
 import TemplatePreviewDialog from './components/TemplatePreviewDialog'
 
@@ -43,6 +45,7 @@ import { useAssetsStore, type LayoutExportKind } from './store/useAssetsStore'
 import type {
   Asset,
   AssetDecal,
+  AssetDecalGifSettings,
   AssetDecalSide,
   AssetMetadata,
   AssetTemplate,
@@ -57,6 +60,11 @@ import {
   distributeCentersZ,
   snapAssetsToGrid,
 } from './scene/assetAlignment'
+import {
+  fetchGifBufferFromDataUrl,
+  MAX_GIF_DECAL_FRAMES,
+  quickGifMeta,
+} from './scene/gifDecalParse'
 import {
   applyTemplateDisplayOverrides,
   buildLibrarySections,
@@ -81,6 +89,8 @@ const HOVER_POINTER_OUT_DEBOUNCE_MS = 50
 const TOOLBAR_POPOVER_GAP = 8
 const TOOLBAR_POPOVER_MAX_H = 480
 const MAX_DECAL_IMAGE_BYTES = 5 * 1024 * 1024
+/** GIF-Decals können viele Frames enthalten — etwas höheres Limit als für Einzelbilder. */
+const MAX_GIF_DECAL_BYTES = 12 * 1024 * 1024
 
 const DECAL_SIDE_OPTIONS: { id: AssetDecalSide; label: string }[] = [
   { id: 'top', label: 'Oben' },
@@ -448,11 +458,9 @@ function InspectorCoreMetadataFields({
           <div className="inspector-core-meta-view-row">
             <p
               className="inspector-core-meta-display inspector-core-meta-truncate"
-              title={
-                asset.metadata.name?.trim() ? asset.metadata.name : asset.type
-              }
+              title={asset.metadata.name?.trim() ? asset.metadata.name : ''}
             >
-              {asset.metadata.name?.trim() || asset.type}
+              {asset.metadata.name?.trim() ? asset.metadata.name : '—'}
             </p>
             <button
               type="button"
@@ -464,6 +472,14 @@ function InspectorCoreMetadataFields({
               }}
             >
               ✎
+            </button>
+            <button
+              type="button"
+              className="inspector-clear-btn"
+              aria-label="Name leeren"
+              onClick={() => patchSimpleMetadata('name', '')}
+            >
+              ×
             </button>
           </div>
         )}
@@ -525,6 +541,14 @@ function InspectorCoreMetadataFields({
             >
               ✎
             </button>
+            <button
+              type="button"
+              className="inspector-clear-btn"
+              aria-label="Beschreibung leeren"
+              onClick={() => patchSimpleMetadata('description', '')}
+            >
+              ×
+            </button>
           </div>
         )}
       </div>
@@ -585,16 +609,14 @@ function InspectorCoreMetadataFields({
             >
               ✎
             </button>
-            {asset.metadata.zoneType?.trim() ? (
-              <button
-                type="button"
-                className="inspector-clear-btn"
-                aria-label="Zonen-/Typ löschen"
-                onClick={() => patchSimpleMetadata('zoneType', '')}
-              >
-                ×
-              </button>
-            ) : null}
+            <button
+              type="button"
+              className="inspector-clear-btn"
+              aria-label="Zonen-/Typ leeren"
+              onClick={() => patchSimpleMetadata('zoneType', '')}
+            >
+              ×
+            </button>
           </div>
         )}
       </div>
@@ -872,6 +894,8 @@ export default function PlannerApp() {
   const [floorInspectorOpen, setFloorInspectorOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [exportDialogOpen, setExportDialogOpen] = useState(false)
+  const [saveAssetModalOpen, setSaveAssetModalOpen] = useState(false)
+  const [customRowEditId, setCustomRowEditId] = useState<string | null>(null)
   const [exportModalKey, setExportModalKey] = useState(0)
   const [lightingPanelOpen, setLightingPanelOpen] = useState(false)
   const lightingBarRef = useRef<HTMLDivElement>(null)
@@ -948,6 +972,7 @@ export default function PlannerApp() {
     exportLayout,
     importLayoutFromFile,
     recordRecentTemplatePlacement,
+    saveSceneAssetAsTemplate,
   } = store
 
   const resolvedTemplates = useMemo(
@@ -1125,6 +1150,7 @@ export default function PlannerApp() {
     [assets, selectedIds],
   )
   const singleSelected = selectedAssets.length === 1 ? selectedAssets[0] : null
+
   const zoneTypeSuggestions = useMemo(() => {
     const set = new Set<string>()
     for (const id of ['production', 'storage', 'safety', 'walkway', 'vehicle-path']) {
@@ -1137,6 +1163,15 @@ export default function PlannerApp() {
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'de'))
   }, [assets])
   const inspectorPrimaryDecal = singleSelected?.visual?.decals?.[0]
+  const inspectorPrimaryDecalIsGif = useMemo(() => {
+    const d = inspectorPrimaryDecal
+    if (!d?.imageUrl) return false
+    return (
+      d.mediaKind === 'gif' ||
+      d.imageUrl.startsWith('data:image/gif') ||
+      /\.gif$/i.test(d.imageName ?? '')
+    )
+  }, [inspectorPrimaryDecal])
   const metadataNameEditId =
     metadataNameEdit != null &&
     singleSelected != null &&
@@ -1215,6 +1250,19 @@ export default function PlannerApp() {
       setSelectedIds([asset.id])
     },
     [mode, selectedIds, setSelectedIds, tool],
+  )
+
+  const onAssetContextMenu = useCallback(
+    (event: ThreeEvent<MouseEvent>, asset: Asset) => {
+      event.stopPropagation()
+      event.nativeEvent.preventDefault()
+      if (mode !== 'edit' || tool !== 'select') return
+      if (asset.isLocked) return
+      setFloorInspectorOpen(false)
+      setSelectedIds([asset.id])
+      setSaveAssetModalOpen(true)
+    },
+    [mode, setSelectedIds, tool],
   )
 
   const onAssetPointerOver = useCallback(
@@ -1901,8 +1949,33 @@ export default function PlannerApp() {
     updateAsset(singleSelected.id, { metadata: { customRows: rows } })
   }, [singleSelected, updateAsset])
 
+  const patchCustomMetadataRow = useCallback(
+    (rowId: string, name: string, value: string, description: string) => {
+      if (!singleSelected) return
+      const trimmedName = name.trim().slice(0, 200)
+      if (!trimmedName) return
+      const desc = description.trim()
+      const rows = getCustomRows(singleSelected.metadata).map((r) =>
+        r.id === rowId
+          ? {
+              ...r,
+              name: trimmedName,
+              value: value.slice(0, 8000),
+              description: desc ? desc.slice(0, 500) : undefined,
+            }
+          : r,
+      )
+      updateAsset(singleSelected.id, { metadata: { customRows: rows } })
+    },
+    [singleSelected, updateAsset],
+  )
+
   const patchPrimaryDecal = useCallback(
-    (partial: Partial<AssetDecal>) => {
+    (
+      partial: Partial<Omit<AssetDecal, 'gif'>> & {
+        gif?: Partial<AssetDecalGifSettings>
+      },
+    ) => {
       if (!singleSelected) return
       const cur = singleSelected.visual?.decals?.[0]
       const base: AssetDecal = cur ?? {
@@ -1916,10 +1989,25 @@ export default function PlannerApp() {
         rotation: 0,
         side: 'front',
       }
-      const merged: AssetDecal = { ...base, ...partial }
-      const decals = merged.imageUrl ? [merged] : []
+      const { gif: gifPartial, ...restDecalPatch } = partial
+      const merged: AssetDecal = { ...base, ...restDecalPatch }
+      if (gifPartial) {
+        merged.gif = {
+          ...(base.gif ?? { playing: true, speed: 1, loop: true }),
+          ...gifPartial,
+        }
+      }
+      if (merged.mediaKind === 'image') {
+        merged.gif = undefined
+      }
+      if (!merged.imageUrl) {
+        updateAsset(singleSelected.id, {
+          visual: { ...(singleSelected.visual ?? {}), decals: [] },
+        })
+        return
+      }
       updateAsset(singleSelected.id, {
-        visual: { ...(singleSelected.visual ?? {}), decals },
+        visual: { ...(singleSelected.visual ?? {}), decals: [merged] },
       })
     },
     [singleSelected, updateAsset],
@@ -1954,6 +2042,31 @@ export default function PlannerApp() {
         open={exportDialogOpen}
         onClose={() => setExportDialogOpen(false)}
         onConfirm={onConfirmExport}
+      />
+      <SaveAssetFromSceneModal
+        open={saveAssetModalOpen && singleSelected != null}
+        asset={singleSelected}
+        onClose={() => setSaveAssetModalOpen(false)}
+        onSave={(opts) => {
+          if (!singleSelected) return
+          saveSceneAssetAsTemplate(singleSelected, opts)
+          setSaveAssetModalOpen(false)
+          setSaveFeedback('In „Eigene Assets“ gespeichert.')
+          window.setTimeout(() => setSaveFeedback(null), 3200)
+        }}
+      />
+      <CustomMetadataRowEditModal
+        open={customRowEditId != null && singleSelected != null}
+        row={
+          singleSelected && customRowEditId
+            ? getCustomRows(singleSelected.metadata).find((r) => r.id === customRowEditId) ?? null
+            : null
+        }
+        defaultDescriptionHint={FIELD_DESC.customMetaPair}
+        onClose={() => setCustomRowEditId(null)}
+        onSave={(rowId, name, value, description) => {
+          patchCustomMetadataRow(rowId, name, value, description)
+        }}
       />
       <header className="top-bar top-bar-grouped">
         <span className="toolbar-title">Factory Planning Studio</span>
@@ -2994,10 +3107,9 @@ export default function PlannerApp() {
             camera={{ position: CAMERA_PRESETS[cameraView].position, fov: 48 }}
           >
             <color attach="background" args={[mode === 'view' ? '#0f1b29' : '#d2dae3']} />
-            <fog
-              attach="fog"
-              args={[mode === 'view' ? '#0f1b29' : '#d2dae3', 55, 145]}
-            />
+            {lighting.fogEnabled ? (
+              <fog attach="fog" args={[lighting.fogColor, lighting.fogNear, lighting.fogFar]} />
+            ) : null}
             <Lighting settings={lighting} presentation={mode === 'view'} />
             <AnimatedCameraRig preset={cameraView} orbitRef={orbitRef} />
             <FactoryFloor
@@ -3030,6 +3142,7 @@ export default function PlannerApp() {
                   isEditMode={mode === 'edit'}
                   selectionAccent={libraryAccentForSectionTitle(asset.category)}
                   onClick={onAssetClick}
+                  onContextMenu={onAssetContextMenu}
                   onPointerOver={onAssetPointerOver}
                   onPointerOut={onAssetPointerOut}
                 />
@@ -3053,6 +3166,7 @@ export default function PlannerApp() {
                   skipTransform
                   selectionAccent={libraryAccentForSectionTitle(singleSelected.category)}
                   onClick={onAssetClick}
+                  onContextMenu={onAssetContextMenu}
                   onPointerOver={onAssetPointerOver}
                   onPointerOut={onAssetPointerOut}
                 />
@@ -3157,6 +3271,17 @@ export default function PlannerApp() {
                   <span aria-hidden> · </span>
                   <code className="inspector-id-chip">{singleSelected.id.slice(0, 10)}…</code>
                 </p>
+                {!singleSelected.isLocked ? (
+                  <p className="inspector-save-asset-row">
+                    <button
+                      type="button"
+                      className="toolbar-btn secondary"
+                      onClick={() => setSaveAssetModalOpen(true)}
+                    >
+                      Als Asset speichern…
+                    </button>
+                  </p>
+                ) : null}
 
                 <h3>
                   <span className="inspector-inline-label">
@@ -3441,33 +3566,72 @@ export default function PlannerApp() {
                     <input
                       ref={decalImportInputRef}
                       type="file"
-                      accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
+                      accept="image/png,image/jpeg,image/webp,image/gif,.png,.jpg,.jpeg,.webp,.gif"
                       className="inspector-file-input-hidden"
                       onChange={(event: ChangeEvent<HTMLInputElement>) => {
                         const file = event.target.files?.[0]
                         event.target.value = ''
                         if (!file || !singleSelected) return
-                        const okType =
+                        const isGif =
+                          /image\/gif/i.test(file.type) || /\.gif$/i.test(file.name)
+                        const okStatic =
                           /image\/(png|jpeg|webp)/i.test(file.type) ||
                           /\.(png|jpe?g|webp)$/i.test(file.name)
-                        if (!okType) {
-                          setSaveFeedback('Nur PNG, JPEG oder WebP.')
+                        if (!isGif && !okStatic) {
+                          setSaveFeedback('Nur PNG, JPEG, WebP oder GIF.')
                           window.setTimeout(() => setSaveFeedback(null), 2800)
                           return
                         }
-                        if (file.size > MAX_DECAL_IMAGE_BYTES) {
-                          setSaveFeedback('Bild zu groß (max. 5 MB).')
+                        const maxBytes = isGif ? MAX_GIF_DECAL_BYTES : MAX_DECAL_IMAGE_BYTES
+                        if (file.size > maxBytes) {
+                          setSaveFeedback(
+                            isGif
+                              ? `GIF zu groß (max. ${Math.round(MAX_GIF_DECAL_BYTES / (1024 * 1024))} MB).`
+                              : 'Bild zu groß (max. 5 MB).',
+                          )
                           window.setTimeout(() => setSaveFeedback(null), 2800)
                           return
                         }
                         const reader = new FileReader()
                         reader.onload = () => {
-                          const url = String(reader.result ?? '')
-                          if (!url) return
-                          patchPrimaryDecal({
-                            imageUrl: url,
-                            imageName: file.name,
-                          })
+                          void (async () => {
+                            const url = String(reader.result ?? '')
+                            if (!url) return
+                            if (isGif) {
+                              const buf = await fetchGifBufferFromDataUrl(url)
+                              const meta = buf ? quickGifMeta(buf) : null
+                              if (!meta) {
+                                setSaveFeedback('GIF konnte nicht gelesen werden.')
+                                window.setTimeout(() => setSaveFeedback(null), 3200)
+                                return
+                              }
+                              patchPrimaryDecal({
+                                imageUrl: url,
+                                imageName: file.name,
+                                mediaKind: 'gif',
+                                gif: {
+                                  playing: true,
+                                  speed: 1,
+                                  loop: true,
+                                  frameCount: meta.frameCount,
+                                  fpsApprox: meta.fpsApprox,
+                                  truncated: meta.truncated,
+                                },
+                              })
+                              if (meta.truncated) {
+                                setSaveFeedback(
+                                  `Hinweis: nur die ersten ${MAX_GIF_DECAL_FRAMES} Frames werden abgespielt (Performance).`,
+                                )
+                                window.setTimeout(() => setSaveFeedback(null), 4200)
+                              }
+                              return
+                            }
+                            patchPrimaryDecal({
+                              imageUrl: url,
+                              imageName: file.name,
+                              mediaKind: 'image',
+                            })
+                          })()
                         }
                         reader.readAsDataURL(file)
                       }}
@@ -3477,7 +3641,7 @@ export default function PlannerApp() {
                         type="button"
                         onClick={() => decalImportInputRef.current?.click()}
                       >
-                        Bild importieren
+                        Bild / GIF importieren
                       </button>
                       {inspectorPrimaryDecal?.imageUrl ? (
                         <button
@@ -3493,6 +3657,11 @@ export default function PlannerApp() {
                       <>
                         <p className="inspector-decal-name" title={inspectorPrimaryDecal.imageName || ''}>
                           {inspectorPrimaryDecal.imageName || 'Bild'}
+                        </p>
+                        <p className="inspector-decal-kind subtle-hint">
+                          {inspectorPrimaryDecalIsGif
+                            ? 'Typ: GIF (animiert)'
+                            : 'Typ: Bild (statisch)'}
                         </p>
                         {inspectorPrimaryDecal.imageUrl.startsWith('data:image/') ? (
                           <img
@@ -3598,6 +3767,63 @@ export default function PlannerApp() {
                             </label>
                           ))}
                         </div>
+                        {inspectorPrimaryDecalIsGif ? (
+                          <div className="inspector-gif-decal-panel">
+                            <h4 className="inspector-subheading-tight">GIF-Einstellungen</h4>
+                            <p className="subtle-hint inspector-gif-perf-hint">
+                              GIFs können die Performance beeinflussen. Empfohlen: höchstens{' '}
+                              {MAX_GIF_DECAL_FRAMES} Frames.
+                            </p>
+                            <label className="inspector-checkbox-row">
+                              <input
+                                type="checkbox"
+                                checked={inspectorPrimaryDecal.gif?.playing !== false}
+                                onChange={(e) =>
+                                  patchPrimaryDecal({
+                                    gif: { playing: e.target.checked },
+                                  })
+                                }
+                              />
+                              Animation abspielen
+                            </label>
+                            <label className="opacity-slider-field">
+                              <span className="inspector-inline-label">
+                                Geschwindigkeit ({(inspectorPrimaryDecal.gif?.speed ?? 1).toFixed(2)}×)
+                              </span>
+                              <input
+                                type="range"
+                                min={0.5}
+                                max={2}
+                                step={0.05}
+                                value={inspectorPrimaryDecal.gif?.speed ?? 1}
+                                onChange={(e) =>
+                                  patchPrimaryDecal({
+                                    gif: { speed: Number(e.target.value) },
+                                  })
+                                }
+                              />
+                            </label>
+                            <label className="inspector-checkbox-row">
+                              <input
+                                type="checkbox"
+                                checked={inspectorPrimaryDecal.gif?.loop !== false}
+                                onChange={(e) =>
+                                  patchPrimaryDecal({
+                                    gif: { loop: e.target.checked },
+                                  })
+                                }
+                              />
+                              Loop (endlos wiederholen)
+                            </label>
+                            <p className="inspector-gif-frames-info">
+                              Frames: {inspectorPrimaryDecal.gif?.frameCount ?? '—'} @{' '}
+                              {inspectorPrimaryDecal.gif?.fpsApprox != null
+                                ? `${inspectorPrimaryDecal.gif.fpsApprox} fps`
+                                : '—'}
+                              {inspectorPrimaryDecal.gif?.truncated ? ' (gekürzt)' : ''}
+                            </p>
+                          </div>
+                        ) : null}
                       </>
                     ) : (
                       <p className="inspector-decal-empty inspector-inline-label">
@@ -3689,7 +3915,13 @@ export default function PlannerApp() {
                       <span className="custom-meta-heading-truncate" title={row.name}>
                         {row.name}
                       </span>
-                      <InfoIcon title={FIELD_DESC.customMetaPair} />
+                      <InfoIcon
+                        title={
+                          row.description?.trim()
+                            ? row.description.trim()
+                            : FIELD_DESC.customMetaPair
+                        }
+                      />
                     </div>
                     <div className="custom-meta-pair-row">
                       <div className="custom-meta-pair-name">
@@ -3731,6 +3963,14 @@ export default function PlannerApp() {
                           onChange={(event) => updateCustomRowValue(row.id, event.target.value)}
                         />
                       </div>
+                      <button
+                        type="button"
+                        className="inspector-pencil-btn custom-meta-edit-btn"
+                        aria-label="Feld bearbeiten"
+                        onClick={() => setCustomRowEditId(row.id)}
+                      >
+                        ✎
+                      </button>
                       <button
                         type="button"
                         className="custom-meta-delete"

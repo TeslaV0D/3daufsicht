@@ -1854,26 +1854,33 @@ textarea {
   border-color: rgba(180, 200, 230, 0.55);
 }
 
-.inspector-field-hint[data-tooltip]:hover::after,
-.inspector-field-hint[data-tooltip]:focus-visible::after {
-  content: attr(data-tooltip);
-  position: absolute;
-  left: 50%;
-  bottom: calc(100% + 8px);
-  transform: translateX(-50%);
-  width: min(240px, 70vw);
-  padding: 0.45rem 0.55rem;
-  font-size: 0.72rem;
+/* Portal-Tooltip (InfoIcon): über Canvas/Panels, unter Modals (2000) */
+.info-tooltip-portal {
+  position: fixed;
+  z-index: 1500;
+  max-width: min(300px, calc(100vw - 16px));
+  padding: 8px 12px;
+  font-size: 12px;
   font-weight: 400;
-  line-height: 1.35;
-  color: #e8eef8;
-  background: rgba(12, 18, 28, 0.97);
-  border: 1px solid rgba(120, 150, 190, 0.4);
-  border-radius: 0.4rem;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-  z-index: 3000;
+  line-height: 1.4;
+  color: #ccc;
+  background: #1a1f28;
+  border: 1px solid rgba(120, 150, 190, 0.45);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
   pointer-events: none;
   white-space: normal;
+  word-wrap: break-word;
+  animation: info-tooltip-fade-in 0.12s ease-out;
+}
+
+@keyframes info-tooltip-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .inspector-decal-panel {
@@ -1904,6 +1911,50 @@ textarea {
   border-radius: 0.35rem;
   border: 1px solid rgba(255, 255, 255, 0.12);
   margin-bottom: 0.35rem;
+}
+
+.inspector-decal-kind {
+  margin: 0 0 0.35rem;
+  font-size: 0.72rem;
+}
+
+.subtle-hint {
+  opacity: 0.78;
+  line-height: 1.35;
+}
+
+.inspector-save-asset-row {
+  margin: 0.35rem 0 0.5rem;
+}
+
+.inspector-save-asset-row .toolbar-btn {
+  width: 100%;
+}
+
+.inspector-gif-decal-panel {
+  margin-top: 0.55rem;
+  padding-top: 0.45rem;
+  border-top: 1px dashed rgba(110, 150, 200, 0.28);
+}
+
+.inspector-gif-perf-hint {
+  margin: 0 0 0.45rem;
+  font-size: 0.7rem;
+}
+
+.inspector-gif-frames-info {
+  margin: 0.35rem 0 0;
+  font-size: 0.74rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.inspector-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0.35rem 0;
+  font-size: 0.78rem;
+  cursor: pointer;
 }
 
 .inspector-subheading-tight {
@@ -2175,6 +2226,10 @@ textarea {
   white-space: nowrap;
 }
 
+.custom-meta-edit-btn {
+  flex: 0 0 auto;
+}
+
 .custom-meta-delete {
   flex: 0 0 auto;
   width: 2rem;
@@ -2233,4 +2288,13 @@ textarea {
   margin: 0;
   font-size: 0.85rem;
   color: #a8bfd8;
+}
+
+.custom-meta-default-hint {
+  margin: 0.25rem 0 0.5rem;
+  font-size: 0.72rem;
+}
+
+.custom-meta-edit-dialog .library-dialog-textarea {
+  min-height: 4rem;
 }

@@ -46,6 +46,8 @@ export interface CustomMetadataRow {
   /** User-editable display name / key. */
   name: string
   value: string
+  /** Eigener Tooltip-Text für das (?)-Icon; leer = Standard-Hilfe. */
+  description?: string
 }
 
 export interface AssetMetadata {
@@ -72,6 +74,18 @@ export type AssetDecalSide =
   | 'right'
   | 'all'
 
+/** GIF-Decal: Wiedergabe & Loop (Daten in imageUrl als GIF Data-URL). */
+export interface AssetDecalGifSettings {
+  playing: boolean
+  /** 0.5 … 2.0 */
+  speed: number
+  loop: boolean
+  frameCount?: number
+  fpsApprox?: number
+  /** Nach Import: mehr als MAX_GIF_DECAL_FRAMES Frames abgeschnitten */
+  truncated?: boolean
+}
+
 export interface AssetDecal {
   id: string
   imageUrl: string
@@ -84,6 +98,9 @@ export interface AssetDecal {
   offsetY: number
   rotation: number
   side: AssetDecalSide
+  /** image = TextureLoader; gif = animiert */
+  mediaKind?: 'image' | 'gif'
+  gif?: AssetDecalGifSettings
 }
 
 export interface AssetVisual {
@@ -133,6 +150,9 @@ export interface AssetTemplate {
   isUserAsset?: boolean
   /** Unix ms when the template was created (Import). */
   createdAt?: number
+  /** Instanz-Deckkraft (wie Asset.opacity). */
+  opacity?: number
+  materialMode?: MaterialMode
 }
 
 export const FALLBACK_COLOR = '#8ca0b6'
@@ -249,10 +269,16 @@ function sanitizeCustomRows(value: unknown): CustomMetadataRow[] {
     if (typeof o.id !== 'string' || typeof o.name !== 'string') continue
     const name = o.name.trim().slice(0, 200)
     if (!name) continue
+    let description: string | undefined
+    if (typeof o.description === 'string') {
+      const d = o.description.trim().slice(0, 500)
+      if (d) description = d
+    }
     out.push({
       id: o.id.slice(0, 80),
       name,
       value: typeof o.value === 'string' ? o.value.slice(0, 8000) : String(o.value ?? ''),
+      ...(description ? { description } : {}),
     })
   }
   return out
@@ -362,9 +388,26 @@ function sanitizeDecals(value: unknown): AssetDecal[] | undefined {
     const e = d as Record<string, unknown>
     if (typeof e.id !== 'string' || typeof e.imageUrl !== 'string') continue
     const side = DECAL_SIDES.includes(e.side as AssetDecalSide) ? (e.side as AssetDecalSide) : 'front'
+    const mediaKind = e.mediaKind === 'gif' ? 'gif' : undefined
+    const gifRaw = e.gif && typeof e.gif === 'object' ? (e.gif as Record<string, unknown>) : undefined
+    const speedRaw = gifRaw && isFiniteNumber(gifRaw.speed) ? gifRaw.speed : 1
+    const speed = Math.min(2, Math.max(0.5, speedRaw))
+    const gif: AssetDecal['gif'] =
+      mediaKind === 'gif'
+        ? {
+            playing: typeof gifRaw?.playing === 'boolean' ? gifRaw.playing : true,
+            speed,
+            loop: typeof gifRaw?.loop === 'boolean' ? gifRaw.loop : true,
+            frameCount: isFiniteNumber(gifRaw?.frameCount)
+              ? Math.min(2000, Math.max(0, gifRaw.frameCount as number))
+              : undefined,
+            fpsApprox: isFiniteNumber(gifRaw?.fpsApprox) ? (gifRaw.fpsApprox as number) : undefined,
+            truncated: gifRaw?.truncated === true,
+          }
+        : undefined
     out.push({
       id: e.id.slice(0, 80),
-      imageUrl: e.imageUrl.slice(0, 12_000_000),
+      imageUrl: e.imageUrl.slice(0, 35_000_000),
       imageName:
         typeof e.imageName === 'string'
           ? e.imageName.slice(0, 256)
@@ -376,6 +419,8 @@ function sanitizeDecals(value: unknown): AssetDecal[] | undefined {
       offsetY: isFiniteNumber(e.offsetY) ? Math.min(0.5, Math.max(-0.5, e.offsetY)) : 0,
       rotation: isFiniteNumber(e.rotation) ? Math.min(360, Math.max(0, e.rotation)) : 0,
       side,
+      mediaKind,
+      gif,
     })
     if (out.length >= 6) break
   }

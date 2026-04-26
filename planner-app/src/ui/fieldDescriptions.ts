@@ -46,6 +46,32 @@ export const FIELD_DESC = {
 
   decalNoImage: 'Noch kein Bild — über „Bild importieren“ ein Decal hinzufügen.',
 
+  decalGifPerf:
+    'GIFs werden als Frame-Sequenz abgespielt und können die Darstellung stärker belasten. Empfohlen: weniger als 60 Frames; große Dateien vermeiden.',
+
+  decalGifPlay: 'Animation ein- oder ausblenden (letzter Frame bzw. erstes Bild bleibt sichtbar).',
+
+  decalGifSpeed: 'Wiedergabe-Geschwindigkeit: 0,5× langsamer bis 2× schneller (relativ zu den GIF-Verzögerungen).',
+
+  decalGifLoop: 'Endlos wiederholen oder nach dem letzten Frame stoppen.',
+
+  saveFromSceneTitle:
+    'Erzeugt eine neue Vorlage unter „Eigene Assets“ aus dem aktuellen Objektzustand (Geometrie, optional Farbe, Skalierung, Decals, Metadaten).',
+
+  saveFromSceneName: 'Anzeigename der neuen Bibliotheks-Vorlage.',
+
+  saveFromSceneDescription: 'Beschreibung der gespeicherten Vorlage.',
+
+  saveFromSceneZone: 'Optionaler Zonen-/Typ für die Vorlage.',
+
+  saveFromSceneMaterial: 'Basisfarbe, Deckkraft und GLB-Materialmodus (Override/Original) übernehmen.',
+
+  saveFromSceneScale: 'Die aktuelle X/Y/Z-Skalierung der Instanz als Standard für neu platzierte Objekte.',
+
+  saveFromSceneDecals: 'Alle Decals inkl. GIF-Einstellungen und Data-URLs in der Vorlage speichern.',
+
+  saveFromSceneMetadata: 'Name, Beschreibung, Zone, Custom-Metadata und Textinhalt (Labels) der Instanz übernehmen.',
+
   decalSize: 'Relative Größe der Decal-Fläche zur gewählten Modellseite.',
 
   decalOpacity: 'Deckkraft nur des Bild-Decals (nicht des gesamten Assets).',
@@ -62,7 +88,7 @@ export const FIELD_DESC = {
     'Anzeigename, Beschreibung und Zonen-/Typ-Kennung dieser Instanz; mit Bearbeiten und Leeren.',
 
   metaName:
-    'Anzeigename des Assets in Bibliothek, Inspector und Präsentations-Info. Leer lassen, um den Typ-Namen zu verwenden.',
+    'Anzeigename des Assets in Bibliothek, Inspector und Präsentations-Info. Mit × oder „Leeren“ entfernen — dann kein eigener Name (Anzeige „—“; Vorlagen-Typ bleibt in der Instanz-Zeile).',
 
   metaDescription: 'Freitext; erscheint im Präsentations-Popup und in der Bibliothek.',
 
@@ -73,7 +99,10 @@ export const FIELD_DESC = {
     'Eigene Schlüssel-Wert-Felder. Namen sind editierbar; Einträge werden im Layout mitgespeichert.',
 
   customMetaPair:
-    'Benutzerdefiniertes Metadatum: linker Eintrag ist der Feldname, rechter der Wert.',
+    'Benutzerdefiniertes Metadatum: Feldname und Wert. Über „Feld bearbeiten“ eine eigene (?)-Hilfe hinterlegen.',
+
+  customMetaFieldEdit:
+    'Feldname, Wert und optional eigene Kurzbeschreibung für das Info-Icon. „Hilfe zurücksetzen“ stellt den Standard-Tooltip wieder her.',
 
   batchMultiSelect:
     'Mehrfachauswahl: Stapel-Transformation nur, wenn mindestens zwei nicht gesperrte Assets gewählt sind. Gesperrte werden ausgelassen.',
@@ -185,6 +214,14 @@ export const FIELD_DESC = {
   lightingShadowRadius: 'Weichzeichner für Schattenkanten (PCF-Radius).',
 
   lightingEnvironmentIntensity: 'Stärke der HDRI-Umgebungsbeleuchtung (Reflexionen und Fill).',
+
+  lightingFogToggle: 'Nebel für Tiefe und Atmosphäre; Farbe und Distanz steuern, wie schnell Objekte ausblenden.',
+
+  lightingFogColor: 'Farbe des Nebels (wirkt mit Hintergrund und HDRI).',
+
+  lightingFogNear: 'Distanz ab der der Nebel merklich wird (Meter).',
+
+  lightingFogFar: 'Distanz, ab der Objekte im Nebel kaum noch sichtbar sind (Meter).',
 } as const
 
 export type FieldDescriptionKey = keyof typeof FIELD_DESC

@@ -39,6 +39,15 @@ npm run lint
 - Die **Top-Bar** liegt über der Arbeitsfläche, damit **⋮ Werkzeuge** und **Beleuchtung** (fix positioniert) nicht vom WebGL-Canvas verdeckt werden. Canvas `z-index: 0`, Seitenpanels `500`, Toolbar `1000`, Modals `2000`, Shortcuts-Overlay `2500`, Shortcuts-FAB `2490`.
 - **Toolbar-Menüs** öffnen am jeweiligen Button mit **Fade-In** (`opacity`), ohne sichtbares Verspringen der Position (Layout in `useLayoutEffect`).
 
+### Inspector & Tooltips
+
+- **Info-Icons (?):** Kurzinfos als **Portal-Tooltip** (`position: fixed`, intelligente Kanten-Position, **z-index 1500**), nicht hinter dem WebGL-Canvas oder in überlaufenden Panels versteckt.
+- **Metadata:** Name, Beschreibung und Zonen-/Typ per **×** leerbar; bei Custom-Feldern eigene **Beschreibung für den (?)-Tooltip** (Dialog über **✎** am Feld).
+
+### Beleuchtung & Nebel
+
+- Nebel (**Ein/Aus**, Farbe, Start/Ende) in den Beleuchtungs-Einstellungen; Werte werden **mit dem Layout** in `localStorage` gespeichert (siehe `LightingSettings` / Speichern-Button).
+
 ### Dokumentation
 
 - Implementierungs-Chronik und Stände: **`IMPLEMENTATION_PROGRESS.md`** im Repository-Root.
@@ -81,6 +90,8 @@ npm run lint
   - Name, Beschreibung, Zonen-/Typ (bearbeiten per ✎, leeren; Zone mit Vorschlägen)
   - Custom Metadata (dynamisch hinzufuegen, loeschen)
   - Textinhalt-Feld fuer Label-Assets (Live-Update im 3D-Text)
+  - **Decals / Texturen**: PNG, JPEG, WebP und **animierte GIFs** auf Oberflächen; Größe, Transparenz, Position, Seite wie bei Bildern; bei GIFs: Wiedergabe an/aus, Geschwindigkeit (0,5×–2×), Loop oder einmalig, Anzeige Frame-Anzahl / fps (Hinweis Performance, max. 60 Frames beim Abspielen).
+  - **Eigene Assets aus der Szene**: Auswahl eines Objekts → **Als Asset speichern…** im Inspector oder **Rechtsklick** auf das Asset (Auswahl-Werkzeug) → Dialog; neue Vorlage in **Eigene Assets** mit Material, Skalierung, Decals (inkl. GIF-Einstellungen) und Metadata je nach Checkboxen.
 - Undo/Redo (`STRG/CMD + Z`, `STRG/CMD + Y`, `STRG/CMD + Shift + Z`).
 - Copy/Paste (`STRG/CMD + C`, `STRG/CMD + V`).
 - Loeschen per Button oder `Entf`/`Backspace`.

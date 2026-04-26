@@ -301,6 +301,33 @@ Ergebnis: beide Checks erfolgreich.
 - Vollständig editierbare Standard-Metadaten inkl. Löschen.
 - Geordnetes Custom-Metadata-Raster.
 
+## Stand 20: GIF-Decals & „Als Asset speichern“
+
+### Abgeschlossen
+
+- **GIF-Decals**: Import wie Bilder (`gifuct-js` / `gifDecalParse.ts`); `GifDecalFaceMesh` mit CanvasTexture und Frame-Timing; Inspector: Wiedergabe, Geschwindigkeit, Loop, Frame-Info, Performance-Hinweis; `AssetDecal.mediaKind` / `gif`-Felder persistieren in Save/Export.
+- **Custom-Vorlage aus Szene**: `createTemplateFromSceneAsset` + `saveSceneAssetAsTemplate` im Store; UI `SaveAssetFromSceneModal`; Inspector-Button **Als Asset speichern…**; Rechtsklick auf Asset im **Auswahl**-Modus öffnet denselben Dialog; Zuordnung zu **Eigene Assets**.
+
+### Kurzüberblick
+
+- Animierte Decals mit Playback-Kontrolle.
+- Bearbeitete Objekte als wiederverwendbare Bibliotheks-Vorlagen.
+
+## Stand 21: Tooltips (Portal), Metadata löschen & Feld-Hilfen, Nebel in Beleuchtung
+
+### Abgeschlossen
+
+- **InfoIcon / Tooltips**: Text erscheint in `document.body` mit `position: fixed`, **z-index 1500** (über Canvas/Panels, unter Modals 2000), Verzögerung ~400 ms, viewport-aware Position (`tooltipPosition.ts`), kein Abschneiden durch `overflow` der Panels.
+- **Kern-Metadaten**: Name, Beschreibung und Zonen-/Typ in der Ansicht mit **×** leerbar; leerer Name wird als „—“ angezeigt (Vorlagen-Typ u. a. in der Instanz-Zeile / View-Modal).
+- **Custom Metadata**: optionales Feld **`description`** pro Zeile (persistiert); **✎** öffnet Dialog (Name, Wert, eigene (?)-Hilfe); „Hilfe zurücksetzen“ → Standard-Tooltip (`FIELD_DESC.customMetaPair`).
+- **Beleuchtung / Nebel**: `LightingSettings` um **`fogEnabled`, `fogColor`, `fogNear`, `fogFar`** erweitert; Steuerung im Beleuchtungs-Popover; Szene-Nebel aus denselben Werten; Presets **Dramatisch, Abend, Nacht**; `STORAGE_VERSION` 7 (ältere Saves erhalten Defaults für Nebel über `sanitizeLighting`).
+
+### Kurzüberblick
+
+- Sichtbare Hilfe-Tooltips überall, wo `InfoIcon` genutzt wird.
+- Vollständig leerbare Standard-Metadaten + anpassbare Hilfetexte pro Custom-Feld.
+- Nebel editierbar und im Layout gespeichert.
+
 ## Offene optionale Erweiterungen
 
 - Box-Selection fuer Mehrfachauswahl.

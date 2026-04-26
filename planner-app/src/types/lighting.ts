@@ -16,6 +16,11 @@ export interface LightingSettings {
   shadowMapSize: 512 | 1024 | 2048
   shadowRadius: number
   environmentIntensity: number
+  /** Szene-Nebel (persistiert mit Layout). */
+  fogEnabled: boolean
+  fogColor: string
+  fogNear: number
+  fogFar: number
 }
 
 export const DEFAULT_LIGHTING: LightingSettings = {
@@ -31,6 +36,10 @@ export const DEFAULT_LIGHTING: LightingSettings = {
   shadowMapSize: 2048,
   shadowRadius: 2,
   environmentIntensity: 1,
+  fogEnabled: true,
+  fogColor: '#b8c4d4',
+  fogNear: 55,
+  fogFar: 145,
 }
 
 function clamp(n: number, min: number, max: number) {
@@ -96,6 +105,21 @@ export function sanitizeLighting(value: unknown): LightingSettings {
   }
   if (typeof e.environmentIntensity === 'number' && Number.isFinite(e.environmentIntensity)) {
     base.environmentIntensity = clamp(e.environmentIntensity, 0, 3)
+  }
+  if (typeof e.fogEnabled === 'boolean') {
+    base.fogEnabled = e.fogEnabled
+  }
+  if (typeof e.fogColor === 'string') {
+    base.fogColor = sanitizeColor(e.fogColor)
+  }
+  if (typeof e.fogNear === 'number' && Number.isFinite(e.fogNear)) {
+    base.fogNear = clamp(e.fogNear, 1, 500)
+  }
+  if (typeof e.fogFar === 'number' && Number.isFinite(e.fogFar)) {
+    base.fogFar = clamp(e.fogFar, 5, 800)
+  }
+  if (base.fogFar <= base.fogNear) {
+    base.fogFar = base.fogNear + 10
   }
   return base
 }

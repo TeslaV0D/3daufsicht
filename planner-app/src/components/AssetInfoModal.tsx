@@ -23,8 +23,10 @@ export default function AssetInfoModal({ asset, onClose }: AssetInfoModalProps) 
     }
   }, [onClose])
 
-  const name = asset.metadata.name ?? asset.type
-  const description = asset.metadata.description ?? 'Keine Beschreibung vorhanden.'
+  const name = asset.metadata.name?.trim() ? asset.metadata.name : '—'
+  const description = asset.metadata.description?.trim()
+    ? asset.metadata.description
+    : 'Keine Beschreibung vorhanden.'
   const zoneType = asset.metadata.zoneType
   const customEntries = getCustomRows(asset.metadata)
 
@@ -42,8 +44,8 @@ export default function AssetInfoModal({ asset, onClose }: AssetInfoModalProps) 
         <div className="asset-info-title-block">
           <h3 id="asset-info-title">{name}</h3>
           <p>
-            {asset.category}
-            {zoneType ? ` - ${zoneType}` : ''}
+            {asset.type} · {asset.category}
+            {zoneType ? ` · ${zoneType}` : ''}
           </p>
         </div>
         <button

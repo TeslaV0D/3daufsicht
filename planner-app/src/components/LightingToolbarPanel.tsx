@@ -12,12 +12,18 @@ const PRESETS: Record<string, Partial<LightingSettings>> = {
     environmentIntensity: 1.1,
     mainColor: '#fff8f0',
     shadowRadius: 3,
+    fogColor: '#c5d0de',
+    fogNear: 50,
+    fogFar: 150,
   },
   Dunkel: {
     mainIntensity: 0.75,
     ambientIntensity: 0.12,
     environmentIntensity: 0.65,
     mainColor: '#d4e5ff',
+    fogColor: '#2a3140',
+    fogNear: 35,
+    fogFar: 120,
   },
   Natürlich: {
     mainIntensity: 1.15,
@@ -25,6 +31,38 @@ const PRESETS: Record<string, Partial<LightingSettings>> = {
     environmentIntensity: 1.25,
     mainColor: '#fff3dd',
     mainPosition: [14, 28, 18],
+    fogColor: '#a8b8c8',
+    fogNear: 60,
+    fogFar: 160,
+  },
+  Dramatisch: {
+    mainIntensity: 1.55,
+    ambientIntensity: 0.1,
+    environmentIntensity: 0.75,
+    mainColor: '#ffe8d4',
+    fogEnabled: true,
+    fogColor: '#1e2430',
+    fogNear: 25,
+    fogFar: 130,
+  },
+  Abend: {
+    mainIntensity: 0.95,
+    ambientIntensity: 0.18,
+    environmentIntensity: 0.9,
+    mainColor: '#ffd4a8',
+    mainPosition: [10, 20, 22],
+    fogColor: '#4a3f52',
+    fogNear: 40,
+    fogFar: 165,
+  },
+  Nacht: {
+    mainIntensity: 0.55,
+    ambientIntensity: 0.08,
+    environmentIntensity: 0.45,
+    mainColor: '#a8c8ff',
+    fogColor: '#0a0e14',
+    fogNear: 18,
+    fogFar: 100,
   },
 }
 
@@ -270,6 +308,53 @@ export default function LightingToolbarPanel({
           step={0.05}
           value={lighting.environmentIntensity}
           onChange={(e) => setLighting({ environmentIntensity: Number(e.target.value) })}
+        />
+      </label>
+
+      <p className="lighting-subheading inspector-inline-label">
+        Nebel
+        <InfoIcon title={FIELD_DESC.lightingFogToggle} />
+      </p>
+      <label className="checkbox-field">
+        <input
+          type="checkbox"
+          checked={lighting.fogEnabled}
+          onChange={(e) => setLighting({ fogEnabled: e.target.checked })}
+        />
+        <span>Nebel aktiv</span>
+      </label>
+      <ColorPickerPopover
+        label="Nebelfarbe"
+        hint={FIELD_DESC.lightingFogColor}
+        value={lighting.fogColor}
+        onCommit={(c) => setLighting({ fogColor: sanitizeColor(c) })}
+      />
+      <label className="metadata-field">
+        <span className="inspector-inline-label">
+          Nebel Start (m)
+          <InfoIcon title={FIELD_DESC.lightingFogNear} />
+        </span>
+        <input
+          type="number"
+          min={1}
+          max={400}
+          step={1}
+          value={lighting.fogNear}
+          onChange={(e) => setLighting({ fogNear: Number(e.target.value) })}
+        />
+      </label>
+      <label className="metadata-field">
+        <span className="inspector-inline-label">
+          Nebel Ende (m)
+          <InfoIcon title={FIELD_DESC.lightingFogFar} />
+        </span>
+        <input
+          type="number"
+          min={5}
+          max={700}
+          step={1}
+          value={lighting.fogFar}
+          onChange={(e) => setLighting({ fogFar: Number(e.target.value) })}
         />
       </label>
     </div>

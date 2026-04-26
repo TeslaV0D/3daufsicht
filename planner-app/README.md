@@ -37,7 +37,7 @@ Interaktive 3D-Planungsapplikation im Stil von City-Skylines/SIMS fuer Hallen- u
 - Transform-Gizmo: Bewegen / Drehen / Skalieren. **Skalieren** am Gizmo ist **stufenlos** (`scaleSnap` aus); im Inspector: Slider „Alle Achsen gleich“ (feine Schritte) und drei Felder mit bis zu **vier Nachkommastellen**.
 - Toolbar-Menue **„⋮ Werkzeuge“**: Ausrichten (Links/Rechts/Mitte, Oben/Unten), Verteilen auf X/Z, Auswahl an Platzierungs-Raster ausrichten — oeffnet als schwebendes Panel, die Leiste bleibt kompakt.
 - **Beleuchtung**-Popover ebenfalls **fix positioniert** unterhalb der Toolbar, verschiebt die Button-Reihe nicht.
-- Inspector: Position, Rotation (Grad), Skalierung, Farbe, Name, Beschreibung, Zone-Typ, Custom Metadata, **Textinhalt** fuer Label-Assets.
+- Inspector: Position, Rotation (Grad), Skalierung, Farbe, Name, Beschreibung, Zone-Typ, Custom Metadata, **Textinhalt** fuer Label-Assets; **Bild/GIF-Decals** (GIF mit Wiedergabe, Geschwindigkeit, Loop); **Als Asset speichern** und Rechtsklick im Auswahl-Modus fuer neue Vorlage unter **Eigene Assets**.
 - Ghost-Placement, Snap-Toggle mit `STRG/CMD`.
 - Undo/Redo, Copy/Paste.
 
