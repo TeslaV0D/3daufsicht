@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import type { Asset } from '../types/asset'
+import { getCustomRows, type Asset } from '../types/asset'
 
 export interface AssetInfoModalProps {
   asset: Asset
@@ -23,11 +23,12 @@ export default function AssetInfoModal({ asset, onClose }: AssetInfoModalProps) 
     }
   }, [onClose])
 
-  const name = asset.metadata.name ?? asset.type
-  const description = asset.metadata.description ?? 'Keine Beschreibung vorhanden.'
+  const name = asset.metadata.name?.trim() ? asset.metadata.name : '—'
+  const description = asset.metadata.description?.trim()
+    ? asset.metadata.description
+    : 'Keine Beschreibung vorhanden.'
   const zoneType = asset.metadata.zoneType
-  const customData = asset.metadata.customData ?? {}
-  const customEntries = Object.entries(customData)
+  const customEntries = getCustomRows(asset.metadata)
 
   return (
     <div
@@ -43,8 +44,8 @@ export default function AssetInfoModal({ asset, onClose }: AssetInfoModalProps) 
         <div className="asset-info-title-block">
           <h3 id="asset-info-title">{name}</h3>
           <p>
-            {asset.category}
-            {zoneType ? ` - ${zoneType}` : ''}
+            {asset.type} · {asset.category}
+            {zoneType ? ` · ${zoneType}` : ''}
           </p>
         </div>
         <button
@@ -63,10 +64,10 @@ export default function AssetInfoModal({ asset, onClose }: AssetInfoModalProps) 
         <div className="asset-info-custom">
           <h4>Details</h4>
           <dl>
-            {customEntries.map(([key, value]) => (
-              <div key={key}>
-                <dt>{key}</dt>
-                <dd>{value}</dd>
+            {customEntries.map((row) => (
+              <div key={row.id}>
+                <dt>{row.name}</dt>
+                <dd>{row.value}</dd>
               </div>
             ))}
           </dl>

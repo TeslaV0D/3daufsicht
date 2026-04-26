@@ -1822,3 +1822,479 @@ textarea {
   color: #8fa6c4;
   margin-top: 0.15rem;
 }
+
+/* Inspector: Hilfe-Icons & Decals */
+.inspector-inline-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.inspector-field-hint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 1;
+  color: #8a9aad;
+  border: 1px solid rgba(138, 154, 173, 0.45);
+  background: rgba(20, 28, 40, 0.5);
+  cursor: help;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.inspector-field-hint:hover,
+.inspector-field-hint:focus-visible {
+  color: #c5d2e5;
+  border-color: rgba(180, 200, 230, 0.55);
+}
+
+/* Portal-Tooltip (InfoIcon): über Canvas/Panels, unter Modals (2000) */
+.info-tooltip-portal {
+  position: fixed;
+  z-index: 1500;
+  max-width: min(300px, calc(100vw - 16px));
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: #ccc;
+  background: #1a1f28;
+  border: 1px solid rgba(120, 150, 190, 0.45);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  white-space: normal;
+  word-wrap: break-word;
+  animation: info-tooltip-fade-in 0.12s ease-out;
+}
+
+@keyframes info-tooltip-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.inspector-decal-panel {
+  margin-top: 0.65rem;
+  padding: 0.55rem 0.5rem;
+  border-radius: 0.45rem;
+  border: 1px solid rgba(110, 150, 200, 0.22);
+  background: rgba(8, 14, 22, 0.35);
+}
+
+.inspector-decal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.35rem 0;
+}
+
+.inspector-decal-name {
+  margin: 0.15rem 0 0.25rem;
+  font-size: 0.78rem;
+  word-break: break-all;
+}
+
+.inspector-decal-thumb {
+  max-width: 100%;
+  max-height: 120px;
+  object-fit: contain;
+  border-radius: 0.35rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  margin-bottom: 0.35rem;
+}
+
+.inspector-decal-kind {
+  margin: 0 0 0.35rem;
+  font-size: 0.72rem;
+}
+
+.subtle-hint {
+  opacity: 0.78;
+  line-height: 1.35;
+}
+
+.inspector-save-asset-row {
+  margin: 0.35rem 0 0.5rem;
+}
+
+.inspector-save-asset-row .toolbar-btn {
+  width: 100%;
+}
+
+.inspector-gif-decal-panel {
+  margin-top: 0.55rem;
+  padding-top: 0.45rem;
+  border-top: 1px dashed rgba(110, 150, 200, 0.28);
+}
+
+.inspector-gif-perf-hint {
+  margin: 0 0 0.45rem;
+  font-size: 0.7rem;
+}
+
+.inspector-gif-frames-info {
+  margin: 0.35rem 0 0;
+  font-size: 0.74rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.inspector-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0.35rem 0;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.inspector-subheading-tight {
+  margin: 0.35rem 0 0.15rem;
+  font-size: 0.75rem;
+}
+
+.decal-side-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.25rem 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.decal-side-radio {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.inspector-file-input-hidden {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.custom-field-row--meta {
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.25fr) auto;
+  align-items: start;
+}
+
+.custom-field-name-col {
+  min-width: 0;
+}
+
+.custom-field-name-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.25rem 0.35rem;
+  border-radius: 0.3rem;
+  border: 1px dashed rgba(140, 160, 190, 0.35);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.custom-field-name-btn:hover {
+  border-color: rgba(180, 200, 230, 0.5);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.custom-field-name-input {
+  width: 100%;
+  font: inherit;
+  padding: 0.25rem 0.35rem;
+  border-radius: 0.3rem;
+}
+
+.custom-field-value {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Info-Icons, kompakte Inspector-Fakten, Core-Metadaten, Custom-Metadata-Zeilen */
+.panel-library-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.library-fav-empty {
+  margin: 0.35rem 0;
+  font-size: 0.82rem;
+  color: #8fa6c4;
+}
+
+.library-fav-empty-dash {
+  opacity: 0.55;
+  margin-right: 0.15rem;
+}
+
+.inspector-compact-facts {
+  margin: 0 0 0.75rem;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: #a8bfd8;
+  word-break: break-word;
+}
+
+.inspector-compact-facts-mono {
+  font-family: ui-monospace, monospace;
+}
+
+.inspector-id-chip {
+  font-size: 0.72rem;
+  opacity: 0.9;
+}
+
+.material-mode-label {
+  display: inline-flex;
+  margin: 0 0 0.45rem;
+  font-size: 0.82rem;
+  color: #a8bfd8;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.inspector-decal-empty {
+  margin: 0.35rem 0 0;
+  font-size: 0.82rem;
+  color: #8fa6c4;
+}
+
+.inspector-decal-empty-label {
+  opacity: 0.55;
+  margin-right: 0.15rem;
+}
+
+.inspector-core-meta-block {
+  margin-top: 0.55rem;
+}
+
+.inspector-core-meta-label-row {
+  margin-bottom: 0.25rem;
+  font-size: 0.8rem;
+  color: #a8bfd8;
+}
+
+.inspector-core-meta-view-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.inspector-core-meta-display {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 0.35rem 0.45rem;
+  border: 1px solid rgba(120, 150, 190, 0.28);
+  border-radius: 0.4rem;
+  background: rgba(8, 14, 22, 0.35);
+  font-size: 0.82rem;
+  color: #e8eef8;
+}
+
+.inspector-core-meta-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inspector-core-meta-description-preview {
+  white-space: pre-wrap;
+  line-height: 1.35;
+  max-height: 4.6rem;
+  overflow: hidden;
+}
+
+.inspector-core-meta-edit textarea,
+.inspector-core-meta-edit input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.inspector-core-meta-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+}
+
+.inspector-pencil-btn,
+.inspector-clear-btn {
+  flex-shrink: 0;
+  min-width: 2rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: 0.35rem;
+  border: 1px solid rgba(140, 160, 190, 0.4);
+  background: rgba(20, 28, 40, 0.55);
+  color: #c5d2e5;
+  cursor: pointer;
+  font-size: 0.85rem;
+  line-height: 1.2;
+}
+
+.inspector-pencil-btn:hover,
+.inspector-clear-btn:hover {
+  border-color: rgba(180, 200, 230, 0.55);
+}
+
+.custom-meta-block {
+  margin-top: 0.55rem;
+}
+
+.custom-meta-block-heading {
+  display: inline-flex;
+  margin-bottom: 0.25rem;
+  font-size: 0.78rem;
+  color: #8fa6c4;
+  max-width: 100%;
+}
+
+.custom-meta-heading-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.custom-meta-pair-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.35rem 0.45rem;
+  border: 1px solid rgba(110, 150, 200, 0.22);
+  border-radius: 0.45rem;
+  background: rgba(8, 14, 22, 0.35);
+  box-sizing: border-box;
+}
+
+.custom-meta-pair-name {
+  flex: 0 0 30%;
+  max-width: 30%;
+  min-width: 0;
+}
+
+.custom-meta-pair-value {
+  flex: 1;
+  min-width: 0;
+}
+
+.custom-meta-pair-input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.custom-meta-pair-value .custom-meta-pair-input {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.custom-meta-name-hit {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.28rem 0.35rem;
+  border-radius: 0.3rem;
+  border: 1px dashed rgba(140, 160, 190, 0.35);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.custom-meta-pair-truncate {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.custom-meta-edit-btn {
+  flex: 0 0 auto;
+}
+
+.custom-meta-delete {
+  flex: 0 0 auto;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border-radius: 0.35rem;
+  border: 1px solid rgba(140, 160, 190, 0.35);
+  background: rgba(20, 28, 40, 0.45);
+  color: #cfdcee;
+  cursor: pointer;
+  line-height: 1;
+}
+
+@media (max-width: 600px) {
+  .custom-meta-pair-row {
+    flex-wrap: wrap;
+  }
+
+  .custom-meta-pair-name,
+  .custom-meta-pair-value {
+    flex: 1 1 100%;
+    max-width: 100%;
+  }
+
+  .custom-meta-delete {
+    margin-left: auto;
+  }
+}
+
+.lighting-presets-wrap {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+  margin-bottom: 0.45rem;
+}
+
+.lighting-presets-wrap .lighting-presets {
+  flex: 1;
+  min-width: 0;
+}
+
+.lighting-panel-help-icon {
+  flex-shrink: 0;
+  margin-top: 0.2rem;
+}
+
+.details-dt-with-hint {
+  align-self: start;
+}
+
+.inspector-empty-state {
+  padding: 0.25rem 0;
+}
+
+.inspector-empty-hint {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #a8bfd8;
+}
+
+.custom-meta-default-hint {
+  margin: 0.25rem 0 0.5rem;
+  font-size: 0.72rem;
+}
+
+.custom-meta-edit-dialog .library-dialog-textarea {
+  min-height: 4rem;
+}

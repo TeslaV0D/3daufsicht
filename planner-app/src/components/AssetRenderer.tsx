@@ -18,6 +18,7 @@ import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
 import { CATEGORY_ZONES } from '../AssetFactory'
 import type { Asset, GeometryParams } from '../types/asset'
 import { resolveAssetOpacity } from '../types/asset'
+import AssetDecalPlanes from './AssetDecalPlanes'
 
 export interface AssetRendererProps {
   asset: Asset
@@ -28,6 +29,7 @@ export interface AssetRendererProps {
   selectionAccent?: string
   onPointerDown?: (event: ThreeEvent<PointerEvent>, asset: Asset) => void
   onClick?: (event: ThreeEvent<MouseEvent>, asset: Asset) => void
+  onContextMenu?: (event: ThreeEvent<MouseEvent>, asset: Asset) => void
   onPointerOver?: (event: ThreeEvent<PointerEvent>, asset: Asset) => void
   onPointerOut?: (event: ThreeEvent<PointerEvent>, asset: Asset) => void
 }
@@ -611,6 +613,7 @@ export function AssetBody({
         isSelected={isSelected}
         isHovered={isHovered}
       />
+      <AssetDecalPlanes asset={asset} />
       {showWireOutline && (
         <mesh>
           <boxGeometry args={[1.02, 1.02, 1.02]} />
@@ -639,6 +642,7 @@ export default function AssetRenderer({
   selectionAccent,
   onPointerDown,
   onClick,
+  onContextMenu,
   onPointerOver,
   onPointerOut,
   skipTransform = false,
@@ -657,6 +661,7 @@ export default function AssetRenderer({
 
   const eventProps = {
     onClick: (event: ThreeEvent<MouseEvent>) => onClick?.(event, asset),
+    onContextMenu: (event: ThreeEvent<MouseEvent>) => onContextMenu?.(event, asset),
     onPointerDown: (event: ThreeEvent<PointerEvent>) => onPointerDown?.(event, asset),
     onPointerEnter: (event: ThreeEvent<PointerEvent>) => {
       event.stopPropagation()
@@ -755,6 +760,7 @@ export function GhostAssetRenderer({ asset }: { asset: Asset }) {
         isSelected={false}
         isHovered={false}
       />
+      <AssetDecalPlanes asset={asset} />
     </group>
   )
 }

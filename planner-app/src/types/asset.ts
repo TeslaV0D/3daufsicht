@@ -41,6 +41,15 @@ export interface AssetGeometry {
   params: GeometryParams
 }
 
+export interface CustomMetadataRow {
+  id: string
+  /** User-editable display name / key. */
+  name: string
+  value: string
+  /** Eigener Tooltip-Text für das (?)-Icon; leer = Standard-Hilfe. */
+  description?: string
+}
+
 export interface AssetMetadata {
   name?: string
   description?: string
@@ -50,7 +59,48 @@ export interface AssetMetadata {
    * when present; falls back to a placeholder otherwise.
    */
   text?: string
+  /** Legacy / denormalized map; kept in sync with `customRows` when present. */
   customData?: Record<string, string>
+  /** Canonical ordered custom fields (stable ids for edit/delete/rename). */
+  customRows?: CustomMetadataRow[]
+}
+
+export type AssetDecalSide =
+  | 'top'
+  | 'bottom'
+  | 'front'
+  | 'back'
+  | 'left'
+  | 'right'
+  | 'all'
+
+/** GIF-Decal: Wiedergabe & Loop (Daten in imageUrl als GIF Data-URL). */
+export interface AssetDecalGifSettings {
+  playing: boolean
+  /** 0.5 … 2.0 */
+  speed: number
+  loop: boolean
+  frameCount?: number
+  fpsApprox?: number
+  /** Nach Import: mehr als MAX_GIF_DECAL_FRAMES Frames abgeschnitten */
+  truncated?: boolean
+}
+
+export interface AssetDecal {
+  id: string
+  imageUrl: string
+  imageName: string
+  /** Scale factor relative to face size (0.1–5). */
+  size: number
+  opacity: number
+  /** -0.5 … 0.5 along face tangents */
+  offsetX: number
+  offsetY: number
+  rotation: number
+  side: AssetDecalSide
+  /** image = TextureLoader; gif = animiert */
+  mediaKind?: 'image' | 'gif'
+  gif?: AssetDecalGifSettings
 }
 
 export interface AssetVisual {
@@ -61,6 +111,8 @@ export interface AssetVisual {
   wireframe?: boolean
   transparent?: boolean
   flatShading?: boolean
+  /** Image decals on primitive / bbox surfaces (data URLs or http). */
+  decals?: AssetDecal[]
 }
 
 export interface Asset {
@@ -98,6 +150,9 @@ export interface AssetTemplate {
   isUserAsset?: boolean
   /** Unix ms when the template was created (Import). */
   createdAt?: number
+  /** Instanz-Deckkraft (wie Asset.opacity). */
+  opacity?: number
+  materialMode?: MaterialMode
 }
 
 export const FALLBACK_COLOR = '#8ca0b6'
@@ -175,6 +230,88 @@ export function sanitizeGeometry(value: unknown): AssetGeometry {
   return { kind: 'box', params: {} }
 }
 
+export function newCustomFieldId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return `cf-${Math.random().toString(36).slice(2, 12)}`
+}
+
+function legacyRowIdFromKey(key: string): string {
+  return `legacy:${encodeURIComponent(key)}`
+}
+
+export function customRowsToRecord(rows: CustomMetadataRow[]): Record<string, string> {
+  const o: Record<string, string> = {}
+  for (const r of rows) {
+    o[r.name] = r.value
+  }
+  return o
+}
+
+export function getCustomRows(meta: AssetMetadata): CustomMetadataRow[] {
+  if (meta.customRows && meta.customRows.length > 0) {
+    return meta.customRows
+  }
+  return Object.entries(meta.customData ?? {}).map(([name, value]) => ({
+    id: legacyRowIdFromKey(name),
+    name,
+    value: String(value),
+  }))
+}
+
+function sanitizeCustomRows(value: unknown): CustomMetadataRow[] {
+  if (!Array.isArray(value)) return []
+  const out: CustomMetadataRow[] = []
+  for (const r of value) {
+    if (!r || typeof r !== 'object') continue
+    const o = r as Record<string, unknown>
+    if (typeof o.id !== 'string' || typeof o.name !== 'string') continue
+    const name = o.name.trim().slice(0, 200)
+    if (!name) continue
+    let description: string | undefined
+    if (typeof o.description === 'string') {
+      const d = o.description.trim().slice(0, 500)
+      if (d) description = d
+    }
+    out.push({
+      id: o.id.slice(0, 80),
+      name,
+      value: typeof o.value === 'string' ? o.value.slice(0, 8000) : String(o.value ?? ''),
+      ...(description ? { description } : {}),
+    })
+  }
+  return out
+}
+
+function reconcileCustomMetadata(
+  customData: Record<string, string>,
+  rowsIn: CustomMetadataRow[] | undefined,
+): { customRows: CustomMetadataRow[]; customData: Record<string, string> } {
+  let rows = rowsIn?.length ? [...rowsIn] : []
+  if (rows.length === 0) {
+    rows = Object.entries(customData).map(([name, value]) => ({
+      id: legacyRowIdFromKey(name),
+      name,
+      value: String(value),
+    }))
+  } else {
+    const byName = new Map(rows.map((r) => [r.name, r]))
+    for (const [name, value] of Object.entries(customData)) {
+      if (!byName.has(name)) {
+        rows.push({ id: newCustomFieldId(), name, value: String(value) })
+      }
+    }
+  }
+  const seen = new Set<string>()
+  rows = rows.filter((r) => {
+    if (seen.has(r.id)) return false
+    seen.add(r.id)
+    return true
+  })
+  return { customRows: rows, customData: customRowsToRecord(rows) }
+}
+
 export function sanitizeMetadata(value: unknown): AssetMetadata {
   if (value && typeof value === 'object') {
     const entry = value as Record<string, unknown>
@@ -186,15 +323,40 @@ export function sanitizeMetadata(value: unknown): AssetMetadata {
     for (const [key, val] of Object.entries(customSource)) {
       customData[key] = String(val)
     }
+    const rowsSan = sanitizeCustomRows(entry.customRows)
+    const { customRows, customData: dataOut } = reconcileCustomMetadata(customData, rowsSan)
     return {
       name: typeof entry.name === 'string' ? entry.name : undefined,
       description: typeof entry.description === 'string' ? entry.description : undefined,
       zoneType: typeof entry.zoneType === 'string' ? entry.zoneType : undefined,
       text: typeof entry.text === 'string' ? entry.text : undefined,
-      customData,
+      customData: dataOut,
+      customRows,
     }
   }
-  return { customData: {} }
+  return { customData: {}, customRows: [] }
+}
+
+export function mergeAssetMetadata(
+  prev: AssetMetadata,
+  patch: Partial<AssetMetadata> | undefined,
+): AssetMetadata {
+  if (!patch) return prev
+  const base: AssetMetadata = { ...prev, ...patch }
+  if (patch.customRows !== undefined) {
+    const rows = patch.customRows.map((r) => ({ ...r }))
+    base.customRows = rows
+    base.customData = customRowsToRecord(rows)
+    return base
+  }
+  if (patch.customData !== undefined) {
+    base.customData = { ...patch.customData }
+    const reconciled = reconcileCustomMetadata(base.customData, prev.customRows)
+    base.customRows = reconciled.customRows
+    base.customData = reconciled.customData
+    return base
+  }
+  return base
 }
 
 export function resolveAssetOpacity(asset: Asset): number {
@@ -206,6 +368,63 @@ export function resolveAssetOpacity(asset: Asset): number {
 function sanitizeMaterialMode(value: unknown): MaterialMode | undefined {
   if (value === 'original' || value === 'override') return value
   return undefined
+}
+
+const DECAL_SIDES: AssetDecalSide[] = [
+  'top',
+  'bottom',
+  'front',
+  'back',
+  'left',
+  'right',
+  'all',
+]
+
+function sanitizeDecals(value: unknown): AssetDecal[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const out: AssetDecal[] = []
+  for (const d of value) {
+    if (!d || typeof d !== 'object') continue
+    const e = d as Record<string, unknown>
+    if (typeof e.id !== 'string' || typeof e.imageUrl !== 'string') continue
+    const side = DECAL_SIDES.includes(e.side as AssetDecalSide) ? (e.side as AssetDecalSide) : 'front'
+    const mediaKind = e.mediaKind === 'gif' ? 'gif' : undefined
+    const gifRaw = e.gif && typeof e.gif === 'object' ? (e.gif as Record<string, unknown>) : undefined
+    const speedRaw = gifRaw && isFiniteNumber(gifRaw.speed) ? gifRaw.speed : 1
+    const speed = Math.min(2, Math.max(0.5, speedRaw))
+    const gif: AssetDecal['gif'] =
+      mediaKind === 'gif'
+        ? {
+            playing: typeof gifRaw?.playing === 'boolean' ? gifRaw.playing : true,
+            speed,
+            loop: typeof gifRaw?.loop === 'boolean' ? gifRaw.loop : true,
+            frameCount: isFiniteNumber(gifRaw?.frameCount)
+              ? Math.min(2000, Math.max(0, gifRaw.frameCount as number))
+              : undefined,
+            fpsApprox: isFiniteNumber(gifRaw?.fpsApprox) ? (gifRaw.fpsApprox as number) : undefined,
+            truncated: gifRaw?.truncated === true,
+          }
+        : undefined
+    out.push({
+      id: e.id.slice(0, 80),
+      imageUrl: e.imageUrl.slice(0, 35_000_000),
+      imageName:
+        typeof e.imageName === 'string'
+          ? e.imageName.slice(0, 256)
+          : 'image.png',
+      size:
+        isFiniteNumber(e.size) ? Math.min(5, Math.max(0.1, e.size)) : 1,
+      opacity: isFiniteNumber(e.opacity) ? Math.min(1, Math.max(0, e.opacity)) : 1,
+      offsetX: isFiniteNumber(e.offsetX) ? Math.min(0.5, Math.max(-0.5, e.offsetX)) : 0,
+      offsetY: isFiniteNumber(e.offsetY) ? Math.min(0.5, Math.max(-0.5, e.offsetY)) : 0,
+      rotation: isFiniteNumber(e.rotation) ? Math.min(360, Math.max(0, e.rotation)) : 0,
+      side,
+      mediaKind,
+      gif,
+    })
+    if (out.length >= 6) break
+  }
+  return out.length ? out : undefined
 }
 
 export function sanitizeVisual(value: unknown): AssetVisual | undefined {
@@ -221,6 +440,8 @@ export function sanitizeVisual(value: unknown): AssetVisual | undefined {
   if (typeof entry.wireframe === 'boolean') visual.wireframe = entry.wireframe
   if (typeof entry.transparent === 'boolean') visual.transparent = entry.transparent
   if (typeof entry.flatShading === 'boolean') visual.flatShading = entry.flatShading
+  const decals = sanitizeDecals(entry.decals)
+  if (decals) visual.decals = decals
   return visual
 }
 
@@ -269,8 +490,14 @@ export function cloneAsset(asset: Asset): Asset {
     metadata: {
       ...asset.metadata,
       customData: { ...(asset.metadata.customData ?? {}) },
+      customRows: (asset.metadata.customRows ?? []).map((r) => ({ ...r })),
     },
-    visual: asset.visual ? { ...asset.visual } : undefined,
+    visual: asset.visual
+      ? {
+          ...asset.visual,
+          decals: asset.visual.decals?.map((d) => ({ ...d })),
+        }
+      : undefined,
     materialMode: asset.materialMode,
     isLocked: asset.isLocked,
     opacity: asset.opacity,

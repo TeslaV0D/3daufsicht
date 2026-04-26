@@ -270,6 +270,64 @@ Ergebnis: beide Checks erfolgreich.
 
 - Projekt-Chronik nur noch in dieser Datei **`IMPLEMENTATION_PROGRESS.md`** (Root). Der Ordner **`docs/`** wurde entfernt.
 
+## Stand 18: Decals, Metadata-Fix, editierbare Feldnamen, Inspector-Hilfen
+
+### Abgeschlossen
+
+- **Bilder / Decals** auf Assets: Texturflächen (Plane + `TextureLoader`) auf gewählter Seite relativ zur Bounding-Box; Parameter Größe, Deckkraft, Offsets, Rotation, Seite; Speicherung in `AssetVisual.decals` (max. 6 Einträge in Sanitize; UI aktuell ein Haupt-Decal).
+- **Inspector (? )-Tooltips** (`InspectorHint`, CSS `data-tooltip`) an Farbe, Deckkraft, Sperre, Info-Feldern, Custom Metadata, Decal-Bereich; `ColorPickerPopover` mit optionalem `hint`.
+- **Metadata löschen repariert**: `updateAsset` / `updateAssets` mergen `customData` nicht mehr per Spread (entfernte Keys kamen zurück); `mergeAssetMetadata` ersetzt `customData` / `customRows` ganz, wenn im Patch gesetzt.
+- **Eigene Namen für Metadata**: `CustomMetadataRow` mit `id`, editierbarem `name`, `value`; `getCustomRows` + Migration aus `customData`; UI Klick auf Feldname → Inline-Edit.
+- Hilfsmodul `scene/assetDecalBounds.ts` für Decal-Placement; `AssetInfoModal` nutzt `getCustomRows`.
+
+### Kurzüberblick Features
+
+- Decal-System mit parametrierbarer Fläche (Bounding-Approximation).
+- Platzsparende Feldhilfen im Inspector.
+- Metadata vollständig löschbar und umbenennbar.
+
+## Stand 19: Globale Info-Icons, Core-Metadaten bearbeiten, Metadata-Layout
+
+### Abgeschlossen
+
+- **Info-Icons überall**: Wiederverwendbare `InfoIcon`-Komponente; zentrale Kurztexte in `planner-app/src/ui/fieldDescriptions.ts`. Erklärungen nur noch als (?)-Tooltip (Hover/Fokus), keine langen `panel-hint`-Absätze an denselben Stellen — u. a. Inspector, Asset-Bibliothek, Vorlagen-Details, Export/Laden, Vorschau, Beleuchtungs-Popover, Boden-Inspector, Mehrfachauswahl.
+- **Core-Metadaten**: Name, Beschreibung und Zonen-/Typ im Inspector mit **✎** (Speichern / Abbrechen / Leeren); Zonen-/Typ mit **datalist**-Vorschlägen aus der Szene plus Freitext; **×** zum schnellen Leeren. `patchSimpleMetadata` normalisiert leere Strings zu `undefined` (Felder wirklich leer).
+- **Custom Metadata-Layout**: Name und Wert in **einer Zeile** (ca. 30 % / 70 %), Rahmen, Ellipsis bei Overflow, `title` mit vollem Text; Delete **×**; responsive Wrap unter 600px.
+- **`InspectorHint`**: dünner Wrapper um `InfoIcon` (Abwärtskompatibilität).
+
+### Kurzüberblick
+
+- Konsistente, platzeffiziente Hilfe-UI.
+- Vollständig editierbare Standard-Metadaten inkl. Löschen.
+- Geordnetes Custom-Metadata-Raster.
+
+## Stand 20: GIF-Decals & „Als Asset speichern“
+
+### Abgeschlossen
+
+- **GIF-Decals**: Import wie Bilder (`gifuct-js` / `gifDecalParse.ts`); `GifDecalFaceMesh` mit CanvasTexture und Frame-Timing; Inspector: Wiedergabe, Geschwindigkeit, Loop, Frame-Info, Performance-Hinweis; `AssetDecal.mediaKind` / `gif`-Felder persistieren in Save/Export.
+- **Custom-Vorlage aus Szene**: `createTemplateFromSceneAsset` + `saveSceneAssetAsTemplate` im Store; UI `SaveAssetFromSceneModal`; Inspector-Button **Als Asset speichern…**; Rechtsklick auf Asset im **Auswahl**-Modus öffnet denselben Dialog; Zuordnung zu **Eigene Assets**.
+
+### Kurzüberblick
+
+- Animierte Decals mit Playback-Kontrolle.
+- Bearbeitete Objekte als wiederverwendbare Bibliotheks-Vorlagen.
+
+## Stand 21: Tooltips (Portal), Metadata löschen & Feld-Hilfen, Nebel in Beleuchtung
+
+### Abgeschlossen
+
+- **InfoIcon / Tooltips**: Text erscheint in `document.body` mit `position: fixed`, **z-index 1500** (über Canvas/Panels, unter Modals 2000), Verzögerung ~400 ms, viewport-aware Position (`tooltipPosition.ts`), kein Abschneiden durch `overflow` der Panels.
+- **Kern-Metadaten**: Name, Beschreibung und Zonen-/Typ in der Ansicht mit **×** leerbar; leerer Name wird als „—“ angezeigt (Vorlagen-Typ u. a. in der Instanz-Zeile / View-Modal).
+- **Custom Metadata**: optionales Feld **`description`** pro Zeile (persistiert); **✎** öffnet Dialog (Name, Wert, eigene (?)-Hilfe); „Hilfe zurücksetzen“ → Standard-Tooltip (`FIELD_DESC.customMetaPair`).
+- **Beleuchtung / Nebel**: `LightingSettings` um **`fogEnabled`, `fogColor`, `fogNear`, `fogFar`** erweitert; Steuerung im Beleuchtungs-Popover; Szene-Nebel aus denselben Werten; Presets **Dramatisch, Abend, Nacht**; `STORAGE_VERSION` 7 (ältere Saves erhalten Defaults für Nebel über `sanitizeLighting`).
+
+### Kurzüberblick
+
+- Sichtbare Hilfe-Tooltips überall, wo `InfoIcon` genutzt wird.
+- Vollständig leerbare Standard-Metadaten + anpassbare Hilfetexte pro Custom-Feld.
+- Nebel editierbar und im Layout gespeichert.
+
 ## Offene optionale Erweiterungen
 
 - Box-Selection fuer Mehrfachauswahl.

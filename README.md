@@ -39,6 +39,15 @@ npm run lint
 - Die **Top-Bar** liegt über der Arbeitsfläche, damit **⋮ Werkzeuge** und **Beleuchtung** (fix positioniert) nicht vom WebGL-Canvas verdeckt werden. Canvas `z-index: 0`, Seitenpanels `500`, Toolbar `1000`, Modals `2000`, Shortcuts-Overlay `2500`, Shortcuts-FAB `2490`.
 - **Toolbar-Menüs** öffnen am jeweiligen Button mit **Fade-In** (`opacity`), ohne sichtbares Verspringen der Position (Layout in `useLayoutEffect`).
 
+### Inspector & Tooltips
+
+- **Info-Icons (?):** Kurzinfos als **Portal-Tooltip** (`position: fixed`, intelligente Kanten-Position, **z-index 1500**), nicht hinter dem WebGL-Canvas oder in überlaufenden Panels versteckt.
+- **Metadata:** Name, Beschreibung und Zonen-/Typ per **×** leerbar; bei Custom-Feldern eigene **Beschreibung für den (?)-Tooltip** (Dialog über **✎** am Feld).
+
+### Beleuchtung & Nebel
+
+- Nebel (**Ein/Aus**, Farbe, Start/Ende) in den Beleuchtungs-Einstellungen; Werte werden **mit dem Layout** in `localStorage` gespeichert (siehe `LightingSettings` / Speichern-Button).
+
 ### Dokumentation
 
 - Implementierungs-Chronik und Stände: **`IMPLEMENTATION_PROGRESS.md`** im Repository-Root.
@@ -78,9 +87,11 @@ npm run lint
 - Inspector:
   - Position X/Y/Z, Rotation X/Y/Z (Grad), Skalierung X/Y/Z
   - Farbe (eigener Farbpicker mit Swatches, RGB, Hex)
-  - Name, Beschreibung, Zone-/Typ-Hinweis
+  - Name, Beschreibung, Zonen-/Typ (bearbeiten per ✎, leeren; Zone mit Vorschlägen)
   - Custom Metadata (dynamisch hinzufuegen, loeschen)
   - Textinhalt-Feld fuer Label-Assets (Live-Update im 3D-Text)
+  - **Decals / Texturen**: PNG, JPEG, WebP und **animierte GIFs** auf Oberflächen; Größe, Transparenz, Position, Seite wie bei Bildern; bei GIFs: Wiedergabe an/aus, Geschwindigkeit (0,5×–2×), Loop oder einmalig, Anzeige Frame-Anzahl / fps (Hinweis Performance, max. 60 Frames beim Abspielen).
+  - **Eigene Assets aus der Szene**: Auswahl eines Objekts → **Als Asset speichern…** im Inspector oder **Rechtsklick** auf das Asset (Auswahl-Werkzeug) → Dialog; neue Vorlage in **Eigene Assets** mit Material, Skalierung, Decals (inkl. GIF-Einstellungen) und Metadata je nach Checkboxen.
 - Undo/Redo (`STRG/CMD + Z`, `STRG/CMD + Y`, `STRG/CMD + Shift + Z`).
 - Copy/Paste (`STRG/CMD + C`, `STRG/CMD + V`).
 - Loeschen per Button oder `Entf`/`Backspace`.
@@ -150,6 +161,24 @@ npm run lint
 - Toolbar **„Beleuchtung“** (Edit-Modus): Hauptlicht-Typ (Directional / Point / Spot), Intensitäten, Farben, Position, Schatten, HDRI-Stärke, Presets.
 - Das Beleuchtungs-Popover liegt per **Z-Index** über der 3D-Arbeitsfläche; globale Modals (z. B. Layout laden, Tastenkürzel) bleiben darüber.
 - Einstellungen werden mit dem Workspace gespeichert (Feld `lighting` in JSON / `localStorage`; Layout-Version siehe `STORAGE_VERSION` im Store).
+
+### Decals & Texturen
+
+- Bilder **PNG, JPEG, WebP** auf die Asset-Oberfläche legen (Näherung über Bounding-Box / Primitive-Maße).
+- Im Inspector unter **Material**: **Bild / Decal** — Import, Entfernen, **Größe** (10–500 %), **Bild-Deckkraft**, **Position** (X/Y), **Rotation**, **Seite** (Oben/Unten/Vorne/Hinten/Links/Rechts oder alle Seiten).
+- Daten in `visual.decals` (Data-URL), mit dem Workspace speicherbar.
+- 3D-Text-Assets: kein Decal-Block (fokus auf Label-Text).
+
+### Metadata-Felder
+
+- **Name, Beschreibung, Zonen-/Typ**: im Inspector per **✎** bearbeiten (Speichern, Abbrechen, Leeren); Zonen-/Typ mit Vorschlägen aus platzierten Assets und Freitext; **×** leert den Zonen-/Typ schnell.
+- **Custom Metadata**: Zeilen mit **stabiler ID**; **Name und Wert** in einer Zeile (links/rechts, mit Ellipsis bei langem Text); Name per Klick editierbar; **×** löscht die Zeile.
+- `customRows` im JSON (plus abgeleitetes `customData` für Kompatibilität); Import alter Layouts migriert automatisch.
+
+### Inspector & Beschreibungen
+
+- **Info-Icons (? )** bei den meisten Feld-Labels (Inspector, Bibliothek, Vorlagen-Details, Export/Laden, Beleuchtung, Boden, Stapel-Ansicht): Kurztexte zentral in `planner-app/src/ui/fieldDescriptions.ts`, Anzeige per Hover/Fokus (`InfoIcon`).
+- Spart Platz; lange Erklär-Absätze wurden in Tooltips verlagert.
 
 ### Sprache / Zeichen
 

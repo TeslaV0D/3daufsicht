@@ -1,5 +1,10 @@
-import type { Asset, AssetTemplate, GeometryKind, ModelFormat } from './types/asset'
-import { cloneAsset, FALLBACK_COLOR } from './types/asset'
+import type { Asset, AssetMetadata, AssetTemplate, GeometryKind, ModelFormat } from './types/asset'
+import {
+  cloneAsset,
+  FALLBACK_COLOR,
+  isFiniteNumber,
+  sanitizeMetadata,
+} from './types/asset'
 
 export const CATEGORY_PRIMITIVE_3D = 'Primitive 3D'
 export const CATEGORY_PRIMITIVE_2D = 'Primitive 2D'
@@ -359,10 +364,10 @@ export function createAssetFromTemplate(template: AssetTemplate, overrides?: Par
       kind: template.geometry.kind,
       params: { ...template.geometry.params },
     },
-    metadata: {
+    metadata: sanitizeMetadata({
       ...(template.metadata ?? {}),
       customData: { ...(template.metadata?.customData ?? {}) },
-    },
+    }),
     visual: template.visual ? { ...template.visual } : undefined,
   }
 
@@ -371,10 +376,103 @@ export function createAssetFromTemplate(template: AssetTemplate, overrides?: Par
   if (asset.geometry.kind === 'custom' && (fmt === 'glb' || fmt === 'gltf')) {
     next = { ...asset, materialMode: 'original' as const }
   }
+  if (template.materialMode) {
+    next = { ...next, materialMode: template.materialMode }
+  }
+  if (template.opacity != null && isFiniteNumber(template.opacity)) {
+    next = {
+      ...next,
+      opacity: Math.min(1, Math.max(0, template.opacity)),
+    }
+  }
   if (overrides) {
     return cloneAsset({ ...next, ...overrides })
   }
   return next
+}
+
+export interface SaveSceneAssetTemplateOptions {
+  label: string
+  description: string
+  zoneType: string
+  saveMaterial: boolean
+  saveScale: boolean
+  saveDecals: boolean
+  saveMetadata: boolean
+}
+
+/** Neues Bibliotheks-Template aus einem platzierten Asset (Eigene Assets). */
+export function createTemplateFromSceneAsset(
+  asset: Asset,
+  options: SaveSceneAssetTemplateOptions,
+): AssetTemplate {
+  const type = `custom-${generateId('saved')}`
+  const label = options.label.trim() || 'Gespeichertes Asset'
+  const geometry: Asset['geometry'] = {
+    kind: asset.geometry.kind,
+    params: { ...asset.geometry.params },
+  }
+
+  let metadata: AssetMetadata
+  if (options.saveMetadata) {
+    metadata = sanitizeMetadata({
+      ...asset.metadata,
+      name: options.label.trim() || asset.metadata.name,
+      description:
+        options.description.trim() ||
+        asset.metadata.description ||
+        '',
+      zoneType:
+        options.zoneType.trim() ||
+        asset.metadata.zoneType ||
+        undefined,
+    })
+  } else {
+    metadata = sanitizeMetadata({
+      name: label,
+      description: options.description.trim(),
+      zoneType: options.zoneType.trim() || undefined,
+    })
+  }
+
+  let visual: Asset['visual'] | undefined
+  if (options.saveDecals && asset.visual?.decals?.length) {
+    visual = {
+      ...(asset.visual ?? {}),
+      decals: asset.visual.decals.map((d) => ({ ...d })),
+    }
+  } else if (options.saveMaterial && asset.visual) {
+    const rest = { ...asset.visual }
+    delete rest.decals
+    visual = Object.keys(rest).length ? { ...rest } : undefined
+  }
+
+  const color = options.saveMaterial ? asset.color : FALLBACK_COLOR
+  const scale: Asset['scale'] = options.saveScale
+    ? ([asset.scale[0], asset.scale[1], asset.scale[2]] as Asset['scale'])
+    : [1, 1, 1]
+
+  const template: AssetTemplate = {
+    type,
+    label,
+    category: CATEGORY_CUSTOM,
+    color,
+    scale,
+    geometry,
+    metadata,
+    visual,
+    isUserAsset: true,
+    createdAt: Date.now(),
+  }
+
+  if (options.saveMaterial && asset.opacity != null && isFiniteNumber(asset.opacity)) {
+    template.opacity = Math.min(1, Math.max(0, asset.opacity))
+  }
+  if (options.saveMaterial && asset.materialMode) {
+    template.materialMode = asset.materialMode
+  }
+
+  return template
 }
 
 export function createCustomModelTemplate(

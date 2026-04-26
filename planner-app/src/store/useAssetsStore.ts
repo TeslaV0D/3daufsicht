@@ -4,9 +4,11 @@ import {
   ASSET_TEMPLATES,
   createDefaultDemoLayout,
   createCustomModelTemplate,
+  createTemplateFromSceneAsset,
+  type SaveSceneAssetTemplateOptions,
 } from '../AssetFactory'
 import type { Asset, AssetTemplate, ModelFormat } from '../types/asset'
-import { cloneAsset, cloneAssets, sanitizeAsset } from '../types/asset'
+import { cloneAsset, cloneAssets, mergeAssetMetadata, sanitizeAsset } from '../types/asset'
 import {
   cloneFloor,
   DEFAULT_FLOOR,
@@ -41,7 +43,7 @@ import {
 
 export const STORAGE_KEY = 'factory-layout'
 export const STORAGE_SLOTS_KEY = 'factory-layout-slots'
-export const STORAGE_VERSION = 6
+export const STORAGE_VERSION = 7
 const MAX_HISTORY = 50
 
 export type LayoutExportKind = 'workspace' | 'complete'
@@ -184,6 +186,11 @@ export interface AssetsStore {
     items: { name: string; modelUrl: string; modelFormat: ModelFormat }[],
     options?: { category?: string },
   ) => AssetTemplate[]
+  /** Aus platziertem Asset ein neues Template in „Eigene Assets“. */
+  saveSceneAssetAsTemplate: (
+    asset: Asset,
+    options: SaveSceneAssetTemplateOptions,
+  ) => AssetTemplate
   removeCustomTemplate: (type: string) => void
   libraryOrganization: LibraryOrganizationState
   addUserLibraryGroup: (label: string) => string | null
@@ -562,14 +569,9 @@ export function useAssetsStore(): AssetsStore {
           ? cloneAsset({
               ...asset,
               ...patch,
-              metadata: {
-                ...asset.metadata,
-                ...(patch.metadata ?? {}),
-                customData: {
-                  ...(asset.metadata.customData ?? {}),
-                  ...(patch.metadata?.customData ?? {}),
-                },
-              },
+              metadata: patch.metadata
+                ? mergeAssetMetadata(asset.metadata, patch.metadata)
+                : asset.metadata,
               geometry: patch.geometry
                 ? {
                     kind: patch.geometry.kind,
@@ -596,14 +598,7 @@ export function useAssetsStore(): AssetsStore {
           ...asset,
           ...patch,
           metadata: patch.metadata
-            ? {
-                ...asset.metadata,
-                ...patch.metadata,
-                customData: {
-                  ...(asset.metadata.customData ?? {}),
-                  ...(patch.metadata.customData ?? {}),
-                },
-              }
+            ? mergeAssetMetadata(asset.metadata, patch.metadata)
             : asset.metadata,
           geometry: patch.geometry
             ? {
@@ -666,6 +661,27 @@ export function useAssetsStore(): AssetsStore {
         return next
       })
       return created
+    },
+    [takeSnapshot],
+  )
+
+  const saveSceneAssetAsTemplate = useCallback(
+    (asset: Asset, options: SaveSceneAssetTemplateOptions) => {
+      const snapshot = takeSnapshot()
+      setHistoryPast((past) => [...past.slice(-(MAX_HISTORY - 1)), snapshot])
+      setHistoryFuture([])
+      const template = createTemplateFromSceneAsset(asset, options)
+      setCustomTemplates((current) => [...current, template])
+      setLibraryOrganizationState((prev) => {
+        const withGroup = ensureEigeneAssetsUserGroup(prev)
+        const next = cloneLibraryOrganization(withGroup)
+        next.templateTypeToUserGroup = {
+          ...next.templateTypeToUserGroup,
+          [template.type]: EIGENE_ASSETS_USER_GROUP_ID,
+        }
+        return next
+      })
+      return template
     },
     [takeSnapshot],
   )
@@ -1350,6 +1366,7 @@ export function useAssetsStore(): AssetsStore {
     addTemplate,
     addCustomModelTemplate,
     importCustomModelTemplatesBatch,
+    saveSceneAssetAsTemplate,
     removeCustomTemplate,
     libraryOrganization,
     addUserLibraryGroup,

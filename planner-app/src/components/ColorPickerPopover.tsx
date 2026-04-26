@@ -8,6 +8,7 @@ import {
 } from 'react'
 import { registerColorPickerEscape } from '../colorPickerEscapeStack'
 import { sanitizeColor } from '../types/asset'
+import InfoIcon from './InfoIcon'
 
 export const COLOR_FAVORITES_STORAGE_KEY = 'factory-color-favorites'
 const MAX_FAVORITES = 10
@@ -59,6 +60,8 @@ interface ColorPickerPopoverProps {
   onCommit: (hex: string) => void
   disabled?: boolean
   label?: string
+  /** Kurzer Hilfetext neben dem Label (?). */
+  hint?: string
   /** Erhöhen öffnet den Picker (z. B. Tastatur C). */
   openSignal?: number
 }
@@ -68,6 +71,7 @@ export default function ColorPickerPopover({
   onCommit,
   disabled,
   label = 'Farbe',
+  hint,
   openSignal,
 }: ColorPickerPopoverProps) {
   const safe = sanitizeColor(value)
@@ -178,7 +182,10 @@ export default function ColorPickerPopover({
 
   return (
     <label className={`color-picker color-picker-advanced${disabled ? ' input-disabled' : ''}`}>
-      {label}
+      <span className="inspector-inline-label">
+        {label}
+        {hint ? <InfoIcon title={hint} /> : null}
+      </span>
       <div className="color-control" ref={popoverRef}>
         <button
           type="button"
