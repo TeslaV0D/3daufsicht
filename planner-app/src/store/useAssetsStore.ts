@@ -17,11 +17,14 @@ import {
 } from '../types/floor'
 import { LAYOUT_FORMAT_SEMVER } from '../config/layoutFormat'
 import {
+  type AxisViewCamerasState,
   type CameraViewPreset,
+  cloneAxisViewCameras,
   normalizeCameraViewPreset,
   type PerformanceSettings,
   type PerspectiveCameraSettings,
   type PlannerShellMode,
+  sanitizeAxisViewCameras,
   sanitizePerformanceSettings,
   sanitizePerspectiveCamera,
 } from '../types/plannerUi'
@@ -65,6 +68,7 @@ export interface StoredPayload {
   lighting?: LightingSettings
   libraryOrganization?: LibraryOrganizationState
   perspectiveCamera?: PerspectiveCameraSettings
+  axisViewCameras?: AxisViewCamerasState
   performanceSettings?: PerformanceSettings
   /** Gesetzt bei Datei-Export: Workspace nur Szene, complete = volles Projekt */
   exportKind?: LayoutExportKind
@@ -107,6 +111,7 @@ export function finalizeImportedPayload(p: StoredPayload): StoredPayload {
     layoutFormatSemver: LAYOUT_FORMAT_SEMVER,
     perspectiveCamera: clonePerspective(sanitizePerspectiveCamera(p.perspectiveCamera)),
     performanceSettings: sanitizePerformanceSettings(p.performanceSettings),
+    axisViewCameras: cloneAxisViewCameras(sanitizeAxisViewCameras(p.axisViewCameras)),
   }
 }
 
@@ -194,6 +199,11 @@ export interface AssetsStore {
   setCameraView: (preset: CameraViewPreset) => void
   perspectiveCamera: PerspectiveCameraSettings
   setPerspectiveCamera: (patch: Partial<PerspectiveCameraSettings>) => void
+  axisViewCameras: AxisViewCamerasState
+  setAxisViewCamera: <K extends keyof AxisViewCamerasState>(
+    view: K,
+    patch: Partial<AxisViewCamerasState[K]>,
+  ) => void
   performanceSettings: PerformanceSettings
   setPerformanceSettings: (patch: Partial<PerformanceSettings>) => void
   lighting: LightingSettings
@@ -317,6 +327,7 @@ function parseStoredPayload(raw: string | null): StoredPayload | null {
 
     const rawPerspective = entry.perspectiveCamera
     const rawPerf = entry.performanceSettings
+    const rawAxis = entry.axisViewCameras
     return finalizeImportedPayload({
       version: typeof entry.version === 'number' ? entry.version : 1,
       assets,
@@ -331,6 +342,9 @@ function parseStoredPayload(raw: string | null): StoredPayload | null {
       librarySectionExpanded,
       ...(rawPerspective && typeof rawPerspective === 'object'
         ? { perspectiveCamera: rawPerspective as PerspectiveCameraSettings }
+        : {}),
+      ...(rawAxis && typeof rawAxis === 'object'
+        ? { axisViewCameras: rawAxis as AxisViewCamerasState }
         : {}),
       ...(rawPerf && typeof rawPerf === 'object'
         ? { performanceSettings: rawPerf as PerformanceSettings }
@@ -364,6 +378,7 @@ function loadSlots(): LayoutSlot[] {
           : undefined
         const rawPerspective = payloadEntry.perspectiveCamera
         const rawPerf = payloadEntry.performanceSettings
+        const rawAxis = payloadEntry.axisViewCameras
         const payload = finalizeImportedPayload({
           version: typeof payloadEntry.version === 'number' ? payloadEntry.version : 1,
           assets: sanitizedAssets,
@@ -375,6 +390,9 @@ function loadSlots(): LayoutSlot[] {
           libraryOrganization: sanitizeLibraryOrganization(payloadEntry.libraryOrganization),
           ...(rawPerspective && typeof rawPerspective === 'object'
             ? { perspectiveCamera: rawPerspective as PerspectiveCameraSettings }
+            : {}),
+          ...(rawAxis && typeof rawAxis === 'object'
+            ? { axisViewCameras: rawAxis as AxisViewCamerasState }
             : {}),
           ...(rawPerf && typeof rawPerf === 'object'
             ? { performanceSettings: rawPerf as PerformanceSettings }
@@ -420,6 +438,7 @@ export interface InitialPlannerState {
   lighting: LightingSettings
   libraryOrganization: LibraryOrganizationState
   perspectiveCamera: PerspectiveCameraSettings
+  axisViewCameras: AxisViewCamerasState
   performanceSettings: PerformanceSettings
 }
 
@@ -435,6 +454,7 @@ export function loadInitialPlannerState(): InitialPlannerState {
       cloneLibraryOrganization(DEFAULT_LIBRARY_ORGANIZATION),
     ),
     perspectiveCamera: clonePerspective(sanitizePerspectiveCamera(undefined)),
+    axisViewCameras: cloneAxisViewCameras(sanitizeAxisViewCameras(undefined)),
     performanceSettings: sanitizePerformanceSettings(undefined),
   }
   if (typeof localStorage === 'undefined') {
@@ -454,6 +474,7 @@ export function loadInitialPlannerState(): InitialPlannerState {
         mergeLibraryOrgWithUserTemplates(stored.libraryOrganization, customTemplates),
       ),
       perspectiveCamera: clonePerspective(sanitizePerspectiveCamera(stored.perspectiveCamera)),
+      axisViewCameras: cloneAxisViewCameras(sanitizeAxisViewCameras(stored.axisViewCameras)),
       performanceSettings: sanitizePerformanceSettings(stored.performanceSettings),
     }
   }
@@ -476,6 +497,9 @@ export function useAssetsStore(): AssetsStore {
   const [cameraView, setCameraViewState] = useState<CameraViewPreset>(initial.cameraView)
   const [perspectiveCamera, setPerspectiveCameraState] = useState<PerspectiveCameraSettings>(
     () => clonePerspective(initial.perspectiveCamera),
+  )
+  const [axisViewCameras, setAxisViewCamerasState] = useState<AxisViewCamerasState>(() =>
+    cloneAxisViewCameras(initial.axisViewCameras),
   )
   const [performanceSettings, setPerformanceSettingsState] = useState<PerformanceSettings>(
     () => ({ ...initial.performanceSettings }),
@@ -575,6 +599,15 @@ export function useAssetsStore(): AssetsStore {
       return next
     })
   }, [])
+
+  const setAxisViewCamera = useCallback(
+    <K extends keyof AxisViewCamerasState>(view: K, patch: Partial<AxisViewCamerasState[K]>) => {
+      setAxisViewCamerasState((prev) =>
+        sanitizeAxisViewCameras({ ...prev, [view]: { ...prev[view], ...patch } }),
+      )
+    },
+    [],
+  )
 
   const setPerformanceSettings = useCallback((patch: Partial<PerformanceSettings>) => {
     setPerformanceSettingsState((p) => ({ ...p, ...patch }))
@@ -1082,6 +1115,7 @@ export function useAssetsStore(): AssetsStore {
         lighting: cloneLighting(lighting),
         libraryOrganization: cloneLibraryOrganization(libraryOrganization),
         perspectiveCamera: clonePerspective(perspectiveCamera),
+        axisViewCameras: cloneAxisViewCameras(axisViewCameras),
         performanceSettings: { ...performanceSettings },
       }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
@@ -1089,6 +1123,7 @@ export function useAssetsStore(): AssetsStore {
       console.error('Failed to save layout', error)
     }
   }, [
+    axisViewCameras,
     cameraView,
     customTemplates,
     floor,
@@ -1112,6 +1147,7 @@ export function useAssetsStore(): AssetsStore {
         cloneLighting(parsed.lighting ? sanitizeLighting(parsed.lighting) : DEFAULT_LIGHTING),
       )
       setPerspectiveCameraState(clonePerspective(sanitizePerspectiveCamera(parsed.perspectiveCamera)))
+      setAxisViewCamerasState(cloneAxisViewCameras(sanitizeAxisViewCameras(parsed.axisViewCameras)))
       setPerformanceSettingsState(sanitizePerformanceSettings(parsed.performanceSettings))
       const ct = parsed.customTemplates ?? []
       setCustomTemplates(ct)
@@ -1131,6 +1167,7 @@ export function useAssetsStore(): AssetsStore {
     setFloorState({ ...DEFAULT_FLOOR })
     setCameraViewState('perspective')
     setPerspectiveCameraState(clonePerspective(sanitizePerspectiveCamera(undefined)))
+    setAxisViewCamerasState(cloneAxisViewCameras(sanitizeAxisViewCameras(undefined)))
     setPerformanceSettingsState(sanitizePerformanceSettings(undefined))
     setLightingState(cloneLighting(DEFAULT_LIGHTING))
     setLibraryOrganizationState(
@@ -1149,6 +1186,7 @@ export function useAssetsStore(): AssetsStore {
       lighting: cloneLighting(lighting),
       libraryOrganization: cloneLibraryOrganization(libraryOrganization),
       perspectiveCamera: clonePerspective(perspectiveCamera),
+      axisViewCameras: cloneAxisViewCameras(axisViewCameras),
       performanceSettings: { ...performanceSettings },
       customTemplates: customTemplates.map((template) => ({
         ...template,
@@ -1166,7 +1204,16 @@ export function useAssetsStore(): AssetsStore {
         visual: template.visual ? { ...template.visual } : undefined,
       })),
     }
-  }, [cameraView, customTemplates, floor, lighting, libraryOrganization, perspectiveCamera, performanceSettings])
+  }, [
+    axisViewCameras,
+    cameraView,
+    customTemplates,
+    floor,
+    lighting,
+    libraryOrganization,
+    perspectiveCamera,
+    performanceSettings,
+  ])
 
   const buildWorkspacePayload = useCallback((): StoredPayload => {
     const scene = assetsRef.current
@@ -1197,10 +1244,19 @@ export function useAssetsStore(): AssetsStore {
       cameraView,
       lighting: cloneLighting(lighting),
       perspectiveCamera: clonePerspective(perspectiveCamera),
+      axisViewCameras: cloneAxisViewCameras(axisViewCameras),
       performanceSettings: { ...performanceSettings },
       ...(neededCustom.length > 0 ? { customTemplates: neededCustom } : {}),
     }
-  }, [cameraView, customTemplates, floor, lighting, perspectiveCamera, performanceSettings])
+  }, [
+    axisViewCameras,
+    cameraView,
+    customTemplates,
+    floor,
+    lighting,
+    perspectiveCamera,
+    performanceSettings,
+  ])
 
   const applyPayload = useCallback((payload: StoredPayload) => {
     const ct = payload.customTemplates ?? []
@@ -1214,6 +1270,7 @@ export function useAssetsStore(): AssetsStore {
       cloneLighting(payload.lighting ? sanitizeLighting(payload.lighting) : DEFAULT_LIGHTING),
     )
     setPerspectiveCameraState(clonePerspective(sanitizePerspectiveCamera(payload.perspectiveCamera)))
+    setAxisViewCamerasState(cloneAxisViewCameras(sanitizeAxisViewCameras(payload.axisViewCameras)))
     setPerformanceSettingsState(sanitizePerformanceSettings(payload.performanceSettings))
     setCustomTemplates(ct)
     setLibraryOrganizationState(
@@ -1247,6 +1304,7 @@ export function useAssetsStore(): AssetsStore {
       cloneLighting(payload.lighting ? sanitizeLighting(payload.lighting) : DEFAULT_LIGHTING),
     )
     setPerspectiveCameraState(clonePerspective(sanitizePerspectiveCamera(payload.perspectiveCamera)))
+    setAxisViewCamerasState(cloneAxisViewCameras(sanitizeAxisViewCameras(payload.axisViewCameras)))
     setPerformanceSettingsState(sanitizePerformanceSettings(payload.performanceSettings))
   }, [])
 
@@ -1390,6 +1448,7 @@ export function useAssetsStore(): AssetsStore {
           }
           const rawPerspective = entry.perspectiveCamera
           const rawPerf = entry.performanceSettings
+          const rawAxis = entry.axisViewCameras
           payload = finalizeImportedPayload({
             version: typeof entry.version === 'number' ? entry.version : 1,
             assets,
@@ -1405,6 +1464,9 @@ export function useAssetsStore(): AssetsStore {
             librarySectionExpanded,
             ...(rawPerspective && typeof rawPerspective === 'object'
               ? { perspectiveCamera: rawPerspective as PerspectiveCameraSettings }
+              : {}),
+            ...(rawAxis && typeof rawAxis === 'object'
+              ? { axisViewCameras: rawAxis as AxisViewCamerasState }
               : {}),
             ...(rawPerf && typeof rawPerf === 'object'
               ? { performanceSettings: rawPerf as PerformanceSettings }
@@ -1462,6 +1524,8 @@ export function useAssetsStore(): AssetsStore {
     setCameraView,
     perspectiveCamera,
     setPerspectiveCamera,
+    axisViewCameras,
+    setAxisViewCamera,
     performanceSettings,
     setPerformanceSettings,
     lighting,

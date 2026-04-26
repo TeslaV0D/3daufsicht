@@ -26,7 +26,7 @@ import {
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 
 import './App.css'
-import AnimatedCameraRig, { CAMERA_PRESETS } from './components/AnimatedCameraRig'
+import AnimatedCameraRig from './components/AnimatedCameraRig'
 import DistanceCullWrap from './components/DistanceCullWrap'
 import InstancedBoxBatch from './components/InstancedBoxBatch'
 import PerformanceHud from './components/PerformanceHud'
@@ -80,9 +80,15 @@ import {
 } from './types/asset'
 import type { CameraViewPreset } from './types/plannerUi'
 import {
+  DEFAULT_FRONT_VIEW_CAMERA,
+  DEFAULT_SIDE_VIEW_CAMERA,
+  DEFAULT_TOP_VIEW_CAMERA,
+  frontViewToRig,
   perspectivePresetDefaults,
   perspectiveToPosition,
   sanitizePerspectiveCamera,
+  sideViewToRig,
+  topViewToRig,
 } from './types/plannerUi'
 import {
   alignAssetsXZ,
@@ -1127,6 +1133,8 @@ export default function PlannerApp() {
     setCameraView,
     perspectiveCamera,
     setPerspectiveCamera,
+    axisViewCameras,
+    setAxisViewCamera,
     performanceSettings,
     setPerformanceSettings,
     lighting,
@@ -1177,6 +1185,19 @@ export default function PlannerApp() {
     [activeTemplateType, resolvedTemplates],
   )
 
+  const axisViewRig = useMemo(() => {
+    switch (cameraView) {
+      case 'top':
+        return topViewToRig(axisViewCameras.top)
+      case 'front':
+        return frontViewToRig(axisViewCameras.front)
+      case 'side':
+        return sideViewToRig(axisViewCameras.side)
+      default:
+        return null
+    }
+  }, [cameraView, axisViewCameras])
+
   const canvasCamera = useMemo(() => {
     if (cameraView === 'perspective') {
       return {
@@ -1184,9 +1205,12 @@ export default function PlannerApp() {
         fov: perspectiveCamera.fov,
       }
     }
-    const p = CAMERA_PRESETS[cameraView]
-    return { position: p.position, fov: 48 }
-  }, [cameraView, perspectiveCamera])
+    if (!axisViewRig) return { position: [0, 42, 0.01] as Vector3Tuple, fov: 48 }
+    return {
+      position: [...axisViewRig.position] as Vector3Tuple,
+      fov: axisViewRig.fov,
+    }
+  }, [cameraView, perspectiveCamera, axisViewRig])
 
   const customTemplateTypeSet = useMemo(
     () => new Set(customTemplates.map((t) => t.type)),
@@ -2555,11 +2579,225 @@ export default function PlannerApp() {
                   </button>
                 </div>
               </>
-            ) : (
-              <p className="view-menu-hint subtle-hint">
-                Perspektive-Einstellungen sind nur in der Perspektive-Ansicht aktiv.
-              </p>
-            )}
+            ) : null}
+            {cameraView === 'top' ? (
+              <>
+                <div className="toolbar-more-menu-heading">Top (Draufsicht)</div>
+                <label className="opacity-slider-field view-menu-slider">
+                  <span className="inspector-inline-label">Höhe (m)</span>
+                  <input
+                    type="range"
+                    min={8}
+                    max={120}
+                    step={1}
+                    value={axisViewCameras.top.height}
+                    onChange={(e) =>
+                      setAxisViewCamera('top', { height: Number(e.target.value) })
+                    }
+                  />
+                  <span className="slider-value-hint">{axisViewCameras.top.height.toFixed(0)}</span>
+                </label>
+                <label className="opacity-slider-field view-menu-slider">
+                  <span className="inspector-inline-label">FOV (°)</span>
+                  <input
+                    type="range"
+                    min={20}
+                    max={80}
+                    step={1}
+                    value={axisViewCameras.top.fov}
+                    onChange={(e) => setAxisViewCamera('top', { fov: Number(e.target.value) })}
+                  />
+                  <span className="slider-value-hint">{axisViewCameras.top.fov.toFixed(0)}</span>
+                </label>
+                <label className="opacity-slider-field view-menu-slider">
+                  <span className="inspector-inline-label">Offset X (m)</span>
+                  <input
+                    type="range"
+                    min={-80}
+                    max={80}
+                    step={0.5}
+                    value={axisViewCameras.top.offsetX}
+                    onChange={(e) =>
+                      setAxisViewCamera('top', { offsetX: Number(e.target.value) })
+                    }
+                  />
+                  <span className="slider-value-hint">{axisViewCameras.top.offsetX.toFixed(1)}</span>
+                </label>
+                <label className="opacity-slider-field view-menu-slider">
+                  <span className="inspector-inline-label">Offset Z (m)</span>
+                  <input
+                    type="range"
+                    min={-80}
+                    max={80}
+                    step={0.5}
+                    value={axisViewCameras.top.offsetZ}
+                    onChange={(e) =>
+                      setAxisViewCamera('top', { offsetZ: Number(e.target.value) })
+                    }
+                  />
+                  <span className="slider-value-hint">{axisViewCameras.top.offsetZ.toFixed(1)}</span>
+                </label>
+                <div className="view-menu-actions-row">
+                  <button
+                    type="button"
+                    className="toolbar-btn secondary"
+                    onClick={() => setAxisViewCamera('top', { ...DEFAULT_TOP_VIEW_CAMERA })}
+                  >
+                    Reset
+                  </button>
+                </div>
+              </>
+            ) : null}
+            {cameraView === 'front' ? (
+              <>
+                <div className="toolbar-more-menu-heading">Front (Vorne)</div>
+                <label className="opacity-slider-field view-menu-slider">
+                  <span className="inspector-inline-label">FOV (°)</span>
+                  <input
+                    type="range"
+                    min={20}
+                    max={80}
+                    step={1}
+                    value={axisViewCameras.front.fov}
+                    onChange={(e) =>
+                      setAxisViewCamera('front', { fov: Number(e.target.value) })
+                    }
+                  />
+                  <span className="slider-value-hint">{axisViewCameras.front.fov.toFixed(0)}</span>
+                </label>
+                <label className="opacity-slider-field view-menu-slider">
+                  <span className="inspector-inline-label">Abstand Z (m)</span>
+                  <input
+                    type="range"
+                    min={8}
+                    max={90}
+                    step={0.5}
+                    value={axisViewCameras.front.distance}
+                    onChange={(e) =>
+                      setAxisViewCamera('front', { distance: Number(e.target.value) })
+                    }
+                  />
+                  <span className="slider-value-hint">
+                    {axisViewCameras.front.distance.toFixed(1)}
+                  </span>
+                </label>
+                <label className="opacity-slider-field view-menu-slider">
+                  <span className="inspector-inline-label">Höhen-Offset (m)</span>
+                  <input
+                    type="range"
+                    min={-20}
+                    max={20}
+                    step={0.5}
+                    value={axisViewCameras.front.heightOffset}
+                    onChange={(e) =>
+                      setAxisViewCamera('front', { heightOffset: Number(e.target.value) })
+                    }
+                  />
+                  <span className="slider-value-hint">
+                    {axisViewCameras.front.heightOffset.toFixed(1)}
+                  </span>
+                </label>
+                <label className="opacity-slider-field view-menu-slider">
+                  <span className="inspector-inline-label">Seiten-Offset X (m)</span>
+                  <input
+                    type="range"
+                    min={-60}
+                    max={60}
+                    step={0.5}
+                    value={axisViewCameras.front.sideOffset}
+                    onChange={(e) =>
+                      setAxisViewCamera('front', { sideOffset: Number(e.target.value) })
+                    }
+                  />
+                  <span className="slider-value-hint">
+                    {axisViewCameras.front.sideOffset.toFixed(1)}
+                  </span>
+                </label>
+                <div className="view-menu-actions-row">
+                  <button
+                    type="button"
+                    className="toolbar-btn secondary"
+                    onClick={() => setAxisViewCamera('front', { ...DEFAULT_FRONT_VIEW_CAMERA })}
+                  >
+                    Reset
+                  </button>
+                </div>
+              </>
+            ) : null}
+            {cameraView === 'side' ? (
+              <>
+                <div className="toolbar-more-menu-heading">Seite</div>
+                <label className="opacity-slider-field view-menu-slider">
+                  <span className="inspector-inline-label">FOV (°)</span>
+                  <input
+                    type="range"
+                    min={20}
+                    max={80}
+                    step={1}
+                    value={axisViewCameras.side.fov}
+                    onChange={(e) => setAxisViewCamera('side', { fov: Number(e.target.value) })}
+                  />
+                  <span className="slider-value-hint">{axisViewCameras.side.fov.toFixed(0)}</span>
+                </label>
+                <label className="opacity-slider-field view-menu-slider">
+                  <span className="inspector-inline-label">Abstand X (m)</span>
+                  <input
+                    type="range"
+                    min={8}
+                    max={90}
+                    step={0.5}
+                    value={axisViewCameras.side.distance}
+                    onChange={(e) =>
+                      setAxisViewCamera('side', { distance: Number(e.target.value) })
+                    }
+                  />
+                  <span className="slider-value-hint">
+                    {axisViewCameras.side.distance.toFixed(1)}
+                  </span>
+                </label>
+                <label className="opacity-slider-field view-menu-slider">
+                  <span className="inspector-inline-label">Höhen-Offset (m)</span>
+                  <input
+                    type="range"
+                    min={-20}
+                    max={20}
+                    step={0.5}
+                    value={axisViewCameras.side.heightOffset}
+                    onChange={(e) =>
+                      setAxisViewCamera('side', { heightOffset: Number(e.target.value) })
+                    }
+                  />
+                  <span className="slider-value-hint">
+                    {axisViewCameras.side.heightOffset.toFixed(1)}
+                  </span>
+                </label>
+                <label className="opacity-slider-field view-menu-slider">
+                  <span className="inspector-inline-label">Tiefen-Offset Z (m)</span>
+                  <input
+                    type="range"
+                    min={-60}
+                    max={60}
+                    step={0.5}
+                    value={axisViewCameras.side.depthOffset}
+                    onChange={(e) =>
+                      setAxisViewCamera('side', { depthOffset: Number(e.target.value) })
+                    }
+                  />
+                  <span className="slider-value-hint">
+                    {axisViewCameras.side.depthOffset.toFixed(1)}
+                  </span>
+                </label>
+                <div className="view-menu-actions-row">
+                  <button
+                    type="button"
+                    className="toolbar-btn secondary"
+                    onClick={() => setAxisViewCamera('side', { ...DEFAULT_SIDE_VIEW_CAMERA })}
+                  >
+                    Reset
+                  </button>
+                </div>
+              </>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -3671,6 +3909,7 @@ export default function PlannerApp() {
               preset={cameraView}
               orbitRef={orbitRef}
               perspectiveCamera={cameraView === 'perspective' ? perspectiveCamera : null}
+              axisViewRig={cameraView === 'perspective' ? null : axisViewRig}
             />
             <FactoryFloor
               floor={floor}
@@ -3883,8 +4122,13 @@ export default function PlannerApp() {
                     setPerformanceSettings({ useInstancing: e.target.checked })
                   }
                 />
-                <span>Instancing (gleiche Boxen, 1 Draw-Call pro Gruppe)</span>
+                <span>Instancing aktivieren (Opt-in)</span>
               </label>
+              <p className="subtle-hint inspector-perf-footnote perf-instancing-hint">
+                Verbessert die Performance bei vielen identischen Boxen (ein Draw-Call pro Gruppe).
+                In der Regel sind Objekte dann nicht mehr per Klick auswählbar — nur einschalten, wenn
+                nötig.
+              </p>
               <label className="checkbox-field">
                 <input
                   type="checkbox"

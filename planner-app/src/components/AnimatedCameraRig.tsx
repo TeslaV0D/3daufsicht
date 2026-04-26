@@ -4,6 +4,7 @@ import { PerspectiveCamera, Vector3 } from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import {
   perspectiveToPosition,
+  type AxisViewRig,
   type CameraViewPreset,
   type PerspectiveCameraSettings,
 } from '../types/plannerUi'
@@ -24,10 +25,12 @@ export default function AnimatedCameraRig({
   preset,
   orbitRef,
   perspectiveCamera,
+  axisViewRig,
 }: {
   preset: CameraViewPreset
   orbitRef: RefObject<OrbitControlsImpl | null>
   perspectiveCamera: PerspectiveCameraSettings | null
+  axisViewRig: AxisViewRig | null
 }) {
   const { camera } = useThree()
   const fromPos = useRef(new Vector3())
@@ -47,17 +50,24 @@ export default function AnimatedCameraRig({
       fromTarget.current.set(...p.target)
     }
     desiredFov.current =
-      preset === 'perspective' && perspectiveCamera ? perspectiveCamera.fov : 48
+      preset === 'perspective' && perspectiveCamera
+        ? perspectiveCamera.fov
+        : axisViewRig
+          ? axisViewRig.fov
+          : 48
     if (preset === 'perspective' && perspectiveCamera) {
       const pos = perspectiveToPosition(perspectiveCamera)
       toPos.current.set(...pos)
       toTarget.current.set(...perspectiveCamera.target)
+    } else if (axisViewRig) {
+      toPos.current.set(...axisViewRig.position)
+      toTarget.current.set(...axisViewRig.target)
     } else {
       toPos.current.set(...p.position)
       toTarget.current.set(...p.target)
     }
     startTime.current = performance.now()
-  }, [preset, perspectiveCamera, camera, orbitRef])
+  }, [preset, perspectiveCamera, axisViewRig, camera, orbitRef])
 
   useFrame((state: RootState) => {
     const cam = state.camera

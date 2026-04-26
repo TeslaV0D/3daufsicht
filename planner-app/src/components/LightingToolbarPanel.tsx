@@ -112,28 +112,6 @@ export default function LightingToolbarPanel({
           Licht-Preset
           <InfoIcon title={FIELD_DESC.lightingPresets} className="lighting-panel-help-icon" />
         </h4>
-        <label className="lighting-field lighting-preset-select-row">
-          <span className="inspector-inline-label">Preset</span>
-          <select
-            className="lighting-preset-dropdown"
-            value=""
-            aria-label="Licht-Preset wählen"
-            onChange={(e) => {
-              const name = e.target.value
-              e.target.value = ''
-              if (!name) return
-              if (name === 'Standard') setLighting(cloneLighting(DEFAULT_LIGHTING))
-              else setLighting({ ...cloneLighting(DEFAULT_LIGHTING), ...PRESETS[name] })
-            }}
-          >
-            <option value="">Schnell wählen…</option>
-            {Object.keys(PRESETS).map((name) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-          </select>
-        </label>
         <div className="lighting-presets lighting-presets--compact">
           {Object.keys(PRESETS).map((name) => (
             <button

@@ -1837,6 +1837,10 @@ textarea {
   line-height: 1.35;
 }
 
+.perf-instancing-hint {
+  margin: -0.15rem 0 0.55rem;
+}
+
 .inspector-label-style-panel {
   margin: 0.5rem 0 0.75rem;
   padding: 0.45rem 0.35rem;
@@ -2462,15 +2466,6 @@ p.lighting-panel-section-title {
 
 .lighting-panel-nested {
   margin-left: 12px;
-}
-
-.lighting-preset-select-row {
-  margin-bottom: 0.35rem;
-}
-
-.lighting-preset-dropdown {
-  width: 100%;
-  max-width: 100%;
 }
 
 .lighting-presets.lighting-presets--compact {

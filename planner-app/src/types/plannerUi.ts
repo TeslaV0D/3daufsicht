@@ -129,6 +129,167 @@ export function perspectiveToPosition(s: PerspectiveCameraSettings): [number, nu
   return [x + s.target[0], y0 + s.height + s.target[1], z + s.target[2]]
 }
 
+/** Achsparallele Draufsicht (Y-up): Kamera über dem Zielpunkt auf der XZ-Ebene. */
+export interface TopViewCameraSettings {
+  /** Kamera-Höhe Y (m) */
+  height: number
+  /** Sichtfeld (°) — kleinerer Wert = stärkerer „Zoom“ */
+  fov: number
+  offsetX: number
+  offsetZ: number
+}
+
+export const DEFAULT_TOP_VIEW_CAMERA: TopViewCameraSettings = {
+  height: 42,
+  fov: 48,
+  offsetX: 0,
+  offsetZ: 0,
+}
+
+/** Frontalansicht (+Z zur Szene). */
+export interface FrontViewCameraSettings {
+  fov: number
+  /** Abstand der Kamera entlang +Z (m) */
+  distance: number
+  heightOffset: number
+  sideOffset: number
+}
+
+export const DEFAULT_FRONT_VIEW_CAMERA: FrontViewCameraSettings = {
+  fov: 48,
+  distance: 36,
+  heightOffset: 0,
+  sideOffset: 0,
+}
+
+/** Seitenansicht (+X zur Szene). */
+export interface SideViewCameraSettings {
+  fov: number
+  /** Abstand der Kamera entlang +X (m) */
+  distance: number
+  heightOffset: number
+  depthOffset: number
+}
+
+export const DEFAULT_SIDE_VIEW_CAMERA: SideViewCameraSettings = {
+  fov: 48,
+  distance: 36,
+  heightOffset: 0,
+  depthOffset: 0,
+}
+
+export interface AxisViewCamerasState {
+  top: TopViewCameraSettings
+  front: FrontViewCameraSettings
+  side: SideViewCameraSettings
+}
+
+export const DEFAULT_AXIS_VIEW_CAMERAS: AxisViewCamerasState = {
+  top: { ...DEFAULT_TOP_VIEW_CAMERA },
+  front: { ...DEFAULT_FRONT_VIEW_CAMERA },
+  side: { ...DEFAULT_SIDE_VIEW_CAMERA },
+}
+
+export type AxisViewRig = {
+  position: readonly [number, number, number]
+  target: readonly [number, number, number]
+  fov: number
+}
+
+export function topViewToRig(s: TopViewCameraSettings): AxisViewRig {
+  const ox = s.offsetX
+  const oz = s.offsetZ
+  return {
+    position: [ox, s.height, oz + 0.01],
+    target: [ox, 0, oz],
+    fov: s.fov,
+  }
+}
+
+export function frontViewToRig(s: FrontViewCameraSettings): AxisViewRig {
+  const ty = 2 + s.heightOffset
+  const ey = 12 + s.heightOffset
+  const sx = s.sideOffset
+  return {
+    position: [sx, ey, s.distance],
+    target: [sx, ty, 0],
+    fov: s.fov,
+  }
+}
+
+export function sideViewToRig(s: SideViewCameraSettings): AxisViewRig {
+  const ty = 2 + s.heightOffset
+  const ey = 12 + s.heightOffset
+  const dz = s.depthOffset
+  return {
+    position: [s.distance, ey, dz],
+    target: [0, ty, dz],
+    fov: s.fov,
+  }
+}
+
+function numAxis(x: unknown, fallback: number) {
+  const n = Number(x)
+  return Number.isFinite(n) ? n : fallback
+}
+
+export function sanitizeTopViewCamera(value: unknown): TopViewCameraSettings {
+  if (!value || typeof value !== 'object') return { ...DEFAULT_TOP_VIEW_CAMERA }
+  const v = value as Record<string, unknown>
+  return {
+    height: Math.min(160, Math.max(4, numAxis(v.height, DEFAULT_TOP_VIEW_CAMERA.height))),
+    fov: Math.min(85, Math.max(20, numAxis(v.fov, DEFAULT_TOP_VIEW_CAMERA.fov))),
+    offsetX: Math.min(200, Math.max(-200, numAxis(v.offsetX, DEFAULT_TOP_VIEW_CAMERA.offsetX))),
+    offsetZ: Math.min(200, Math.max(-200, numAxis(v.offsetZ, DEFAULT_TOP_VIEW_CAMERA.offsetZ))),
+  }
+}
+
+export function sanitizeFrontViewCamera(value: unknown): FrontViewCameraSettings {
+  if (!value || typeof value !== 'object') return { ...DEFAULT_FRONT_VIEW_CAMERA }
+  const v = value as Record<string, unknown>
+  return {
+    fov: Math.min(85, Math.max(20, numAxis(v.fov, DEFAULT_FRONT_VIEW_CAMERA.fov))),
+    distance: Math.min(120, Math.max(6, numAxis(v.distance, DEFAULT_FRONT_VIEW_CAMERA.distance))),
+    heightOffset: Math.min(40, Math.max(-40, numAxis(v.heightOffset, DEFAULT_FRONT_VIEW_CAMERA.heightOffset))),
+    sideOffset: Math.min(120, Math.max(-120, numAxis(v.sideOffset, DEFAULT_FRONT_VIEW_CAMERA.sideOffset))),
+  }
+}
+
+export function sanitizeSideViewCamera(value: unknown): SideViewCameraSettings {
+  if (!value || typeof value !== 'object') return { ...DEFAULT_SIDE_VIEW_CAMERA }
+  const v = value as Record<string, unknown>
+  return {
+    fov: Math.min(85, Math.max(20, numAxis(v.fov, DEFAULT_SIDE_VIEW_CAMERA.fov))),
+    distance: Math.min(120, Math.max(6, numAxis(v.distance, DEFAULT_SIDE_VIEW_CAMERA.distance))),
+    heightOffset: Math.min(40, Math.max(-40, numAxis(v.heightOffset, DEFAULT_SIDE_VIEW_CAMERA.heightOffset))),
+    depthOffset: Math.min(120, Math.max(-120, numAxis(v.depthOffset, DEFAULT_SIDE_VIEW_CAMERA.depthOffset))),
+  }
+}
+
+export function sanitizeAxisViewCameras(value: unknown): AxisViewCamerasState {
+  if (!value || typeof value !== 'object') {
+    return {
+      top: { ...DEFAULT_TOP_VIEW_CAMERA },
+      front: { ...DEFAULT_FRONT_VIEW_CAMERA },
+      side: { ...DEFAULT_SIDE_VIEW_CAMERA },
+    }
+  }
+  const v = value as Record<string, unknown>
+  return {
+    top: sanitizeTopViewCamera(v.top),
+    front: sanitizeFrontViewCamera(v.front),
+    side: sanitizeSideViewCamera(v.side),
+  }
+}
+
+export function cloneAxisViewCameras(s: AxisViewCamerasState): AxisViewCamerasState {
+  return {
+    top: { ...s.top },
+    front: { ...s.front },
+    side: { ...s.side },
+  }
+}
+
 export interface PerformanceSettings {
   /** FPS / Draw-Call Overlay in der Szene */
   showHud: boolean
@@ -153,7 +314,7 @@ export const DEFAULT_PERFORMANCE: PerformanceSettings = {
   showHud: false,
   maxDpr: 2,
   lodHintEnabled: false,
-  useInstancing: true,
+  useInstancing: false,
   distanceCullEnabled: false,
   distanceCullMeters: 280,
   virtualLibraryScroll: true,
@@ -173,7 +334,7 @@ export function sanitizePerformanceSettings(value: unknown): PerformanceSettings
     showHud: o.showHud === true,
     maxDpr: Math.min(3, Math.max(1, Number.isFinite(maxDpr) ? maxDpr : DEFAULT_PERFORMANCE.maxDpr)),
     lodHintEnabled: o.lodHintEnabled === true,
-    useInstancing: o.useInstancing !== false,
+    useInstancing: o.useInstancing === true,
     distanceCullEnabled: o.distanceCullEnabled === true,
     distanceCullMeters: Math.min(2000, Math.max(50, Number.isFinite(dist) ? dist : DEFAULT_PERFORMANCE.distanceCullMeters)),
     virtualLibraryScroll: o.virtualLibraryScroll !== false,
