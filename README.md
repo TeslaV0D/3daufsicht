@@ -29,7 +29,7 @@ npm run lint
 ### Modus-Trennung
 
 - **Edit-Modus**: volle Bearbeitung (Platzieren, Gizmos, Inspector, Library, Undo/Redo).
-- **Praesentationsmodus (View Mode)**: read-only, Klick auf ein **nicht gesperrtes** Asset (keine **Zonen**-Assets) öffnet das Info-Popup mit rein semantischen Infos. **Gesperrte** Objekte und **Zonen** sind nicht anwählbar.
+- **Praesentationsmodus (View Mode)**: read-only, Klick auf ein **nicht gesperrtes** Asset (keine **Zonen**-Assets) öffnet das Info-Popup mit rein semantischen Infos. **Gesperrte** Objekte und **Zonen** verhalten sich wie nicht vorhanden: kein Hover-Highlight, kein Zeiger-Cursor, keine Selektion/kein Info-Popup; dahinter liegende, nicht gesperrte Objekte bleiben klickbar.
 - **Präsentations-Toolbar**: nur **Ansicht**-Menü (alle Kameras Perspektive/Top/Front/Seite, Perspektive-Slider, Presets, Custom-Presets); keine separaten View-Buttons mehr. Badge `VIEW MODE`, Button **„Präsentation beenden (ESC)“** — keine Modus-Tools, keine Beleuchtung, kein Speichern/Laden/Export, kein Shortcuts-„?“-FAB.
 - Klarer Mode-Badge (`EDIT MODE` / `VIEW MODE`) in der Top-Bar, fade-Transition beim Wechsel.
 - View Mode nutzt weicheres Kamera-Profil; `OrbitControls` werden beim Wechsel per `key={mode}` sauber resettet. **ESC** schließt schichtweise offene UI (Farbwähler, Vorschau, Dialoge, Toolbar-Menüs, Suche) und beendet danach die Präsentation bzw. setzt im Edit-Modus das Auswahl-Tool.
@@ -77,6 +77,13 @@ npm run lint
 - Orbit-Kamera mit Damping, Zoom-To-Cursor, Kamera-Presets (Perspektive, Top, Front, Seite).
 - Ghost-Placement-Vorschau beim Platzieren.
 - Hover-Feedback ueber Pointer-Enter/Leave mit kurzem Debounce beim Verlassen, damit Submesh-Wechsel die Animation nicht neu starten.
+
+### Objekt-Auswahl & Klicks
+
+- **Zuverlässige Auswahl**: Selektion läuft über **`pointerdown`** (Primärtaste), damit `OrbitControls` und verzögerte `click`-Events die Auswahl nicht „schlucken“.
+- **Raycasting**: R3F nutzt die **Canvas-Bounding-Box** für Pointer-Normalisierung; **`PLANNER_RAYCASTER_PROPS`** auf dem `Canvas` setzt etwas höhere **Line-/Points-Thresholds** für dünnere Geometrien.
+- **Transform-Gizmo**: Klicks auf Gizmo-Handles ändern die Auswahl nicht (Handles liegen außerhalb der Asset-Hit-Tests der Szene).
+- **Hover & Cursor**: Im **Edit-Modus** zeigen gesperrte und freie Assets weiterhin Hover-Feedback. Im **View-Modus** nur bei **nicht gesperrten, nicht-Zonen**-Assets; gesperrte/Zonen werden visuell und per Cursor ignoriert.
 
 ### Unified Asset System
 

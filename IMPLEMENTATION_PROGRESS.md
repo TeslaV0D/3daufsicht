@@ -376,6 +376,26 @@ Ergebnis: beide Checks erfolgreich.
 
 - Weniger redundante UI; konsistente Farbwahl für Labels; Präsentation ohne Klicks auf gesperrte/Zonen-Objekte.
 
+## Stand 25: Klick-Erkennung & Präsentation (gesperrte Objekte)
+
+### Klick-Detection & Auswahl
+
+- Auswahl über **`onPointerDown`** statt `onClick` für konsistente Treffer mit Orbit-Steuerung.
+- **`Canvas` `raycaster`-Prop** (`PLANNER_RAYCASTER_PROPS`): `Line`- und `Points`-Schwellwerte leicht erhöht (≥ 0,12) für bessere Treffer auf Linien/Punkten, ohne den Raycaster zur Laufzeit zu mutieren.
+- **`userData.assetId`** am Asset-Root (`AssetRenderer`) für eindeutige Zuordnung bei Bedarf.
+- **Instancing**: nur noch **PointerDown** mit linker Taste; gemeinsame Logik mit regulären Assets über `applyAssetPointerSelect`.
+
+### Präsentationsmodus (View) — gesperrte / Zonen-Assets
+
+- **`assetShowsHoverHighlight`**: kein Hover-Scale/Outline-Effekt für gesperrte oder Zonen-Assets im View-Modus.
+- **`onAssetPointerOver`**: bei gesperrt/Zone sofort **`hoveredId`** geleert, damit kein „stecken bleibender“ Hover.
+- **`SceneInteractionCursor`**: Zeiger **`pointer`** nur für im View-Modus wirklich anklickbare Assets; sonst **`auto`**.
+- Klicks auf gesperrte/Zonen werden weiterhin in **`applyAssetPointerSelect`** ignoriert (kein Info-Modal).
+
+### Kurzüberblick
+
+- Zuverlässigere Objektauswahl; Präsentation ohne ablenkendes Hover-Feedback auf gesperrten Objekten.
+
 ## Offene optionale Erweiterungen
 
 - Box-Selection fuer Mehrfachauswahl.
