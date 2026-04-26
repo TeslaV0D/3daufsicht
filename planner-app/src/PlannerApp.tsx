@@ -52,7 +52,11 @@ import {
   savePerspectiveCustomPresets,
 } from './perspectiveCustomPresets'
 import { dismissTopColorPickerEscape } from './colorPickerEscapeStack'
-import { createAssetFromTemplate, geometryKindSupports2D } from './AssetFactory'
+import {
+  CATEGORY_ZONES,
+  createAssetFromTemplate,
+  geometryKindSupports2D,
+} from './AssetFactory'
 import { useAssetsStore, type LayoutExportKind } from './store/useAssetsStore'
 import type {
   Asset,
@@ -1424,6 +1428,9 @@ export default function PlannerApp() {
     (event: ThreeEvent<MouseEvent>, asset: Asset) => {
       event.stopPropagation()
       if (mode === 'view') {
+        if (asset.isLocked || asset.category === CATEGORY_ZONES) {
+          return
+        }
         setInfoAssetId(asset.id)
         return
       }
@@ -1449,6 +1456,9 @@ export default function PlannerApp() {
       if (!asset) return
       event.stopPropagation()
       if (mode === 'view') {
+        if (asset.isLocked || asset.category === CATEGORY_ZONES) {
+          return
+        }
         setInfoAssetId(asset.id)
         return
       }
@@ -2762,25 +2772,6 @@ export default function PlannerApp() {
 
             <ToolbarSeparator />
 
-            <ButtonGroup>
-              {(['perspective', 'top', 'front', 'side'] as const).map((preset) => (
-                <button
-                  type="button"
-                  key={preset}
-                  className={cameraView === preset ? 'active' : ''}
-                  onClick={() => setCameraView(preset)}
-                >
-                  {preset === 'perspective'
-                    ? 'Perspektive'
-                    : preset === 'top'
-                      ? 'Top'
-                      : preset === 'front'
-                        ? 'Front'
-                        : 'Seite'}
-                </button>
-              ))}
-            </ButtonGroup>
-
             {renderViewMenuDropdown()}
 
             <ToolbarSeparator />
@@ -2848,24 +2839,6 @@ export default function PlannerApp() {
               Präsentation beenden (ESC)
             </button>
             <ToolbarSeparator />
-            <ButtonGroup>
-              {(['perspective', 'top', 'front', 'side'] as CameraViewPreset[]).map((preset) => (
-                <button
-                  type="button"
-                  key={preset}
-                  className={cameraView === preset ? 'active' : ''}
-                  onClick={() => setCameraView(preset)}
-                >
-                  {preset === 'perspective'
-                    ? 'Perspektive'
-                    : preset === 'top'
-                      ? 'Top'
-                      : preset === 'front'
-                        ? 'Front'
-                        : 'Seite'}
-                </button>
-              ))}
-            </ButtonGroup>
             {renderViewMenuDropdown()}
           </>
         )}
@@ -3780,7 +3753,10 @@ export default function PlannerApp() {
 
           {mode === 'view' && (
             <div className="view-hint-bar">
-              <span>Präsentationsmodus: Klicke ein Asset für Details.</span>
+              <span>
+                Präsentationsmodus: Klicke ein Asset für Details. Gesperrte Objekte und Zonen sind
+                nicht anwählbar.
+              </span>
             </div>
           )}
         </main>
@@ -3788,9 +3764,6 @@ export default function PlannerApp() {
         <aside className="panel right" aria-hidden={mode === 'view'}>
           <h2>Inspector</h2>
           <div className="inspector-global-blocks">
-            <p className="subtle-hint inspector-toolbar-hint">
-              Kamera & Perspektive: Toolbar → <strong>Ansicht</strong>.
-            </p>
             <section className="inspector-performance-panel">
               <h3 className="inspector-panel-section-title">Performance</h3>
               <label className="checkbox-field">
@@ -4215,40 +4188,49 @@ export default function PlannerApp() {
                   </>
                 ) : null}
 
-                <ColorPickerPopover
-                  value={singleSelected.color}
-                  openSignal={colorPickerKick}
-                  hint={FIELD_DESC.materialColor}
-                  onCommit={(nextColor) =>
-                    updateAsset(singleSelected.id, { color: sanitizeColor(nextColor) })
-                  }
-                />
+                {singleSelected.geometry.kind !== 'text' ? (
+                  <>
+                    <ColorPickerPopover
+                      value={singleSelected.color}
+                      openSignal={colorPickerKick}
+                      hint={FIELD_DESC.materialColor}
+                      onCommit={(nextColor) =>
+                        updateAsset(singleSelected.id, { color: sanitizeColor(nextColor) })
+                      }
+                    />
 
-                <label className="opacity-slider-field">
-                  <span className="inspector-inline-label">
-                    Deckkraft ({Math.round(resolveAssetOpacity(singleSelected) * 100)}%)
-                    <InfoIcon title={FIELD_DESC.assetOpacity} />
-                  </span>
-                  <input
-                    type="range"
-                    min={0}
-                    max={100}
-                    value={Math.round(resolveAssetOpacity(singleSelected) * 100)}
-                    onChange={(event) =>
-                      updateAsset(singleSelected.id, {
-                        opacity: Number(event.target.value) / 100,
-                      })
-                    }
-                  />
-                </label>
-                <div
-                  className="material-preview-swatch"
-                  style={{
-                    backgroundColor: singleSelected.color,
-                    opacity: resolveAssetOpacity(singleSelected),
-                  }}
-                  title="Vorschau Farbe + Deckkraft"
-                />
+                    <label className="opacity-slider-field">
+                      <span className="inspector-inline-label">
+                        Deckkraft ({Math.round(resolveAssetOpacity(singleSelected) * 100)}%)
+                        <InfoIcon title={FIELD_DESC.assetOpacity} />
+                      </span>
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        value={Math.round(resolveAssetOpacity(singleSelected) * 100)}
+                        onChange={(event) =>
+                          updateAsset(singleSelected.id, {
+                            opacity: Number(event.target.value) / 100,
+                          })
+                        }
+                      />
+                    </label>
+                    <div
+                      className="material-preview-swatch"
+                      style={{
+                        backgroundColor: singleSelected.color,
+                        opacity: resolveAssetOpacity(singleSelected),
+                      }}
+                      title="Vorschau Farbe + Deckkraft"
+                    />
+                  </>
+                ) : (
+                  <p className="subtle-hint">
+                    Objekt-Farbe und Deckkraft gelten nicht für Text-Labels — nutze{' '}
+                    <strong>Text-Label (Lesbarkeit)</strong> unten.
+                  </p>
+                )}
 
                 {singleSelected.geometry.kind !== 'text' ? (
                   <div className="inspector-decal-panel">
@@ -4564,55 +4546,75 @@ export default function PlannerApp() {
                         <div className="inspector-label-style-panel">
                           <h4 className="inspector-subheading">Text-Label (Lesbarkeit)</h4>
                           <p className="subtle-hint inspector-label-bg-hint">
-                            Hintergrund über Canvas-Textur; wirkt auf alle Text-Instanzen dieses Typs
-                            gemäß Vorlage.
+                            Schrift- und Hintergrundfarbe wie bei anderen Assets (Favoriten im
+                            Farbwähler). Nur diese eine Schriftfarbe steuert die Canvas-Textur — nicht
+                            die Objekt-Farbe darunter.
                           </p>
-                          <span className="inspector-inline-label">Hintergrund</span>
-                          <div className="decal-side-grid">
-                            {(
-                              [
-                                ['none', 'Aus'],
-                                ['light', 'Hell'],
-                                ['dark', 'Dunkel'],
-                                ['custom', 'Farbe…'],
-                              ] as const
-                            ).map(([id, label]) => (
-                              <label key={id} className="decal-side-radio">
-                                <input
-                                  type="radio"
-                                  name={`label-bg-${singleSelected.id}`}
-                                  checked={ls.background === id}
-                                  onChange={() => patchLs({ background: id })}
-                                />
-                                {label}
-                              </label>
-                            ))}
-                          </div>
-                          {ls.background === 'custom' ? (
-                            <label className="metadata-field">
-                              <span className="inspector-inline-label">Hintergrundfarbe</span>
-                              <input
-                                type="text"
-                                value={ls.backgroundColor ?? '#ffffff'}
-                                onChange={(e) => patchLs({ backgroundColor: e.target.value })}
-                              />
-                            </label>
-                          ) : null}
-                          <label className="opacity-slider-field">
-                            <span className="inspector-inline-label">
-                              Hintergrund-Deckkraft (
-                              {Math.round((ls.backgroundOpacity ?? 0.8) * 100)}%)
-                            </span>
+                          <ColorPickerPopover
+                            label="Textfarbe"
+                            value={sanitizeColor(ls.textColor ?? DEFAULT_TEXT_LABEL_STYLE.textColor)}
+                            hint="Farbe der Beschriftung auf dem Label."
+                            onCommit={(hex) => patchLs({ textColor: sanitizeColor(hex) })}
+                          />
+                          <label className="checkbox-field">
                             <input
-                              type="range"
-                              min={0}
-                              max={100}
-                              value={Math.round((ls.backgroundOpacity ?? 0.8) * 100)}
-                              onChange={(e) =>
-                                patchLs({ backgroundOpacity: Number(e.target.value) / 100 })
-                              }
+                              type="checkbox"
+                              checked={ls.background !== 'none'}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  const fallback =
+                                    ls.background === 'light'
+                                      ? '#ffffff'
+                                      : ls.background === 'dark'
+                                        ? '#141820'
+                                        : ls.backgroundColor ?? '#ffffff'
+                                  patchLs({
+                                    background: 'custom',
+                                    backgroundColor: sanitizeColor(fallback),
+                                  })
+                                } else {
+                                  patchLs({ background: 'none' })
+                                }
+                              }}
                             />
+                            <span>Hintergrund anzeigen</span>
                           </label>
+                          {ls.background !== 'none' ? (
+                            <>
+                              <ColorPickerPopover
+                                label="Hintergrundfarbe"
+                                value={sanitizeColor(
+                                  ls.background === 'light'
+                                    ? '#ffffff'
+                                    : ls.background === 'dark'
+                                      ? '#141820'
+                                      : ls.backgroundColor ?? '#ffffff',
+                                )}
+                                hint="Farbe der abgerundeten Fläche hinter dem Text."
+                                onCommit={(hex) =>
+                                  patchLs({
+                                    background: 'custom',
+                                    backgroundColor: sanitizeColor(hex),
+                                  })
+                                }
+                              />
+                              <label className="opacity-slider-field">
+                                <span className="inspector-inline-label">
+                                  Hintergrund-Deckkraft (
+                                  {Math.round((ls.backgroundOpacity ?? 0.8) * 100)}%)
+                                </span>
+                                <input
+                                  type="range"
+                                  min={0}
+                                  max={100}
+                                  value={Math.round((ls.backgroundOpacity ?? 0.8) * 100)}
+                                  onChange={(e) =>
+                                    patchLs({ backgroundOpacity: Number(e.target.value) / 100 })
+                                  }
+                                />
+                              </label>
+                            </>
+                          ) : null}
                           <label className="opacity-slider-field">
                             <span className="inspector-inline-label">Padding (px)</span>
                             <input
@@ -4636,14 +4638,6 @@ export default function PlannerApp() {
                               onChange={(e) => patchLs({ borderRadiusPx: Number(e.target.value) })}
                             />
                             <span className="slider-value-hint">{ls.borderRadiusPx}</span>
-                          </label>
-                          <label className="metadata-field">
-                            <span className="inspector-inline-label">Textfarbe</span>
-                            <input
-                              type="text"
-                              value={ls.textColor ?? DEFAULT_TEXT_LABEL_STYLE.textColor}
-                              onChange={(e) => patchLs({ textColor: e.target.value })}
-                            />
                           </label>
                           <label className="opacity-slider-field">
                             <span className="inspector-inline-label">Schrift (Canvas px)</span>

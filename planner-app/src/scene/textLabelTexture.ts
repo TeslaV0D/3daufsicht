@@ -1,3 +1,4 @@
+import tinycolor from 'tinycolor2'
 import type { TextLabelStyle } from '../types/asset'
 import { mergeLabelStyle } from '../types/asset'
 
@@ -69,30 +70,34 @@ export function buildTextLabelTexture(
   }
 
   if (style.background !== 'none') {
-    let fill = 'rgba(255,255,255,0.82)'
-    if (style.background === 'dark') fill = 'rgba(20,24,32,0.88)'
-    if (style.background === 'custom' && style.backgroundColor) {
-      const hex = style.backgroundColor.replace('#', '')
-      const a = Math.max(0, Math.min(1, style.backgroundOpacity ?? 0.85))
-      if (hex.length === 6) {
-        const r = parseInt(hex.slice(0, 2), 16)
-        const g = parseInt(hex.slice(2, 4), 16)
-        const b = parseInt(hex.slice(4, 6), 16)
-        fill = `rgba(${r},${g},${b},${a})`
-      }
-    } else if (style.background === 'light') {
-      const a = Math.max(0, Math.min(1, style.backgroundOpacity ?? 0.82))
+    const a = Math.max(0, Math.min(1, style.backgroundOpacity ?? 0.85))
+    let fill: string
+    if (style.background === 'light') {
       fill = `rgba(255,255,255,${a})`
     } else if (style.background === 'dark') {
-      const a = Math.max(0, Math.min(1, style.backgroundOpacity ?? 0.88))
       fill = `rgba(20,24,32,${a})`
+    } else if (style.background === 'custom' && style.backgroundColor) {
+      const tc = tinycolor(style.backgroundColor)
+      if (tc.isValid()) {
+        const rgb = tc.toRgb()
+        fill = `rgba(${rgb.r},${rgb.g},${rgb.b},${a})`
+      } else {
+        fill = `rgba(255,255,255,${a})`
+      }
+    } else {
+      fill = `rgba(255,255,255,${a})`
     }
     ctx.fillStyle = fill
     drawRounded()
     ctx.fill()
   }
 
-  const tx = style.textColor ?? (style.background === 'dark' ? '#f1f5f9' : '#0b1220')
+  const textTc = tinycolor(style.textColor)
+  const tx = textTc.isValid()
+    ? textTc.toRgbString()
+    : style.background === 'dark'
+      ? 'rgb(241, 245, 249)'
+      : 'rgb(11, 18, 32)'
   ctx.fillStyle = tx
 
   if (style.textShadow) {
@@ -105,10 +110,13 @@ export function buildTextLabelTexture(
   let yOff = pad
   for (const line of lines) {
     if (style.outline) {
-      ctx.strokeStyle = 'rgba(0,0,0,0.55)'
+      const strokeTc = tinycolor(style.textColor)
+      const strokeRgb = strokeTc.isValid() ? strokeTc.toRgb() : { r: 11, g: 18, b: 32 }
+      ctx.strokeStyle = `rgba(${strokeRgb.r},${strokeRgb.g},${strokeRgb.b},0.35)`
       ctx.lineWidth = 2 * dpr
       ctx.strokeText(line || ' ', pad, yOff)
     }
+    ctx.fillStyle = tx
     ctx.fillText(line || ' ', pad, yOff)
     yOff += lineH
   }

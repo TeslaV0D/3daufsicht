@@ -350,17 +350,31 @@ Ergebnis: beide Checks erfolgreich.
 
 ### Abgeschlossen
 
-- **Toolbar „Ansicht“:** Popover wie Werkzeuge/Beleuchtung — Kameras (Perspektive/Top/Front/Seite), Perspektive-Slider, Presets (Standard, Erhöht, Vogel, Isometrisch), Reset, **Custom-Presets** (`perspectiveCustomPresets.ts` / `localStorage`); auch im View Mode; Inspector nur noch Kurzhinweis.
+- **Toolbar „Ansicht“:** Popover wie Werkzeuge/Beleuchtung — Kameras (Perspektive/Top/Front/Seite), Perspektive-Slider, Presets (Standard, Erhöht, Vogel, Isometrisch), Reset, **Custom-Presets** (`perspectiveCustomPresets.ts` / `localStorage`); auch im View Mode.
 - **Instancing:** `computeInstancedBoxBatches` + `InstancedBoxBatch` — gleiche Box-Vorlage + gleiche `geometry.params`, opak, ohne Decals, nicht selektiert/gehovered; Klicks mit `instanceId`; optional **Distanz-Culling** pro Instanz in der Batch; `frustumCulled={false}` wegen dynamischer Instanzen.
 - **Bibliothek:** `react-window` **v2** `List` mit fester Zeilenhöhe ab `virtualLibraryThreshold`; Schwellwert und Zeilenhöhe im Performance-Panel.
 - **Distanz-Culling:** `DistanceCullWrap` um nicht-instanziierte `AssetRenderer`; Schalter + Max-Distanz im Inspector.
 - **Performance-HUD:** optional **JS Heap (MB)** wenn `performance.memory` verfügbar (Chrome).
-- **Text-Labels:** Inspector-Sektion **Text-Label (Lesbarkeit)** — Hintergrund-Modus, Custom-Farbe, Deckkraft, Padding, Radius, Textfarbe, Canvas-Schriftgröße, Stärke, Schatten, Outline (`TextLabelStyle` / `mergeLabelStyle`).
+- **Text-Labels:** Inspector-Sektion **Text-Label (Lesbarkeit)** — Hintergrund-Modi, Custom-Farbe, Deckkraft, Padding, Radius, Textfarbe, Canvas-Schriftgröße, Stärke, Schatten, Outline (`TextLabelStyle` / `mergeLabelStyle`).
 
 ### Kurzüberblick
 
 - Schnelle Kamera- und Perspektive-Bedienung aus der Toolbar; eigene Kamera-Presets speicherbar.
 - Weniger Draw-Calls bei vielen gleichen Kisten/Boxen; flüssigere Bibliothek bei langen Listen; Distanz-Culling ohne Selektions-/Gizmo-Logik zu ändern.
+
+## Stand 24: UI-Bereinigung Ansicht, Label-Farben, Präsentation gesperrt
+
+### Abgeschlossen
+
+- **Toolbar:** Die vier View-Buttons (Perspektive / Top / Front / Seite) entfernt — Umschalten nur noch im **Ansicht**-Menü (Tasten 1–4 unverändert).
+- **Inspector:** Kein Kamera-/Ansicht-Hinweis mehr; View-Steuerung nur in der Toolbar.
+- **Text-Labels:** Schriftfarbe nur noch über **`ColorPickerPopover`** und `labelStyle.textColor`; Canvas-Textur nutzt **tinycolor** + stabiler **`styleKey`** in `BillboardTextLabel`; Material-Farbwähler für `geometry.kind === 'text'` ausgeblendet (Hinweis auf Label-Sektion).
+- **Label-Hintergrund:** Checkbox **Hintergrund anzeigen**; Hintergrundfarbe mit vollem Color Picker; Deckkraft separat; alte Presets Hell/Dunkel werden beim Aktivieren auf Hex-Farben gemappt.
+- **Präsentationsmodus:** `onAssetClick` / `onInstancedBoxPointerDown` — **gesperrte** Assets und **Zonen** (`CATEGORY_ZONES`) öffnen kein Info-Modal; Hinweisleiste angepasst.
+
+### Kurzüberblick
+
+- Weniger redundante UI; konsistente Farbwahl für Labels; Präsentation ohne Klicks auf gesperrte/Zonen-Objekte.
 
 ## Offene optionale Erweiterungen
 

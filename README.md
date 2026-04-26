@@ -29,8 +29,8 @@ npm run lint
 ### Modus-Trennung
 
 - **Edit-Modus**: volle Bearbeitung (Platzieren, Gizmos, Inspector, Library, Undo/Redo).
-- **Praesentationsmodus (View Mode)**: read-only, Klick auf Asset oeffnet Info-Popup mit rein semantischen Infos (Name, Beschreibung, Kategorie, Custom Metadata).
-- **Präsentations-Toolbar**: Kamera-Presets (Perspektive, Top, Front, Seite) plus **Ansicht**-Menü (Presets, Perspektive-Slider, Custom-Presets); Badge `VIEW MODE`, Button **„Präsentation beenden (ESC)“** — keine Modus-Tools, keine Beleuchtung, kein Speichern/Laden/Export, kein Shortcuts-„?“-FAB.
+- **Praesentationsmodus (View Mode)**: read-only, Klick auf ein **nicht gesperrtes** Asset (keine **Zonen**-Assets) öffnet das Info-Popup mit rein semantischen Infos. **Gesperrte** Objekte und **Zonen** sind nicht anwählbar.
+- **Präsentations-Toolbar**: nur **Ansicht**-Menü (alle Kameras Perspektive/Top/Front/Seite, Perspektive-Slider, Presets, Custom-Presets); keine separaten View-Buttons mehr. Badge `VIEW MODE`, Button **„Präsentation beenden (ESC)“** — keine Modus-Tools, keine Beleuchtung, kein Speichern/Laden/Export, kein Shortcuts-„?“-FAB.
 - Klarer Mode-Badge (`EDIT MODE` / `VIEW MODE`) in der Top-Bar, fade-Transition beim Wechsel.
 - View Mode nutzt weicheres Kamera-Profil; `OrbitControls` werden beim Wechsel per `key={mode}` sauber resettet. **ESC** schließt schichtweise offene UI (Farbwähler, Vorschau, Dialoge, Toolbar-Menüs, Suche) und beendet danach die Präsentation bzw. setzt im Edit-Modus das Auswahl-Tool.
 
@@ -61,8 +61,8 @@ npm run lint
 - **Skalierung:** Für **Custom-/Import-Assets** feinere Dezimalstellen (6) am Slider/Inspector.
 - **Fokus:** Kurze Sperre für Boden-Klicks nach Gizmo-Drag verhindert versehentliches Deselektieren; **ESC** im Edit-Modus leert die Auswahl (wenn kein Multi-Modus aktiv).
 - **Performance:** Inspector „Performance“ — HUD (FPS, Draw-Calls, Geometrien, optional JS-Heap in Chrome), max. Pixel-Ratio, **Instancing** für identische opake Boxen ohne Decals (ein `InstancedMesh` pro Gruppe), **Distanz-Culling**, **virtuelle Bibliotheks-Liste** (`react-window` `List` ab konfigurierbarem Schwellwert), LOD-Hinweis, Schatten-Metadaten-Toggle.
-- **Text-Labels:** **`BillboardTextLabel`** mit Canvas-Textur (Hintergrund hell/dunkel/custom, Lesbarkeit); Inspector: **Text-Label-Stil** bei ausgewähltem Label-Asset.
-- **Perspektive:** Toolbar **Ansicht** — Standard-Ansichten, Live-Slider (nur Perspektive), eingebaute Presets, **eigene Presets** in `localStorage`; Werte weiter im Layout (`perspectiveCamera`).
+- **Text-Labels:** **`BillboardTextLabel`** mit Canvas-Textur; **Textfarbe** und **Hintergrundfarbe** jeweils mit vollem **`ColorPickerPopover`** (wie andere Objekte, inkl. Favoriten); Hintergrund optional mit **Transparenz**; keine doppelte Material-Farbe für Text-Assets im Inspector.
+- **Perspektive:** ausschließlich Toolbar **Ansicht** — Standard-Ansichten, Live-Slider (nur Perspektive), eingebaute Presets, **eigene Presets** in `localStorage`; keine View-Controls mehr im Inspector.
 - **Backward Compatibility:** `version: 8`, `layoutFormatSemver: "1.2.0"`, `finalizeImportedPayload` beim Laden/Import.
 
 ### Bibliothek & Gruppen (Feinschliff)
