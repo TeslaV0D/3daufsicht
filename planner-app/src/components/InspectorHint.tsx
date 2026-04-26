@@ -1,14 +1,6 @@
-/** Compact (? ) hint with hover/focus tooltip (space-saving inspector help). */
+import InfoIcon from './InfoIcon'
+
+/** @deprecated Bevorzugt `InfoIcon` mit `title` und Text aus `fieldDescriptions`. */
 export default function InspectorHint({ text }: { text: string }) {
-  return (
-    <span
-      className="inspector-field-hint"
-      role="img"
-      aria-label={text}
-      data-tooltip={text}
-      tabIndex={0}
-    >
-      ?
-    </span>
-  )
+  return <InfoIcon title={text} />
 }

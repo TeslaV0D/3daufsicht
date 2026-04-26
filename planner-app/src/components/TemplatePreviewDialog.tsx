@@ -5,6 +5,8 @@ import { Suspense, useLayoutEffect, useMemo, useRef } from 'react'
 import { createAssetFromTemplate } from '../AssetFactory'
 import type { AssetTemplate } from '../types/asset'
 import AssetRenderer from './AssetRenderer'
+import InfoIcon from './InfoIcon'
+import { FIELD_DESC } from '../ui/fieldDescriptions'
 
 export default function TemplatePreviewDialog({
   open,
@@ -79,7 +81,10 @@ export default function TemplatePreviewDialog({
             <OrbitControls enablePan enableZoom enableRotate makeDefault />
           </Canvas>
         </div>
-        <p className="panel-hint template-preview-hint">Maus: drehen, zoomen, schwenken</p>
+        <p className="template-preview-hint inspector-inline-label">
+          Steuerung
+          <InfoIcon title={FIELD_DESC.templatePreviewControls} />
+        </p>
       </div>
     </div>
   )

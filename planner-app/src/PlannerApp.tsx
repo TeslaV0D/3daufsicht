@@ -29,7 +29,7 @@ import AssetRenderer, { GhostAssetRenderer } from './components/AssetRenderer'
 import ColorPickerPopover from './components/ColorPickerPopover'
 import ExportLayoutModal from './components/ExportLayoutModal'
 import FactoryFloor from './components/FactoryFloor'
-import InspectorHint from './components/InspectorHint'
+import InfoIcon from './components/InfoIcon'
 import Lighting from './components/Lighting'
 import LightingToolbarPanel from './components/LightingToolbarPanel'
 import LoadLayoutModal from './components/LoadLayoutModal'
@@ -40,7 +40,15 @@ import TemplatePreviewDialog from './components/TemplatePreviewDialog'
 import { dismissTopColorPickerEscape } from './colorPickerEscapeStack'
 import { createAssetFromTemplate, geometryKindSupports2D } from './AssetFactory'
 import { useAssetsStore, type LayoutExportKind } from './store/useAssetsStore'
-import type { Asset, AssetDecal, AssetDecalSide, AssetTemplate, MaterialMode, ModelFormat } from './types/asset'
+import type {
+  Asset,
+  AssetDecal,
+  AssetDecalSide,
+  AssetMetadata,
+  AssetTemplate,
+  MaterialMode,
+  ModelFormat,
+} from './types/asset'
 import { getCustomRows, newCustomFieldId, resolveAssetOpacity, sanitizeColor } from './types/asset'
 import type { CameraViewPreset } from './types/plannerUi'
 import {
@@ -60,6 +68,7 @@ import {
 } from './types/libraryOrganization'
 import { libraryAccentForSectionTitle } from './types/libraryCategoryAccent'
 import { type FloorSettings, sanitizePlacementSnapStep } from './types/floor'
+import { FIELD_DESC } from './ui/fieldDescriptions'
 
 type PlannerTool = 'select' | 'place'
 type PlannerMode = 'edit' | 'view'
@@ -321,6 +330,7 @@ interface NumericInputProps {
   fractionDigits?: number
   onCommit: (value: number) => void
   disabled?: boolean
+  hint?: string
 }
 
 function NumericInput({
@@ -329,6 +339,7 @@ function NumericInput({
   fractionDigits = 2,
   onCommit,
   disabled,
+  hint,
 }: NumericInputProps) {
   const [draft, setDraft] = useState(formatNumeric(value, fractionDigits))
   const [editing, setEditing] = useState(false)
@@ -348,7 +359,10 @@ function NumericInput({
 
   return (
     <label className={disabled ? 'input-disabled' : undefined}>
-      {label}
+      <span className="inspector-inline-label">
+        {label}
+        {hint ? <InfoIcon title={hint} /> : null}
+      </span>
       <input
         type="text"
         inputMode="decimal"
@@ -369,6 +383,222 @@ function NumericInput({
         }}
       />
     </label>
+  )
+}
+
+function InspectorCoreMetadataFields({
+  asset,
+  patchSimpleMetadata,
+  zoneTypeSuggestions,
+}: {
+  asset: Asset
+  patchSimpleMetadata: (kind: 'name' | 'description' | 'zoneType', value: string) => void
+  zoneTypeSuggestions: string[]
+}) {
+  const [coreMetaEdit, setCoreMetaEdit] = useState<null | 'name' | 'description' | 'zoneType'>(
+    null,
+  )
+  const [coreMetaDraft, setCoreMetaDraft] = useState('')
+
+  return (
+    <>
+      <datalist id="inspector-zone-suggestions">
+        {zoneTypeSuggestions.map((z) => (
+          <option key={z} value={z} />
+        ))}
+      </datalist>
+
+      <div className="inspector-core-meta-block">
+        <div className="inspector-core-meta-label-row inspector-inline-label">
+          <span>Name</span>
+          <InfoIcon title={FIELD_DESC.metaName} />
+        </div>
+        {coreMetaEdit === 'name' ? (
+          <div className="inspector-core-meta-edit">
+            <input
+              value={coreMetaDraft}
+              onChange={(e) => setCoreMetaDraft(e.target.value)}
+              autoFocus
+            />
+            <div className="inspector-core-meta-actions">
+              <button
+                type="button"
+                onClick={() => {
+                  patchSimpleMetadata('name', coreMetaDraft)
+                  setCoreMetaEdit(null)
+                }}
+              >
+                Speichern
+              </button>
+              <button type="button" onClick={() => setCoreMetaEdit(null)}>
+                Abbrechen
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  patchSimpleMetadata('name', '')
+                  setCoreMetaEdit(null)
+                }}
+              >
+                Leeren
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="inspector-core-meta-view-row">
+            <p
+              className="inspector-core-meta-display inspector-core-meta-truncate"
+              title={
+                asset.metadata.name?.trim() ? asset.metadata.name : asset.type
+              }
+            >
+              {asset.metadata.name?.trim() || asset.type}
+            </p>
+            <button
+              type="button"
+              className="inspector-pencil-btn"
+              aria-label="Name bearbeiten"
+              onClick={() => {
+                setCoreMetaEdit('name')
+                setCoreMetaDraft(asset.metadata.name?.trim() ?? '')
+              }}
+            >
+              ✎
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="inspector-core-meta-block">
+        <div className="inspector-core-meta-label-row inspector-inline-label">
+          <span>Beschreibung</span>
+          <InfoIcon title={FIELD_DESC.metaDescription} />
+        </div>
+        {coreMetaEdit === 'description' ? (
+          <div className="inspector-core-meta-edit">
+            <textarea
+              rows={4}
+              value={coreMetaDraft}
+              onChange={(e) => setCoreMetaDraft(e.target.value)}
+              autoFocus
+            />
+            <div className="inspector-core-meta-actions">
+              <button
+                type="button"
+                onClick={() => {
+                  patchSimpleMetadata('description', coreMetaDraft)
+                  setCoreMetaEdit(null)
+                }}
+              >
+                Speichern
+              </button>
+              <button type="button" onClick={() => setCoreMetaEdit(null)}>
+                Abbrechen
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  patchSimpleMetadata('description', '')
+                  setCoreMetaEdit(null)
+                }}
+              >
+                Leeren
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="inspector-core-meta-view-row">
+            <p
+              className="inspector-core-meta-display inspector-core-meta-description-preview"
+              title={asset.metadata.description ?? ''}
+            >
+              {asset.metadata.description?.trim() ? asset.metadata.description : '—'}
+            </p>
+            <button
+              type="button"
+              className="inspector-pencil-btn"
+              aria-label="Beschreibung bearbeiten"
+              onClick={() => {
+                setCoreMetaEdit('description')
+                setCoreMetaDraft(asset.metadata.description ?? '')
+              }}
+            >
+              ✎
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="inspector-core-meta-block">
+        <div className="inspector-core-meta-label-row inspector-inline-label">
+          <span>Zonen-/Typ</span>
+          <InfoIcon title={FIELD_DESC.metaZoneType} />
+        </div>
+        {coreMetaEdit === 'zoneType' ? (
+          <div className="inspector-core-meta-edit">
+            <input
+              list="inspector-zone-suggestions"
+              value={coreMetaDraft}
+              onChange={(e) => setCoreMetaDraft(e.target.value)}
+              autoFocus
+            />
+            <div className="inspector-core-meta-actions">
+              <button
+                type="button"
+                onClick={() => {
+                  patchSimpleMetadata('zoneType', coreMetaDraft)
+                  setCoreMetaEdit(null)
+                }}
+              >
+                Speichern
+              </button>
+              <button type="button" onClick={() => setCoreMetaEdit(null)}>
+                Abbrechen
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  patchSimpleMetadata('zoneType', '')
+                  setCoreMetaEdit(null)
+                }}
+              >
+                Leeren
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="inspector-core-meta-view-row">
+            <p
+              className="inspector-core-meta-display inspector-core-meta-truncate"
+              title={asset.metadata.zoneType ?? ''}
+            >
+              {asset.metadata.zoneType?.trim() || '—'}
+            </p>
+            <button
+              type="button"
+              className="inspector-pencil-btn"
+              aria-label="Zonen-/Typ bearbeiten"
+              onClick={() => {
+                setCoreMetaEdit('zoneType')
+                setCoreMetaDraft(asset.metadata.zoneType ?? '')
+              }}
+            >
+              ✎
+            </button>
+            {asset.metadata.zoneType?.trim() ? (
+              <button
+                type="button"
+                className="inspector-clear-btn"
+                aria-label="Zonen-/Typ löschen"
+                onClick={() => patchSimpleMetadata('zoneType', '')}
+              >
+                ×
+              </button>
+            ) : null}
+          </div>
+        )}
+      </div>
+    </>
   )
 }
 
@@ -676,7 +906,6 @@ export default function PlannerApp() {
     assetId: string
     rowId: string
   } | null>(null)
-
   const {
     assets,
     templates,
@@ -896,6 +1125,17 @@ export default function PlannerApp() {
     [assets, selectedIds],
   )
   const singleSelected = selectedAssets.length === 1 ? selectedAssets[0] : null
+  const zoneTypeSuggestions = useMemo(() => {
+    const set = new Set<string>()
+    for (const id of ['production', 'storage', 'safety', 'walkway', 'vehicle-path']) {
+      set.add(id)
+    }
+    for (const a of assets) {
+      const z = a.metadata.zoneType?.trim()
+      if (z) set.add(z)
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'de'))
+  }, [assets])
   const inspectorPrimaryDecal = singleSelected?.visual?.decals?.[0]
   const metadataNameEditId =
     metadataNameEdit != null &&
@@ -1599,7 +1839,18 @@ export default function PlannerApp() {
   const patchSimpleMetadata = useCallback(
     (kind: 'name' | 'description' | 'zoneType' | 'text', value: string) => {
       if (!singleSelected) return
-      updateAsset(singleSelected.id, { metadata: { [kind]: value } })
+      let normalized: string | undefined
+      if (kind === 'description') {
+        normalized = value.trim() === '' ? undefined : value
+      } else if (kind === 'name' || kind === 'zoneType') {
+        const t = value.trim()
+        normalized = t === '' ? undefined : t
+      } else {
+        normalized = value.trim() === '' ? undefined : value.slice(0, 160)
+      }
+      updateAsset(singleSelected.id, {
+        metadata: { [kind]: normalized } as Partial<AssetMetadata>,
+      })
     },
     [singleSelected, updateAsset],
   )
@@ -2036,12 +2287,12 @@ export default function PlannerApp() {
         className={`workspace${mode === 'view' ? ' view-mode' : ''}${leftPanelHidden ? ' workspace--hide-library' : ''}${rightPanelHidden ? ' workspace--hide-inspector' : ''}`}
       >
         <aside className="panel left" aria-hidden={mode === 'view'}>
-          <h2>Asset-Bibliothek</h2>
-          <p className="panel-hint">
-            Vorlage wählen und auf den Boden klicken. Eigene Modelle: Plus neben „{EIGENE_ASSETS_USER_GROUP_LABEL}“
-            — GLB, GLTF, STL, OBJ, FBX (max. {formatBytes(MAX_MODEL_SIZE_BYTES)} pro Datei, mehrere Dateien
-            möglich).
-          </p>
+          <h2 className="inspector-inline-label panel-library-heading">
+            Asset-Bibliothek
+            <InfoIcon
+              title={`Vorlage wählen und auf den Boden klicken. Eigene Modelle: Plus neben „${EIGENE_ASSETS_USER_GROUP_LABEL}“ — GLB, GLTF, STL, OBJ, FBX (max. ${formatBytes(MAX_MODEL_SIZE_BYTES)} pro Datei, mehrere Dateien möglich).`}
+            />
+          </h2>
           <div className="library-search-row">
             <span className="library-search-icon" aria-hidden>
               🔍
@@ -2162,13 +2413,15 @@ export default function PlannerApp() {
                   aria-hidden={!expanded}
                 >
                   {section.kind === 'favorites' && section.templates.length === 0 ? (
-                    <p className="panel-hint library-fav-empty">
-                      Über das Menü (⋮) bei einer Vorlage „Zu Favoriten hinzufügen“ wählen.
+                    <p className="library-fav-empty inspector-inline-label">
+                      <span className="library-fav-empty-dash">—</span>
+                      <InfoIcon title={FIELD_DESC.libraryFavoritesEmpty} />
                     </p>
                   ) : null}
                   {section.kind === 'recents' && section.templates.length === 0 ? (
-                    <p className="panel-hint library-fav-empty">
-                      Erscheint automatisch, sobald Sie Assets platzieren.
+                    <p className="library-fav-empty inspector-inline-label">
+                      <span className="library-fav-empty-dash">—</span>
+                      <InfoIcon title={FIELD_DESC.libraryRecentsEmpty} />
                     </p>
                   ) : null}
                   {section.templates.map((template) => (
@@ -2400,7 +2653,10 @@ export default function PlannerApp() {
               >
                 <h3 id="template-meta-title">Vorlage bearbeiten</h3>
                 <label className="library-dialog-field">
-                  <span>Name</span>
+                  <span className="inspector-inline-label">
+                    Name
+                    <InfoIcon title={FIELD_DESC.templateMetaName} />
+                  </span>
                   <input
                     className="library-dialog-input"
                     value={templateMetaDraft.name}
@@ -2410,7 +2666,10 @@ export default function PlannerApp() {
                   />
                 </label>
                 <label className="library-dialog-field">
-                  <span>Beschreibung</span>
+                  <span className="inspector-inline-label">
+                    Beschreibung
+                    <InfoIcon title={FIELD_DESC.templateMetaDescription} />
+                  </span>
                   <textarea
                     className="library-dialog-textarea"
                     rows={3}
@@ -2421,7 +2680,10 @@ export default function PlannerApp() {
                   />
                 </label>
                 <label className="library-dialog-field">
-                  <span>Tags (kommagetrennt)</span>
+                  <span className="inspector-inline-label">
+                    Tags (kommagetrennt)
+                    <InfoIcon title={FIELD_DESC.templateMetaTags} />
+                  </span>
                   <input
                     className="library-dialog-input"
                     value={templateMetaDraft.tags}
@@ -2537,11 +2799,26 @@ export default function PlannerApp() {
                   <section className="details-section">
                     <h4>Basis-Informationen</h4>
                     <dl className="details-dl">
-                      <dt>Name</dt>
+                      <dt className="details-dt-with-hint">
+                        <span className="inspector-inline-label">
+                          Name
+                          <InfoIcon title={FIELD_DESC.templateDetailsName} />
+                        </span>
+                      </dt>
                       <dd>{templateDetailsDialog.label}</dd>
-                      <dt>Beschreibung</dt>
+                      <dt className="details-dt-with-hint">
+                        <span className="inspector-inline-label">
+                          Beschreibung
+                          <InfoIcon title={FIELD_DESC.templateDetailsDescription} />
+                        </span>
+                      </dt>
                       <dd>{templateDetailsDialog.metadata?.description?.trim() || '—'}</dd>
-                      <dt className="details-dt-muted">Typ-ID</dt>
+                      <dt className="details-dt-muted details-dt-with-hint">
+                        <span className="inspector-inline-label">
+                          Typ-ID
+                          <InfoIcon title={FIELD_DESC.templateDetailsTypeId} />
+                        </span>
+                      </dt>
                       <dd className="details-dd-muted">
                         <code>{templateDetailsDialog.type}</code>
                       </dd>
@@ -2550,13 +2827,33 @@ export default function PlannerApp() {
                   <section className="details-section">
                     <h4>Geometrie</h4>
                     <dl className="details-dl">
-                      <dt>Art</dt>
+                      <dt className="details-dt-with-hint">
+                        <span className="inspector-inline-label">
+                          Art
+                          <InfoIcon title={FIELD_DESC.templateDetailsGeometryKind} />
+                        </span>
+                      </dt>
                       <dd>{templateDetailsDialog.geometry.kind}</dd>
-                      <dt>Abmessungen (ca.)</dt>
+                      <dt className="details-dt-with-hint">
+                        <span className="inspector-inline-label">
+                          Abmessungen (ca.)
+                          <InfoIcon title={FIELD_DESC.templateDetailsDimensions} />
+                        </span>
+                      </dt>
                       <dd>{formatTemplateDimensions(templateDetailsDialog)}</dd>
-                      <dt>In Millimetern</dt>
+                      <dt className="details-dt-with-hint">
+                        <span className="inspector-inline-label">
+                          In Millimetern
+                          <InfoIcon title={FIELD_DESC.templateDetailsDimensionsMm} />
+                        </span>
+                      </dt>
                       <dd>{formatTemplateDimensionsMm(templateDetailsDialog)}</dd>
-                      <dt>Template-Skalierung</dt>
+                      <dt className="details-dt-with-hint">
+                        <span className="inspector-inline-label">
+                          Template-Skalierung
+                          <InfoIcon title={FIELD_DESC.templateDetailsScale} />
+                        </span>
+                      </dt>
                       <dd>
                         {templateDetailsDialog.scale[0].toFixed(4)} ×{' '}
                         {templateDetailsDialog.scale[1].toFixed(4)} ×{' '}
@@ -2567,7 +2864,12 @@ export default function PlannerApp() {
                   <section className="details-section">
                     <h4>Material</h4>
                     <dl className="details-dl">
-                      <dt>Farbe</dt>
+                      <dt className="details-dt-with-hint">
+                        <span className="inspector-inline-label">
+                          Farbe
+                          <InfoIcon title={FIELD_DESC.templateDetailsMaterialColor} />
+                        </span>
+                      </dt>
                       <dd className="details-color-row">
                         <span
                           className="details-color-swatch"
@@ -2581,7 +2883,12 @@ export default function PlannerApp() {
                   <section className="details-section">
                     <h4>Status</h4>
                     <dl className="details-dl">
-                      <dt>Favorit</dt>
+                      <dt className="details-dt-with-hint">
+                        <span className="inspector-inline-label">
+                          Favorit
+                          <InfoIcon title={FIELD_DESC.templateDetailsFavorite} />
+                        </span>
+                      </dt>
                       <dd>
                         {libraryOrganization.favoriteTemplateTypes.includes(
                           templateDetailsDialog.type,
@@ -2589,7 +2896,12 @@ export default function PlannerApp() {
                           ? '★ Ja'
                           : '☆ Nein'}
                       </dd>
-                      <dt>Bibliotheks-Gruppe</dt>
+                      <dt className="details-dt-with-hint">
+                        <span className="inspector-inline-label">
+                          Bibliotheks-Gruppe
+                          <InfoIcon title={FIELD_DESC.templateDetailsUserGroup} />
+                        </span>
+                      </dt>
                       <dd>
                         {(() => {
                           const gid =
@@ -2604,29 +2916,54 @@ export default function PlannerApp() {
                   <section className="details-section">
                     <h4>Metadaten</h4>
                     <dl className="details-dl">
-                      <dt>Tags</dt>
+                      <dt className="details-dt-with-hint">
+                        <span className="inspector-inline-label">
+                          Tags
+                          <InfoIcon title={FIELD_DESC.templateDetailsTags} />
+                        </span>
+                      </dt>
                       <dd>
                         {getTagsFromTemplate(templateDetailsDialog, libraryOrganization).join(', ') ||
                           '—'}
                       </dd>
                       {templateDetailsDialog.createdAt ? (
                         <>
-                          <dt>Importiert am</dt>
+                          <dt className="details-dt-with-hint">
+                            <span className="inspector-inline-label">
+                              Importiert am
+                              <InfoIcon title={FIELD_DESC.templateDetailsImportedAt} />
+                            </span>
+                          </dt>
                           <dd>
                             {new Date(templateDetailsDialog.createdAt).toLocaleString('de-DE')}
                           </dd>
                         </>
                       ) : (
                         <>
-                          <dt>Import</dt>
+                          <dt className="details-dt-with-hint">
+                            <span className="inspector-inline-label">
+                              Import
+                              <InfoIcon title={FIELD_DESC.templateDetailsImportBuiltin} />
+                            </span>
+                          </dt>
                           <dd>Nein (eingebaute Vorlage)</dd>
                         </>
                       )}
                       {templateDetailsDialog.geometry.kind === 'custom' ? (
                         <>
-                          <dt>Modell-Format</dt>
+                          <dt className="details-dt-with-hint">
+                            <span className="inspector-inline-label">
+                              Modell-Format
+                              <InfoIcon title={FIELD_DESC.templateDetailsModelFormat} />
+                            </span>
+                          </dt>
                           <dd>{templateDetailsDialog.geometry.params.modelFormat ?? '—'}</dd>
-                          <dt>Modell-URL</dt>
+                          <dt className="details-dt-with-hint">
+                            <span className="inspector-inline-label">
+                              Modell-URL
+                              <InfoIcon title={FIELD_DESC.templateDetailsModelUrl} />
+                            </span>
+                          </dt>
                           <dd className="library-details-mono">
                             {templateDetailsDialog.geometry.params.modelUrl
                               ? `${String(templateDetailsDialog.geometry.params.modelUrl).slice(0, 64)}…`
@@ -2789,7 +3126,7 @@ export default function PlannerApp() {
                 className={`inspector-content${singleSelected.isLocked ? ' inspector-asset-locked' : ''}`}
               >
                 <p className="selected-title">
-                  {singleSelected.metadata.name ?? singleSelected.type}
+                  {singleSelected.metadata.name?.trim() || singleSelected.type}
                   {singleSelected.isLocked ? (
                     <span className="lock-indicator" title="Gesperrt">
                       {' '}
@@ -2797,26 +3134,34 @@ export default function PlannerApp() {
                     </span>
                   ) : null}
                 </p>
-                <p className="panel-hint">
-                  Form: {singleSelected.geometry.kind} | Kategorie: {singleSelected.category}
+                <h4 className="inspector-subheading inspector-inline-label">
+                  Instanz
+                  <InfoIcon title={FIELD_DESC.inspectorInstance} />
+                </h4>
+                <p className="inspector-compact-facts" title={`ID: ${singleSelected.id}`}>
+                  <span className="inspector-compact-facts-mono">{singleSelected.geometry.kind}</span>
+                  <span aria-hidden> · </span>
+                  <span>{singleSelected.category}</span>
+                  <span aria-hidden> · </span>
+                  <span>
+                    {templateByType.has(singleSelected.type)
+                      ? formatTemplateDimensions(templateByType.get(singleSelected.type)!)
+                      : '—'}
+                  </span>
+                  <span aria-hidden> · </span>
+                  <span>
+                    Pos {formatNumber(singleSelected.position[0])},{' '}
+                    {formatNumber(singleSelected.position[1])},{' '}
+                    {formatNumber(singleSelected.position[2])}
+                  </span>
+                  <span aria-hidden> · </span>
+                  <code className="inspector-id-chip">{singleSelected.id.slice(0, 10)}…</code>
                 </p>
-                <p className="panel-hint">
-                  Maße (ca.):{' '}
-                  {templateByType.has(singleSelected.type)
-                    ? formatTemplateDimensions(templateByType.get(singleSelected.type)!)
-                    : '—'}
-                </p>
-                <p className="panel-hint">
-                  Position (m): X {formatNumber(singleSelected.position[0])}, Y{' '}
-                  {formatNumber(singleSelected.position[1])}, Z{' '}
-                  {formatNumber(singleSelected.position[2])}
-                </p>
-                <p className="panel-hint">ID: {singleSelected.id.slice(0, 20)}...</p>
 
                 <h3>
                   <span className="inspector-inline-label">
                     Sperre
-                    <InspectorHint text="Wenn aktiv: Asset kann in der Szene nicht verschoben, gedreht oder skaliert werden (nur per Inspector, wo freigegeben)." />
+                    <InfoIcon title={FIELD_DESC.assetLock} />
                   </span>
                 </h3>
                 <label className="checkbox-field">
@@ -2827,19 +3172,23 @@ export default function PlannerApp() {
                       updateAsset(singleSelected.id, { isLocked: event.target.checked })
                     }
                   />
-                  <span>Asset sperren (keine Auswahl / kein Gizmo in der Szene)</span>
+                  <span className="inspector-inline-label">
+                    Asset sperren
+                    <InfoIcon title="Kein Transform-Gizmo in der Szene; gesperrte Assets werden bei Stapel-Aktionen ausgelassen." />
+                  </span>
                 </label>
-                {singleSelected.isLocked ? (
-                  <p className="panel-hint">
-                    Gesperrt: Transform nur im Inspector eingeschränkt; Farbe/Lock hier
-                    weiterhin änderbar. In der Szene ohne Transform-Gizmo.
-                  </p>
-                ) : null}
 
-                <h3 title={singleSelected.isLocked ? 'Asset ist gesperrt' : undefined}>
+                <h3
+                  className="inspector-inline-label"
+                  title={singleSelected.isLocked ? 'Asset ist gesperrt' : undefined}
+                >
                   Transform
+                  <InfoIcon title={FIELD_DESC.inspectorTransform} />
                 </h3>
-                <h4 className="inspector-subheading">Position</h4>
+                <h4 className="inspector-subheading inspector-inline-label">
+                  Position
+                  <InfoIcon title={FIELD_DESC.transformPositionAxis} />
+                </h4>
                 <div className="vector-grid" key={`${singleSelected.id}-pos`}>
                   <NumericInput
                     label="X"
@@ -2873,7 +3222,10 @@ export default function PlannerApp() {
                   />
                 </div>
 
-                <h4 className="inspector-subheading">Rotation (Grad)</h4>
+                <h4 className="inspector-subheading inspector-inline-label">
+                  Rotation (Grad)
+                  <InfoIcon title={FIELD_DESC.transformRotationAxis} />
+                </h4>
                 <div className="vector-grid" key={`${singleSelected.id}-rot`}>
                   <NumericInput
                     label="X"
@@ -2919,12 +3271,15 @@ export default function PlannerApp() {
                   />
                 </div>
 
-                <h4 className="inspector-subheading">Skalierung</h4>
-                <p className="panel-hint inspector-scale-hint">
-                  Stufenlos (Gizmo und Eingaben). Einheitlich: alle Achsen auf einen Wert setzen.
-                </p>
+                <h4 className="inspector-subheading inspector-inline-label">
+                  Skalierung
+                  <InfoIcon title={FIELD_DESC.transformScaleHint} />
+                </h4>
                 <label className="opacity-slider-field">
-                  Alle Achsen gleich
+                  <span className="inspector-inline-label">
+                    Alle Achsen gleich
+                    <InfoIcon title={FIELD_DESC.transformScaleUniformSlider} />
+                  </span>
                   <input
                     type="range"
                     min={0.01}
@@ -3001,15 +3356,19 @@ export default function PlannerApp() {
                   />
                 </div>
 
-                <h3>Material</h3>
+                <h3 className="inspector-inline-label">
+                  Material
+                  <InfoIcon title={FIELD_DESC.materialOverview} />
+                </h3>
                 {singleSelected.geometry.kind === 'custom' &&
                 (singleSelected.geometry.params.modelFormat === 'glb' ||
                   singleSelected.geometry.params.modelFormat === 'gltf') ? (
                   <>
-                    <p className="panel-hint material-mode-hint">
-                      Modus:{' '}
-                      <strong>{singleSelected.materialMode ?? 'original'}</strong> — Original nutzt
-                      GLTF-Materialien; Override färbt alle Meshes mit der gewählten Farbe.
+                    <p className="inspector-inline-label material-mode-label">
+                      <span>
+                        Modus: <strong>{singleSelected.materialMode ?? 'original'}</strong>
+                      </span>
+                      <InfoIcon title={FIELD_DESC.materialModeGlb} />
                     </p>
                     <div className="segmented-toggle" role="group" aria-label="Materialmodus">
                       <button
@@ -3034,17 +3393,12 @@ export default function PlannerApp() {
                       </button>
                     </div>
                   </>
-                ) : (
-                  <p className="panel-hint">
-                    Farbe und Deckkraft gelten für Primitive und STL; GLB/GLTF zusätzlich mit
-                    Modus Original/Override.
-                  </p>
-                )}
+                ) : null}
 
                 <ColorPickerPopover
                   value={singleSelected.color}
                   openSignal={colorPickerKick}
-                  hint="Basisfarbe des Assets. Bei importierten GLB/GLTF nur im Modus „Override“ sichtbar; Bild-Decals liegen als eigene Fläche darüber."
+                  hint={FIELD_DESC.materialColor}
                   onCommit={(nextColor) =>
                     updateAsset(singleSelected.id, { color: sanitizeColor(nextColor) })
                   }
@@ -3053,7 +3407,7 @@ export default function PlannerApp() {
                 <label className="opacity-slider-field">
                   <span className="inspector-inline-label">
                     Deckkraft ({Math.round(resolveAssetOpacity(singleSelected) * 100)}%)
-                    <InspectorHint text="Durchsichtigkeit des gesamten Assets: 0 % unsichtbar, 100 % deckend. Kombiniert mit Modell-Material, falls vorhanden." />
+                    <InfoIcon title={FIELD_DESC.assetOpacity} />
                   </span>
                   <input
                     type="range"
@@ -3081,7 +3435,7 @@ export default function PlannerApp() {
                     <h4 className="inspector-subheading">
                       <span className="inspector-inline-label">
                         Bild / Decal
-                        <InspectorHint text="PNG, JPEG oder WebP auf eine Fläche legen (Orientierung per Seite). Näherung über die Bounding-Box; bei komplexen Modellen ggf. Seite probieren." />
+                        <InfoIcon title={FIELD_DESC.decalImage} />
                       </span>
                     </h4>
                     <input
@@ -3137,7 +3491,7 @@ export default function PlannerApp() {
                     </div>
                     {inspectorPrimaryDecal?.imageUrl ? (
                       <>
-                        <p className="panel-hint inspector-decal-name">
+                        <p className="inspector-decal-name" title={inspectorPrimaryDecal.imageName || ''}>
                           {inspectorPrimaryDecal.imageName || 'Bild'}
                         </p>
                         {inspectorPrimaryDecal.imageUrl.startsWith('data:image/') ? (
@@ -3148,7 +3502,10 @@ export default function PlannerApp() {
                           />
                         ) : null}
                         <label className="opacity-slider-field">
-                          Größe ({Math.round((inspectorPrimaryDecal.size ?? 1) * 100)}%)
+                          <span className="inspector-inline-label">
+                            Größe ({Math.round((inspectorPrimaryDecal.size ?? 1) * 100)}%)
+                            <InfoIcon title={FIELD_DESC.decalSize} />
+                          </span>
                           <input
                             type="range"
                             min={10}
@@ -3161,8 +3518,11 @@ export default function PlannerApp() {
                           />
                         </label>
                         <label className="opacity-slider-field">
-                          Bild-Deckkraft (
-                          {Math.round((inspectorPrimaryDecal.opacity ?? 1) * 100)}%)
+                          <span className="inspector-inline-label">
+                            Bild-Deckkraft (
+                            {Math.round((inspectorPrimaryDecal.opacity ?? 1) * 100)}%)
+                            <InfoIcon title={FIELD_DESC.decalOpacity} />
+                          </span>
                           <input
                             type="range"
                             min={0}
@@ -3176,7 +3536,10 @@ export default function PlannerApp() {
                           />
                         </label>
                         <label className="opacity-slider-field">
-                          Position X ({Math.round((inspectorPrimaryDecal.offsetX ?? 0) * 100)}%)
+                          <span className="inspector-inline-label">
+                            Position X ({Math.round((inspectorPrimaryDecal.offsetX ?? 0) * 100)}%)
+                            <InfoIcon title={FIELD_DESC.decalOffsetX} />
+                          </span>
                           <input
                             type="range"
                             min={-50}
@@ -3188,7 +3551,10 @@ export default function PlannerApp() {
                           />
                         </label>
                         <label className="opacity-slider-field">
-                          Position Y ({Math.round((inspectorPrimaryDecal.offsetY ?? 0) * 100)}%)
+                          <span className="inspector-inline-label">
+                            Position Y ({Math.round((inspectorPrimaryDecal.offsetY ?? 0) * 100)}%)
+                            <InfoIcon title={FIELD_DESC.decalOffsetY} />
+                          </span>
                           <input
                             type="range"
                             min={-50}
@@ -3200,7 +3566,10 @@ export default function PlannerApp() {
                           />
                         </label>
                         <label className="opacity-slider-field">
-                          Rotation ({Math.round(inspectorPrimaryDecal.rotation ?? 0)}°)
+                          <span className="inspector-inline-label">
+                            Rotation ({Math.round(inspectorPrimaryDecal.rotation ?? 0)}°)
+                            <InfoIcon title={FIELD_DESC.decalRotation} />
+                          </span>
                           <input
                             type="range"
                             min={0}
@@ -3212,7 +3581,10 @@ export default function PlannerApp() {
                             }
                           />
                         </label>
-                        <p className="panel-hint inspector-subheading-tight">Seite</p>
+                        <p className="inspector-subheading-tight inspector-inline-label">
+                          Seite
+                          <InfoIcon title={FIELD_DESC.decalSide} />
+                        </p>
                         <div className="decal-side-grid">
                           {DECAL_SIDE_OPTIONS.map((opt) => (
                             <label key={opt.id} className="decal-side-radio">
@@ -3228,17 +3600,23 @@ export default function PlannerApp() {
                         </div>
                       </>
                     ) : (
-                      <p className="panel-hint">Kein Bild — importieren, um ein Decal anzuzeigen.</p>
+                      <p className="inspector-decal-empty inspector-inline-label">
+                        <span className="inspector-decal-empty-label">—</span>
+                        <InfoIcon title={FIELD_DESC.decalNoImage} />
+                      </p>
                     )}
                   </div>
                 ) : null}
 
-                <h3>Info</h3>
+                <h3 className="inspector-inline-label">
+                  Info
+                  <InfoIcon title={FIELD_DESC.inspectorInfoSection} />
+                </h3>
                 {singleSelected.geometry.kind === 'text' && (
                   <label className="metadata-field">
                     <span className="inspector-inline-label">
                       Textinhalt
-                      <InspectorHint text="Wird im 3D-Label in der Szene angezeigt (max. 160 Zeichen)." />
+                      <InfoIcon title={FIELD_DESC.textContent} />
                     </span>
                     <input
                       maxLength={160}
@@ -3248,37 +3626,12 @@ export default function PlannerApp() {
                     />
                   </label>
                 )}
-                <label className="metadata-field">
-                  <span className="inspector-inline-label">
-                    Name
-                    <InspectorHint text="Anzeigename des Assets in Bibliothek, Inspector und Präsentations-Info." />
-                  </span>
-                  <input
-                    value={singleSelected.metadata.name ?? ''}
-                    onChange={(event) => patchSimpleMetadata('name', event.target.value)}
-                  />
-                </label>
-                <label className="metadata-field">
-                  <span className="inspector-inline-label">
-                    Beschreibung
-                    <InspectorHint text="Freitext; erscheint im Präsentations-Popup und in der Bibliothek." />
-                  </span>
-                  <textarea
-                    rows={2}
-                    value={singleSelected.metadata.description ?? ''}
-                    onChange={(event) => patchSimpleMetadata('description', event.target.value)}
-                  />
-                </label>
-                <label className="metadata-field">
-                  <span className="inspector-inline-label">
-                    Zonen-/Typ-Hinweis
-                    <InspectorHint text="Optionales Schlagwort (z. B. Produktion, Lager) für Filter und Anzeige." />
-                  </span>
-                  <input
-                    value={singleSelected.metadata.zoneType ?? ''}
-                    onChange={(event) => patchSimpleMetadata('zoneType', event.target.value)}
-                  />
-                </label>
+                <InspectorCoreMetadataFields
+                  key={singleSelected.id}
+                  asset={singleSelected}
+                  patchSimpleMetadata={patchSimpleMetadata}
+                  zoneTypeSuggestions={zoneTypeSuggestions}
+                />
 
                 {singleSelected.geometry.kind === 'custom' && (
                   <>
@@ -3296,7 +3649,10 @@ export default function PlannerApp() {
                           })
                         }
                       />
-                      <span>Wireframe</span>
+                      <span className="inspector-inline-label">
+                        Wireframe
+                        <InfoIcon title={FIELD_DESC.modelWireframe} />
+                      </span>
                     </label>
                     {singleSelected.geometry.params.modelFormat === 'stl' && (
                       <label className="checkbox-field">
@@ -3312,7 +3668,10 @@ export default function PlannerApp() {
                             })
                           }
                         />
-                        <span>Flat Shading (CAD-Look)</span>
+                        <span className="inspector-inline-label">
+                          Flat Shading (CAD-Look)
+                          <InfoIcon title={FIELD_DESC.modelFlatShading} />
+                        </span>
                       </label>
                     )}
                   </>
@@ -3321,55 +3680,66 @@ export default function PlannerApp() {
                 <h3>
                   <span className="inspector-inline-label">
                     Custom Metadata
-                    <InspectorHint text="Eigene Felder (Name + Wert). Namen sind editierbar; Einträge werden im Layout gespeichert." />
+                    <InfoIcon title={FIELD_DESC.customMetaSection} />
                   </span>
                 </h3>
                 {getCustomRows(singleSelected.metadata).map((row) => (
-                  <div key={row.id} className="custom-field-row custom-field-row--meta">
-                    <div className="custom-field-name-col">
-                      {metadataNameEditId === row.id ? (
-                        <input
-                          className="custom-field-name-input"
-                          value={row.name}
-                          autoFocus
-                          onChange={(e) => renameCustomRow(row.id, e.target.value)}
-                          onBlur={() => setMetadataNameEdit(null)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === 'Escape') {
-                              setMetadataNameEdit(null)
-                            }
-                          }}
-                        />
-                      ) : (
-                        <button
-                          type="button"
-                          className="custom-field-name-btn"
-                          title="Namen bearbeiten"
-                          onClick={() =>
-                            setMetadataNameEdit({
-                              assetId: singleSelected.id,
-                              rowId: row.id,
-                            })
-                          }
-                        >
-                          {row.name}
-                        </button>
-                      )}
+                  <div key={row.id} className="custom-meta-block">
+                    <div className="custom-meta-block-heading inspector-inline-label">
+                      <span className="custom-meta-heading-truncate" title={row.name}>
+                        {row.name}
+                      </span>
+                      <InfoIcon title={FIELD_DESC.customMetaPair} />
                     </div>
-                    <label className="metadata-field custom-field-value">
-                      <input
-                        value={row.value}
-                        onChange={(event) => updateCustomRowValue(row.id, event.target.value)}
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      className="subtle-delete"
-                      onClick={() => removeCustomRow(row.id)}
-                      aria-label={`${row.name} entfernen`}
-                    >
-                      -
-                    </button>
+                    <div className="custom-meta-pair-row">
+                      <div className="custom-meta-pair-name">
+                        {metadataNameEditId === row.id ? (
+                          <input
+                            className="custom-meta-pair-input"
+                            value={row.name}
+                            autoFocus
+                            title={row.name}
+                            onChange={(e) => renameCustomRow(row.id, e.target.value)}
+                            onBlur={() => setMetadataNameEdit(null)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === 'Escape') {
+                                setMetadataNameEdit(null)
+                              }
+                            }}
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            className="custom-meta-name-hit"
+                            title={row.name}
+                            onClick={() =>
+                              setMetadataNameEdit({
+                                assetId: singleSelected.id,
+                                rowId: row.id,
+                              })
+                            }
+                          >
+                            <span className="custom-meta-pair-truncate">{row.name}</span>
+                          </button>
+                        )}
+                      </div>
+                      <div className="custom-meta-pair-value">
+                        <input
+                          className="custom-meta-pair-input"
+                          value={row.value}
+                          title={row.value}
+                          onChange={(event) => updateCustomRowValue(row.id, event.target.value)}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        className="custom-meta-delete"
+                        onClick={() => removeCustomRow(row.id)}
+                        aria-label={`${row.name} entfernen`}
+                      >
+                        ×
+                      </button>
+                    </div>
                   </div>
                 ))}
                 <button
@@ -3383,11 +3753,10 @@ export default function PlannerApp() {
             ) : selectedAssets.length > 1 ? (
               <div className="inspector-content">
                 <p className="selected-title">{selectedAssets.length} Assets ausgewählt</p>
-                <p className="panel-hint">
-                  Mehrfachauswahl: Transform nur wenn mindestens zwei nicht gesperrte Assets
-                  ausgewählt sind. Gesperrte Assets werden nicht mitbewegt.
-                </p>
-                <h3>Stapel</h3>
+                <h3 className="inspector-inline-label">
+                  Stapel
+                  <InfoIcon title={FIELD_DESC.batchMultiSelect} />
+                </h3>
                 <div className="batch-lock-actions">
                   <button type="button" onClick={() => batchToggleLock(true)}>
                     Alle sperren
@@ -3402,9 +3771,13 @@ export default function PlannerApp() {
                     Löschen…
                   </button>
                 </div>
-                <h3>Material</h3>
+                <h3 className="inspector-inline-label">
+                  Material
+                  <InfoIcon title={FIELD_DESC.batchMaterialColor} />
+                </h3>
                 <ColorPickerPopover
                   label="Farbe (alle)"
+                  hint={FIELD_DESC.batchMaterialColor}
                   value={selectedAssets[0]?.color ?? FALLBACK_ASSET_COLOR}
                   openSignal={colorPickerKick}
                   onCommit={(nextColor) => {
@@ -3412,10 +3785,10 @@ export default function PlannerApp() {
                     updateAssets(selectedAssets.map((a) => ({ id: a.id, patch: { color: c } })))
                   }}
                 />
-                <h3>Ausrichten</h3>
-                <p className="panel-hint">
-                  Zusätzlich: Menü „⋮ Werkzeuge“ in der Toolbar für Ausrichten und Verteilen.
-                </p>
+                <h3 className="inspector-inline-label">
+                  Ausrichten
+                  <InfoIcon title={FIELD_DESC.batchAlignTools} />
+                </h3>
                 <div className="batch-lock-actions batch-align-actions">
                   <button
                     type="button"
@@ -3449,10 +3822,13 @@ export default function PlannerApp() {
               </div>
             ) : floorInspectorOpen ? (
               <div className="inspector-content inspector-floor">
-                <p className="selected-title">Boden</p>
-                <p className="panel-hint">Raster im Präsentationsmodus aus; Bodenfarbe bleibt.</p>
+                <p className="selected-title inspector-inline-label">
+                  Boden
+                  <InfoIcon title={FIELD_DESC.floorPresentationGrid} />
+                </p>
                 <ColorPickerPopover
                   label="Bodenfarbe"
+                  hint={FIELD_DESC.floorColor}
                   value={floor.color}
                   onCommit={(c) => setFloor({ color: sanitizeColor(c) })}
                 />
@@ -3462,15 +3838,22 @@ export default function PlannerApp() {
                     checked={floor.gridVisible}
                     onChange={(e) => setFloor({ gridVisible: e.target.checked })}
                   />
-                  <span>Raster anzeigen (nur Bearbeiten)</span>
+                  <span className="inspector-inline-label">
+                    Raster anzeigen (nur Bearbeiten)
+                    <InfoIcon title={FIELD_DESC.floorGridVisible} />
+                  </span>
                 </label>
                 <ColorPickerPopover
                   label="Rasterfarbe"
+                  hint={FIELD_DESC.floorGridColor}
                   value={floor.gridColor}
                   onCommit={(c) => setFloor({ gridColor: sanitizeColor(c) })}
                 />
                 <label className="opacity-slider-field">
-                  Raster-Zellenabstand ({floor.gridSize.toFixed(2)} m)
+                  <span className="inspector-inline-label">
+                    Raster-Zellenabstand ({floor.gridSize.toFixed(2)} m)
+                    <InfoIcon title={FIELD_DESC.floorGridSpacing} />
+                  </span>
                   <input
                     type="range"
                     min={10}
@@ -3481,7 +3864,10 @@ export default function PlannerApp() {
                   />
                 </label>
                 <label className="opacity-slider-field">
-                  Bodengröße ({floor.size.toFixed(0)} m)
+                  <span className="inspector-inline-label">
+                    Bodengröße ({floor.size.toFixed(0)} m)
+                    <InfoIcon title={FIELD_DESC.floorSize} />
+                  </span>
                   <input
                     type="range"
                     min={40}
@@ -3491,17 +3877,26 @@ export default function PlannerApp() {
                     onChange={(e) => setFloor({ size: Number(e.target.value) })}
                   />
                 </label>
-                <h3>Einrasten</h3>
+                <h3 className="inspector-inline-label">
+                  Einrasten
+                  <InfoIcon title={FIELD_DESC.snapSection} />
+                </h3>
                 <label className="checkbox-field">
                   <input
                     type="checkbox"
                     checked={floor.placementSnapEnabled}
                     onChange={(e) => setFloor({ placementSnapEnabled: e.target.checked })}
                   />
-                  <span>Beim Platzieren und Verschieben am Raster einrasten (STRG: frei)</span>
+                  <span className="inspector-inline-label">
+                    Beim Platzieren und Verschieben am Raster einrasten (STRG: frei)
+                    <InfoIcon title={FIELD_DESC.snapEnabled} />
+                  </span>
                 </label>
                 <label className="metadata-field">
-                  Raster-Schritt
+                  <span className="inspector-inline-label">
+                    Raster-Schritt
+                    <InfoIcon title={FIELD_DESC.snapStep} />
+                  </span>
                   <select
                     value={String(floor.placementSnapStep)}
                     onChange={(e) =>
@@ -3520,11 +3915,11 @@ export default function PlannerApp() {
                 </label>
               </div>
             ) : (
-              <div className="inspector-content">
-                <p className="panel-hint">
-                  Klicke ein platziertes Asset an, um Informationen und Position zu bearbeiten.
+              <div className="inspector-content inspector-empty-state">
+                <p className="inspector-inline-label inspector-empty-hint">
+                  Auswahl
+                  <InfoIcon title={FIELD_DESC.inspectorEmpty} />
                 </p>
-                <p className="panel-hint">Oder den Boden (kein Asset gewählt), um den Boden zu bearbeiten.</p>
               </div>
             )}
         </aside>

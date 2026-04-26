@@ -78,7 +78,7 @@ npm run lint
 - Inspector:
   - Position X/Y/Z, Rotation X/Y/Z (Grad), Skalierung X/Y/Z
   - Farbe (eigener Farbpicker mit Swatches, RGB, Hex)
-  - Name, Beschreibung, Zone-/Typ-Hinweis
+  - Name, Beschreibung, Zonen-/Typ (bearbeiten per ✎, leeren; Zone mit Vorschlägen)
   - Custom Metadata (dynamisch hinzufuegen, loeschen)
   - Textinhalt-Feld fuer Label-Assets (Live-Update im 3D-Text)
 - Undo/Redo (`STRG/CMD + Z`, `STRG/CMD + Y`, `STRG/CMD + Shift + Z`).
@@ -160,12 +160,14 @@ npm run lint
 
 ### Metadata-Felder
 
-- **Custom Metadata**: einzelne Zeilen mit **stabiler ID**; **Feldname per Klick editierbar**; Wert im Eingabefeld; Zeile mit **-** löschen.
+- **Name, Beschreibung, Zonen-/Typ**: im Inspector per **✎** bearbeiten (Speichern, Abbrechen, Leeren); Zonen-/Typ mit Vorschlägen aus platzierten Assets und Freitext; **×** leert den Zonen-/Typ schnell.
+- **Custom Metadata**: Zeilen mit **stabiler ID**; **Name und Wert** in einer Zeile (links/rechts, mit Ellipsis bei langem Text); Name per Klick editierbar; **×** löscht die Zeile.
 - `customRows` im JSON (plus abgeleitetes `customData` für Kompatibilität); Import alter Layouts migriert automatisch.
 
-### Inspector-Beschreibungen
+### Inspector & Beschreibungen
 
-- **(? )-Hinweise** neben zentralen Labels (Farbe, Deckkraft, Sperre, Info-Felder, Custom Metadata, Decal): Kurztext per Hover/Fokus.
+- **Info-Icons (? )** bei den meisten Feld-Labels (Inspector, Bibliothek, Vorlagen-Details, Export/Laden, Beleuchtung, Boden, Stapel-Ansicht): Kurztexte zentral in `planner-app/src/ui/fieldDescriptions.ts`, Anzeige per Hover/Fokus (`InfoIcon`).
+- Spart Platz; lange Erklär-Absätze wurden in Tooltips verlagert.
 
 ### Sprache / Zeichen
 

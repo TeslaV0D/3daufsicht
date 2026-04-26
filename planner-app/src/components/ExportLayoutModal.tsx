@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import type { LayoutExportKind } from '../store/useAssetsStore'
+import InfoIcon from './InfoIcon'
+import { FIELD_DESC } from '../ui/fieldDescriptions'
 
 export interface ExportLayoutModalProps {
   open: boolean
@@ -25,8 +27,10 @@ export default function ExportLayoutModal({ open, onClose, onConfirm }: ExportLa
         aria-labelledby="export-layout-title"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 id="export-layout-title">Export</h3>
-        <p className="export-layout-intro">Modus wählen und als JSON-Datei herunterladen.</p>
+        <h3 id="export-layout-title" className="inspector-inline-label">
+          Export
+          <InfoIcon title="Modus wählen und Layout als JSON-Datei herunterladen." />
+        </h3>
 
         <fieldset className="export-layout-fieldset">
           <legend className="sr-only">Export-Modus</legend>
@@ -37,19 +41,11 @@ export default function ExportLayoutModal({ open, onClose, onConfirm }: ExportLa
               checked={kind === 'workspace'}
               onChange={() => setKind('workspace')}
             />
-            <span className="export-layout-option-label">Nur Workspace</span>
-            <span
-              className="export-layout-info"
-              title="Nur die aktuell platzierte Szene speichern (schnell & klein)"
-              aria-label="Nur die aktuell platzierte Szene speichern (schnell & klein)"
-            >
-              ?
+            <span className="inspector-inline-label">
+              <span className="export-layout-option-label">Nur Workspace</span>
+              <InfoIcon title={FIELD_DESC.exportWorkspace} />
             </span>
           </label>
-          <p className="export-layout-hint">
-            Speichert nur platzierte Assets mit Position, Rotation, Farbe, Beleuchtung und Boden.
-            Benötigte eigene Modelle werden minimal mit abgelegt.
-          </p>
 
           <label className="export-layout-option">
             <input
@@ -58,19 +54,11 @@ export default function ExportLayoutModal({ open, onClose, onConfirm }: ExportLa
               checked={kind === 'complete'}
               onChange={() => setKind('complete')}
             />
-            <span className="export-layout-option-label">Komplette Konfiguration</span>
-            <span
-              className="export-layout-info"
-              title="Alles speichern: Metadaten aller Assets, Gruppen, Favoriten, Beleuchtung (umfassend)"
-              aria-label="Alles speichern: Metadaten aller Assets, Gruppen, Favoriten, Beleuchtung (umfassend)"
-            >
-              ?
+            <span className="inspector-inline-label">
+              <span className="export-layout-option-label">Komplette Konfiguration</span>
+              <InfoIcon title={FIELD_DESC.exportComplete} />
             </span>
           </label>
-          <p className="export-layout-hint">
-            Volles Projekt: Bibliothek, Gruppen, Favoriten, Ansicht, Präsentationsmodus und
-            Bibliotheks-Zustand (aufgeklappte Gruppen).
-          </p>
         </fieldset>
 
         <div className="library-dialog-actions">

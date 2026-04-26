@@ -286,6 +286,21 @@ Ergebnis: beide Checks erfolgreich.
 - Platzsparende Feldhilfen im Inspector.
 - Metadata vollständig löschbar und umbenennbar.
 
+## Stand 19: Globale Info-Icons, Core-Metadaten bearbeiten, Metadata-Layout
+
+### Abgeschlossen
+
+- **Info-Icons überall**: Wiederverwendbare `InfoIcon`-Komponente; zentrale Kurztexte in `planner-app/src/ui/fieldDescriptions.ts`. Erklärungen nur noch als (?)-Tooltip (Hover/Fokus), keine langen `panel-hint`-Absätze an denselben Stellen — u. a. Inspector, Asset-Bibliothek, Vorlagen-Details, Export/Laden, Vorschau, Beleuchtungs-Popover, Boden-Inspector, Mehrfachauswahl.
+- **Core-Metadaten**: Name, Beschreibung und Zonen-/Typ im Inspector mit **✎** (Speichern / Abbrechen / Leeren); Zonen-/Typ mit **datalist**-Vorschlägen aus der Szene plus Freitext; **×** zum schnellen Leeren. `patchSimpleMetadata` normalisiert leere Strings zu `undefined` (Felder wirklich leer).
+- **Custom Metadata-Layout**: Name und Wert in **einer Zeile** (ca. 30 % / 70 %), Rahmen, Ellipsis bei Overflow, `title` mit vollem Text; Delete **×**; responsive Wrap unter 600px.
+- **`InspectorHint`**: dünner Wrapper um `InfoIcon` (Abwärtskompatibilität).
+
+### Kurzüberblick
+
+- Konsistente, platzeffiziente Hilfe-UI.
+- Vollständig editierbare Standard-Metadaten inkl. Löschen.
+- Geordnetes Custom-Metadata-Raster.
+
 ## Offene optionale Erweiterungen
 
 - Box-Selection fuer Mehrfachauswahl.

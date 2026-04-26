@@ -8,7 +8,7 @@ import {
 } from 'react'
 import { registerColorPickerEscape } from '../colorPickerEscapeStack'
 import { sanitizeColor } from '../types/asset'
-import InspectorHint from './InspectorHint'
+import InfoIcon from './InfoIcon'
 
 export const COLOR_FAVORITES_STORAGE_KEY = 'factory-color-favorites'
 const MAX_FAVORITES = 10
@@ -184,7 +184,7 @@ export default function ColorPickerPopover({
     <label className={`color-picker color-picker-advanced${disabled ? ' input-disabled' : ''}`}>
       <span className="inspector-inline-label">
         {label}
-        {hint ? <InspectorHint text={hint} /> : null}
+        {hint ? <InfoIcon title={hint} /> : null}
       </span>
       <div className="color-control" ref={popoverRef}>
         <button

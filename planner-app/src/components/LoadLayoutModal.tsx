@@ -1,5 +1,7 @@
 import { useCallback, useRef, useState, type ChangeEvent } from 'react'
 import type { LayoutSlot } from '../store/useAssetsStore'
+import InfoIcon from './InfoIcon'
+import { FIELD_DESC } from '../ui/fieldDescriptions'
 
 export interface LoadLayoutModalProps {
   slots: LayoutSlot[]
@@ -121,14 +123,14 @@ export default function LoadLayoutModal({
 
         <section className="layout-modal-section">
           <div className="layout-modal-section-header">
-            <h4>Aktuelles Auto-Layout</h4>
+            <h4 className="inspector-inline-label">
+              Aktuelles Auto-Layout
+              <InfoIcon title={FIELD_DESC.loadAutoLayout} />
+            </h4>
             <button type="button" onClick={handleLoadCurrent}>
               Auto-Layout laden
             </button>
           </div>
-          <p className="panel-hint">
-            Das zuletzt automatisch gespeicherte Layout (Speichern-Button).
-          </p>
         </section>
 
         <section className="layout-modal-section">
@@ -192,14 +194,14 @@ export default function LoadLayoutModal({
 
         <section className="layout-modal-section">
           <div className="layout-modal-section-header">
-            <h4>Externe Datei laden</h4>
+            <h4 className="inspector-inline-label">
+              Externe Datei laden
+              <InfoIcon title={FIELD_DESC.loadExternalFile} />
+            </h4>
             <button type="button" onClick={() => fileInputRef.current?.click()}>
               Datei auswählen
             </button>
           </div>
-          <p className="panel-hint">
-            Erwartet ein mit &quot;Export&quot; erstelltes <code>.json</code>-Layout.
-          </p>
           <input
             ref={fileInputRef}
             type="file"
