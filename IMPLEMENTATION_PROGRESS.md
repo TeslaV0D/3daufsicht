@@ -396,6 +396,22 @@ Ergebnis: beide Checks erfolgreich.
 
 - Zuverlässigere Objektauswahl; Präsentation ohne ablenkendes Hover-Feedback auf gesperrten Objekten.
 
+## Stand 26: Root-Cause „Deselektion beim Loslassen“ + Boden-Interaktion
+
+### Diagnose
+
+- Beim Auswählen kann das unter dem Cursor liegende **Mesh zwischen `pointerdown` und `pointerup` aus der Szene verschwinden** (z. B. **Instancing** schließt `selectedIds` aus; **Einzel-Auswahl** rendert das Asset nur noch unter `SingleTransformGizmo`).
+- Der **Hallenboden** löste zuvor **`onClick`** aus — ein erneuter Raycast beim **Loslassen** traf dann oft den **Boden** → `setSelectedIds([])` → Inspector wirkte wie „verliert Fokus beim Mouse-Up“.
+
+### Fix
+
+- **`FactoryFloor`**: `onClick` → **`onPointerDown`** (Primärtaste) für `onAction` / Deselektion auf leerem Boden.
+- **`PlannerApp`**: **`assetPointerSuppressFloorUntilRef`** (~400 ms) nach erfolgreicher Asset-Auswahl im Edit-Modus, zusätzlich zur bestehenden Transform-Sperre — Absicherung gegen verzögerte Doppel-Events.
+
+### Kurzüberblick
+
+- Auswahl bleibt nach dem Loslassen der Maustaste stabil; Klick-Logik bleibt konsistent bei **pointerdown** für Assets und Boden.
+
 ## Offene optionale Erweiterungen
 
 - Box-Selection fuer Mehrfachauswahl.

@@ -81,8 +81,10 @@ npm run lint
 ### Objekt-Auswahl & Klicks
 
 - **Zuverlässige Auswahl**: Selektion läuft über **`pointerdown`** (Primärtaste), damit `OrbitControls` und verzögerte `click`-Events die Auswahl nicht „schlucken“.
+- **Fokus bleibt beim Loslassen**: Boden-Deselektion nutzt ebenfalls **`pointerdown`** (nicht **`click`**). So wird vermieden, dass nach einem Pick das getroffene Mesh zwischen **Down** und **Up** aus der Szene verschwindet (Wechsel Instancing → Einzelmesh / Gizmo) und der **mouseup**/`click`-Raycast fälschlich den **Boden** trifft — zuvor wirkte das wie „Deselektion beim Loslassen“.
 - **Raycasting**: R3F nutzt die **Canvas-Bounding-Box** für Pointer-Normalisierung; **`PLANNER_RAYCASTER_PROPS`** auf dem `Canvas` setzt etwas höhere **Line-/Points-Thresholds** für dünnere Geometrien.
 - **Transform-Gizmo**: Klicks auf Gizmo-Handles ändern die Auswahl nicht (Handles liegen außerhalb der Asset-Hit-Tests der Szene).
+- **Deselektion**: Leerer Bereich / Boden mit Auswahl-Werkzeug (**pointerdown**), **ESC**, oder wie bisher; kurze Sperre nach Asset-Pick verhindert Race-Conditions mit Boden-Handler.
 - **Hover & Cursor**: Im **Edit-Modus** zeigen gesperrte und freie Assets weiterhin Hover-Feedback. Im **View-Modus** nur bei **nicht gesperrten, nicht-Zonen**-Assets; gesperrte/Zonen werden visuell und per Cursor ignoriert.
 
 ### Unified Asset System
