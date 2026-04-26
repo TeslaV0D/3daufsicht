@@ -151,6 +151,22 @@ npm run lint
 - Das Beleuchtungs-Popover liegt per **Z-Index** über der 3D-Arbeitsfläche; globale Modals (z. B. Layout laden, Tastenkürzel) bleiben darüber.
 - Einstellungen werden mit dem Workspace gespeichert (Feld `lighting` in JSON / `localStorage`; Layout-Version siehe `STORAGE_VERSION` im Store).
 
+### Decals & Texturen
+
+- Bilder **PNG, JPEG, WebP** auf die Asset-Oberfläche legen (Näherung über Bounding-Box / Primitive-Maße).
+- Im Inspector unter **Material**: **Bild / Decal** — Import, Entfernen, **Größe** (10–500 %), **Bild-Deckkraft**, **Position** (X/Y), **Rotation**, **Seite** (Oben/Unten/Vorne/Hinten/Links/Rechts oder alle Seiten).
+- Daten in `visual.decals` (Data-URL), mit dem Workspace speicherbar.
+- 3D-Text-Assets: kein Decal-Block (fokus auf Label-Text).
+
+### Metadata-Felder
+
+- **Custom Metadata**: einzelne Zeilen mit **stabiler ID**; **Feldname per Klick editierbar**; Wert im Eingabefeld; Zeile mit **-** löschen.
+- `customRows` im JSON (plus abgeleitetes `customData` für Kompatibilität); Import alter Layouts migriert automatisch.
+
+### Inspector-Beschreibungen
+
+- **(? )-Hinweise** neben zentralen Labels (Farbe, Deckkraft, Sperre, Info-Felder, Custom Metadata, Decal): Kurztext per Hover/Fokus.
+
 ### Sprache / Zeichen
 
 - UI mit **UTF-8** und deutschen **Umlauten** (ä, ö, ü, ß) wo angezeigt; `index.html` mit `lang="de"`.

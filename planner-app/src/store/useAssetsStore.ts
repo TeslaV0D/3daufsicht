@@ -6,7 +6,7 @@ import {
   createCustomModelTemplate,
 } from '../AssetFactory'
 import type { Asset, AssetTemplate, ModelFormat } from '../types/asset'
-import { cloneAsset, cloneAssets, sanitizeAsset } from '../types/asset'
+import { cloneAsset, cloneAssets, mergeAssetMetadata, sanitizeAsset } from '../types/asset'
 import {
   cloneFloor,
   DEFAULT_FLOOR,
@@ -562,14 +562,9 @@ export function useAssetsStore(): AssetsStore {
           ? cloneAsset({
               ...asset,
               ...patch,
-              metadata: {
-                ...asset.metadata,
-                ...(patch.metadata ?? {}),
-                customData: {
-                  ...(asset.metadata.customData ?? {}),
-                  ...(patch.metadata?.customData ?? {}),
-                },
-              },
+              metadata: patch.metadata
+                ? mergeAssetMetadata(asset.metadata, patch.metadata)
+                : asset.metadata,
               geometry: patch.geometry
                 ? {
                     kind: patch.geometry.kind,
@@ -596,14 +591,7 @@ export function useAssetsStore(): AssetsStore {
           ...asset,
           ...patch,
           metadata: patch.metadata
-            ? {
-                ...asset.metadata,
-                ...patch.metadata,
-                customData: {
-                  ...(asset.metadata.customData ?? {}),
-                  ...(patch.metadata.customData ?? {}),
-                },
-              }
+            ? mergeAssetMetadata(asset.metadata, patch.metadata)
             : asset.metadata,
           geometry: patch.geometry
             ? {

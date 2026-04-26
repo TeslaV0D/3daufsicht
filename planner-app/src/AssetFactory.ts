@@ -1,5 +1,5 @@
 import type { Asset, AssetTemplate, GeometryKind, ModelFormat } from './types/asset'
-import { cloneAsset, FALLBACK_COLOR } from './types/asset'
+import { cloneAsset, FALLBACK_COLOR, sanitizeMetadata } from './types/asset'
 
 export const CATEGORY_PRIMITIVE_3D = 'Primitive 3D'
 export const CATEGORY_PRIMITIVE_2D = 'Primitive 2D'
@@ -359,10 +359,10 @@ export function createAssetFromTemplate(template: AssetTemplate, overrides?: Par
       kind: template.geometry.kind,
       params: { ...template.geometry.params },
     },
-    metadata: {
+    metadata: sanitizeMetadata({
       ...(template.metadata ?? {}),
       customData: { ...(template.metadata?.customData ?? {}) },
-    },
+    }),
     visual: template.visual ? { ...template.visual } : undefined,
   }
 

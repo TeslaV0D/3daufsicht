@@ -1822,3 +1822,153 @@ textarea {
   color: #8fa6c4;
   margin-top: 0.15rem;
 }
+
+/* Inspector: Hilfe-Icons & Decals */
+.inspector-inline-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.inspector-field-hint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 1;
+  color: #8a9aad;
+  border: 1px solid rgba(138, 154, 173, 0.45);
+  background: rgba(20, 28, 40, 0.5);
+  cursor: help;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.inspector-field-hint:hover,
+.inspector-field-hint:focus-visible {
+  color: #c5d2e5;
+  border-color: rgba(180, 200, 230, 0.55);
+}
+
+.inspector-field-hint[data-tooltip]:hover::after,
+.inspector-field-hint[data-tooltip]:focus-visible::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%);
+  width: min(240px, 70vw);
+  padding: 0.45rem 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 400;
+  line-height: 1.35;
+  color: #e8eef8;
+  background: rgba(12, 18, 28, 0.97);
+  border: 1px solid rgba(120, 150, 190, 0.4);
+  border-radius: 0.4rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  z-index: 3000;
+  pointer-events: none;
+  white-space: normal;
+}
+
+.inspector-decal-panel {
+  margin-top: 0.65rem;
+  padding: 0.55rem 0.5rem;
+  border-radius: 0.45rem;
+  border: 1px solid rgba(110, 150, 200, 0.22);
+  background: rgba(8, 14, 22, 0.35);
+}
+
+.inspector-decal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.35rem 0;
+}
+
+.inspector-decal-name {
+  margin: 0.15rem 0 0.25rem;
+  font-size: 0.78rem;
+  word-break: break-all;
+}
+
+.inspector-decal-thumb {
+  max-width: 100%;
+  max-height: 120px;
+  object-fit: contain;
+  border-radius: 0.35rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  margin-bottom: 0.35rem;
+}
+
+.inspector-subheading-tight {
+  margin: 0.35rem 0 0.15rem;
+  font-size: 0.75rem;
+}
+
+.decal-side-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.25rem 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.decal-side-radio {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.inspector-file-input-hidden {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.custom-field-row--meta {
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.25fr) auto;
+  align-items: start;
+}
+
+.custom-field-name-col {
+  min-width: 0;
+}
+
+.custom-field-name-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.25rem 0.35rem;
+  border-radius: 0.3rem;
+  border: 1px dashed rgba(140, 160, 190, 0.35);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.custom-field-name-btn:hover {
+  border-color: rgba(180, 200, 230, 0.5);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.custom-field-name-input {
+  width: 100%;
+  font: inherit;
+  padding: 0.25rem 0.35rem;
+  border-radius: 0.3rem;
+}
+
+.custom-field-value {
+  flex: 1;
+  min-width: 0;
+}

@@ -29,6 +29,7 @@ import AssetRenderer, { GhostAssetRenderer } from './components/AssetRenderer'
 import ColorPickerPopover from './components/ColorPickerPopover'
 import ExportLayoutModal from './components/ExportLayoutModal'
 import FactoryFloor from './components/FactoryFloor'
+import InspectorHint from './components/InspectorHint'
 import Lighting from './components/Lighting'
 import LightingToolbarPanel from './components/LightingToolbarPanel'
 import LoadLayoutModal from './components/LoadLayoutModal'
@@ -39,8 +40,8 @@ import TemplatePreviewDialog from './components/TemplatePreviewDialog'
 import { dismissTopColorPickerEscape } from './colorPickerEscapeStack'
 import { createAssetFromTemplate, geometryKindSupports2D } from './AssetFactory'
 import { useAssetsStore, type LayoutExportKind } from './store/useAssetsStore'
-import type { Asset, AssetTemplate, MaterialMode, ModelFormat } from './types/asset'
-import { resolveAssetOpacity, sanitizeColor } from './types/asset'
+import type { Asset, AssetDecal, AssetDecalSide, AssetTemplate, MaterialMode, ModelFormat } from './types/asset'
+import { getCustomRows, newCustomFieldId, resolveAssetOpacity, sanitizeColor } from './types/asset'
 import type { CameraViewPreset } from './types/plannerUi'
 import {
   alignAssetsXZ,
@@ -70,6 +71,17 @@ const TEMPLATE_DRAG_MIME = 'application/x-factory-template-type'
 const HOVER_POINTER_OUT_DEBOUNCE_MS = 50
 const TOOLBAR_POPOVER_GAP = 8
 const TOOLBAR_POPOVER_MAX_H = 480
+const MAX_DECAL_IMAGE_BYTES = 5 * 1024 * 1024
+
+const DECAL_SIDE_OPTIONS: { id: AssetDecalSide; label: string }[] = [
+  { id: 'top', label: 'Oben' },
+  { id: 'bottom', label: 'Unten' },
+  { id: 'front', label: 'Vorne' },
+  { id: 'back', label: 'Hinten' },
+  { id: 'left', label: 'Links' },
+  { id: 'right', label: 'Rechts' },
+  { id: 'all', label: 'Alle Seiten' },
+]
 
 function computeToolbarPopoverPosition(
   anchor: DOMRect,
@@ -659,6 +671,11 @@ export default function PlannerApp() {
   const [templatePreview, setTemplatePreview] = useState<AssetTemplate | null>(null)
   const [importLibraryBusy, setImportLibraryBusy] = useState(false)
   const eigeneAssetsImportInputRef = useRef<HTMLInputElement | null>(null)
+  const decalImportInputRef = useRef<HTMLInputElement | null>(null)
+  const [metadataNameEdit, setMetadataNameEdit] = useState<{
+    assetId: string
+    rowId: string
+  } | null>(null)
 
   const {
     assets,
@@ -879,6 +896,14 @@ export default function PlannerApp() {
     [assets, selectedIds],
   )
   const singleSelected = selectedAssets.length === 1 ? selectedAssets[0] : null
+  const inspectorPrimaryDecal = singleSelected?.visual?.decals?.[0]
+  const metadataNameEditId =
+    metadataNameEdit != null &&
+    singleSelected != null &&
+    metadataNameEdit.assetId === singleSelected.id
+      ? metadataNameEdit.rowId
+      : null
+
   const transformableSelected = useMemo(
     () => selectedAssets.filter((asset) => !asset.isLocked),
     [selectedAssets],
@@ -1571,69 +1596,83 @@ export default function PlannerApp() {
     updateAssets,
   ])
 
-  const updateSingleMetadata = useCallback(
-    (
-      key: string,
-      value: string,
-      kind: 'name' | 'description' | 'zoneType' | 'text' | 'custom',
-    ) => {
+  const patchSimpleMetadata = useCallback(
+    (kind: 'name' | 'description' | 'zoneType' | 'text', value: string) => {
       if (!singleSelected) return
-      if (kind === 'custom') {
-        updateAsset(singleSelected.id, {
-          metadata: {
-            customData: {
-              ...(singleSelected.metadata.customData ?? {}),
-              [key]: value,
-            },
-          },
-        })
-      } else {
-        updateAsset(singleSelected.id, {
-          metadata: {
-            ...singleSelected.metadata,
-            [kind]: value,
-          },
-        })
-      }
+      updateAsset(singleSelected.id, { metadata: { [kind]: value } })
     },
     [singleSelected, updateAsset],
   )
 
-  const removeCustomMetadataKey = useCallback(
-    (key: string) => {
+  const updateCustomRowValue = useCallback(
+    (rowId: string, value: string) => {
       if (!singleSelected) return
-      const nextCustom = { ...(singleSelected.metadata.customData ?? {}) }
-      delete nextCustom[key]
-      updateAsset(singleSelected.id, {
-        metadata: {
-          ...singleSelected.metadata,
-          customData: nextCustom,
-        },
-      })
+      const rows = getCustomRows(singleSelected.metadata).map((r) =>
+        r.id === rowId ? { ...r, value } : r,
+      )
+      updateAsset(singleSelected.id, { metadata: { customRows: rows } })
+    },
+    [singleSelected, updateAsset],
+  )
+
+  const renameCustomRow = useCallback(
+    (rowId: string, newName: string) => {
+      if (!singleSelected) return
+      const name = newName.trim().slice(0, 200)
+      if (!name) return
+      const rows = getCustomRows(singleSelected.metadata).map((r) =>
+        r.id === rowId ? { ...r, name } : r,
+      )
+      updateAsset(singleSelected.id, { metadata: { customRows: rows } })
+    },
+    [singleSelected, updateAsset],
+  )
+
+  const removeCustomRow = useCallback(
+    (rowId: string) => {
+      if (!singleSelected) return
+      const rows = getCustomRows(singleSelected.metadata).filter((r) => r.id !== rowId)
+      updateAsset(singleSelected.id, { metadata: { customRows: rows } })
     },
     [singleSelected, updateAsset],
   )
 
   const addCustomMetadataField = useCallback(() => {
     if (!singleSelected) return
-    const base = 'Feld'
-    const existing = Object.keys(singleSelected.metadata.customData ?? {})
-    let counter = existing.length + 1
-    let newKey = `${base} ${counter}`
-    while (existing.includes(newKey)) {
-      counter += 1
-      newKey = `${base} ${counter}`
+    const rows = [...getCustomRows(singleSelected.metadata)]
+    let n = rows.length + 1
+    let name = `Feld ${n}`
+    while (rows.some((r) => r.name === name)) {
+      n += 1
+      name = `Feld ${n}`
     }
-    updateAsset(singleSelected.id, {
-      metadata: {
-        ...singleSelected.metadata,
-        customData: {
-          ...(singleSelected.metadata.customData ?? {}),
-          [newKey]: '',
-        },
-      },
-    })
+    rows.push({ id: newCustomFieldId(), name, value: '' })
+    updateAsset(singleSelected.id, { metadata: { customRows: rows } })
   }, [singleSelected, updateAsset])
+
+  const patchPrimaryDecal = useCallback(
+    (partial: Partial<AssetDecal>) => {
+      if (!singleSelected) return
+      const cur = singleSelected.visual?.decals?.[0]
+      const base: AssetDecal = cur ?? {
+        id: newCustomFieldId(),
+        imageUrl: '',
+        imageName: '',
+        size: 1,
+        opacity: 1,
+        offsetX: 0,
+        offsetY: 0,
+        rotation: 0,
+        side: 'front',
+      }
+      const merged: AssetDecal = { ...base, ...partial }
+      const decals = merged.imageUrl ? [merged] : []
+      updateAsset(singleSelected.id, {
+        visual: { ...(singleSelected.visual ?? {}), decals },
+      })
+    },
+    [singleSelected, updateAsset],
+  )
 
   // Preview template for ghost placement
   const ghostAsset: Asset | null = useMemo(() => {
@@ -2774,7 +2813,12 @@ export default function PlannerApp() {
                 </p>
                 <p className="panel-hint">ID: {singleSelected.id.slice(0, 20)}...</p>
 
-                <h3>Sperre</h3>
+                <h3>
+                  <span className="inspector-inline-label">
+                    Sperre
+                    <InspectorHint text="Wenn aktiv: Asset kann in der Szene nicht verschoben, gedreht oder skaliert werden (nur per Inspector, wo freigegeben)." />
+                  </span>
+                </h3>
                 <label className="checkbox-field">
                   <input
                     type="checkbox"
@@ -3000,13 +3044,17 @@ export default function PlannerApp() {
                 <ColorPickerPopover
                   value={singleSelected.color}
                   openSignal={colorPickerKick}
+                  hint="Basisfarbe des Assets. Bei importierten GLB/GLTF nur im Modus „Override“ sichtbar; Bild-Decals liegen als eigene Fläche darüber."
                   onCommit={(nextColor) =>
                     updateAsset(singleSelected.id, { color: sanitizeColor(nextColor) })
                   }
                 />
 
                 <label className="opacity-slider-field">
-                  Deckkraft ({Math.round(resolveAssetOpacity(singleSelected) * 100)}%)
+                  <span className="inspector-inline-label">
+                    Deckkraft ({Math.round(resolveAssetOpacity(singleSelected) * 100)}%)
+                    <InspectorHint text="Durchsichtigkeit des gesamten Assets: 0 % unsichtbar, 100 % deckend. Kombiniert mit Modell-Material, falls vorhanden." />
+                  </span>
                   <input
                     type="range"
                     min={0}
@@ -3028,46 +3076,207 @@ export default function PlannerApp() {
                   title="Vorschau Farbe + Deckkraft"
                 />
 
+                {singleSelected.geometry.kind !== 'text' ? (
+                  <div className="inspector-decal-panel">
+                    <h4 className="inspector-subheading">
+                      <span className="inspector-inline-label">
+                        Bild / Decal
+                        <InspectorHint text="PNG, JPEG oder WebP auf eine Fläche legen (Orientierung per Seite). Näherung über die Bounding-Box; bei komplexen Modellen ggf. Seite probieren." />
+                      </span>
+                    </h4>
+                    <input
+                      ref={decalImportInputRef}
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
+                      className="inspector-file-input-hidden"
+                      onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                        const file = event.target.files?.[0]
+                        event.target.value = ''
+                        if (!file || !singleSelected) return
+                        const okType =
+                          /image\/(png|jpeg|webp)/i.test(file.type) ||
+                          /\.(png|jpe?g|webp)$/i.test(file.name)
+                        if (!okType) {
+                          setSaveFeedback('Nur PNG, JPEG oder WebP.')
+                          window.setTimeout(() => setSaveFeedback(null), 2800)
+                          return
+                        }
+                        if (file.size > MAX_DECAL_IMAGE_BYTES) {
+                          setSaveFeedback('Bild zu groß (max. 5 MB).')
+                          window.setTimeout(() => setSaveFeedback(null), 2800)
+                          return
+                        }
+                        const reader = new FileReader()
+                        reader.onload = () => {
+                          const url = String(reader.result ?? '')
+                          if (!url) return
+                          patchPrimaryDecal({
+                            imageUrl: url,
+                            imageName: file.name,
+                          })
+                        }
+                        reader.readAsDataURL(file)
+                      }}
+                    />
+                    <div className="inspector-decal-actions">
+                      <button
+                        type="button"
+                        onClick={() => decalImportInputRef.current?.click()}
+                      >
+                        Bild importieren
+                      </button>
+                      {inspectorPrimaryDecal?.imageUrl ? (
+                        <button
+                          type="button"
+                          className="subtle-delete"
+                          onClick={() => patchPrimaryDecal({ imageUrl: '', imageName: '' })}
+                        >
+                          Entfernen
+                        </button>
+                      ) : null}
+                    </div>
+                    {inspectorPrimaryDecal?.imageUrl ? (
+                      <>
+                        <p className="panel-hint inspector-decal-name">
+                          {inspectorPrimaryDecal.imageName || 'Bild'}
+                        </p>
+                        {inspectorPrimaryDecal.imageUrl.startsWith('data:image/') ? (
+                          <img
+                            className="inspector-decal-thumb"
+                            src={inspectorPrimaryDecal.imageUrl}
+                            alt=""
+                          />
+                        ) : null}
+                        <label className="opacity-slider-field">
+                          Größe ({Math.round((inspectorPrimaryDecal.size ?? 1) * 100)}%)
+                          <input
+                            type="range"
+                            min={10}
+                            max={500}
+                            step={5}
+                            value={Math.round((inspectorPrimaryDecal.size ?? 1) * 100)}
+                            onChange={(e) =>
+                              patchPrimaryDecal({ size: Number(e.target.value) / 100 })
+                            }
+                          />
+                        </label>
+                        <label className="opacity-slider-field">
+                          Bild-Deckkraft (
+                          {Math.round((inspectorPrimaryDecal.opacity ?? 1) * 100)}%)
+                          <input
+                            type="range"
+                            min={0}
+                            max={100}
+                            value={Math.round(
+                              (inspectorPrimaryDecal.opacity ?? 1) * 100,
+                            )}
+                            onChange={(e) =>
+                              patchPrimaryDecal({ opacity: Number(e.target.value) / 100 })
+                            }
+                          />
+                        </label>
+                        <label className="opacity-slider-field">
+                          Position X ({Math.round((inspectorPrimaryDecal.offsetX ?? 0) * 100)}%)
+                          <input
+                            type="range"
+                            min={-50}
+                            max={50}
+                            value={Math.round((inspectorPrimaryDecal.offsetX ?? 0) * 100)}
+                            onChange={(e) =>
+                              patchPrimaryDecal({ offsetX: Number(e.target.value) / 100 })
+                            }
+                          />
+                        </label>
+                        <label className="opacity-slider-field">
+                          Position Y ({Math.round((inspectorPrimaryDecal.offsetY ?? 0) * 100)}%)
+                          <input
+                            type="range"
+                            min={-50}
+                            max={50}
+                            value={Math.round((inspectorPrimaryDecal.offsetY ?? 0) * 100)}
+                            onChange={(e) =>
+                              patchPrimaryDecal({ offsetY: Number(e.target.value) / 100 })
+                            }
+                          />
+                        </label>
+                        <label className="opacity-slider-field">
+                          Rotation ({Math.round(inspectorPrimaryDecal.rotation ?? 0)}°)
+                          <input
+                            type="range"
+                            min={0}
+                            max={360}
+                            step={1}
+                            value={Math.round(inspectorPrimaryDecal.rotation ?? 0)}
+                            onChange={(e) =>
+                              patchPrimaryDecal({ rotation: Number(e.target.value) })
+                            }
+                          />
+                        </label>
+                        <p className="panel-hint inspector-subheading-tight">Seite</p>
+                        <div className="decal-side-grid">
+                          {DECAL_SIDE_OPTIONS.map((opt) => (
+                            <label key={opt.id} className="decal-side-radio">
+                              <input
+                                type="radio"
+                                name={`decal-side-${singleSelected.id}`}
+                                checked={inspectorPrimaryDecal.side === opt.id}
+                                onChange={() => patchPrimaryDecal({ side: opt.id })}
+                              />
+                              {opt.label}
+                            </label>
+                          ))}
+                        </div>
+                      </>
+                    ) : (
+                      <p className="panel-hint">Kein Bild — importieren, um ein Decal anzuzeigen.</p>
+                    )}
+                  </div>
+                ) : null}
+
                 <h3>Info</h3>
                 {singleSelected.geometry.kind === 'text' && (
                   <label className="metadata-field">
-                    Textinhalt
+                    <span className="inspector-inline-label">
+                      Textinhalt
+                      <InspectorHint text="Wird im 3D-Label in der Szene angezeigt (max. 160 Zeichen)." />
+                    </span>
                     <input
                       maxLength={160}
                       value={singleSelected.metadata.text ?? ''}
                       placeholder="Label"
-                      onChange={(event) =>
-                        updateSingleMetadata('text', event.target.value, 'text')
-                      }
+                      onChange={(event) => patchSimpleMetadata('text', event.target.value)}
                     />
                   </label>
                 )}
                 <label className="metadata-field">
-                  Name
+                  <span className="inspector-inline-label">
+                    Name
+                    <InspectorHint text="Anzeigename des Assets in Bibliothek, Inspector und Präsentations-Info." />
+                  </span>
                   <input
                     value={singleSelected.metadata.name ?? ''}
-                    onChange={(event) =>
-                      updateSingleMetadata('name', event.target.value, 'name')
-                    }
+                    onChange={(event) => patchSimpleMetadata('name', event.target.value)}
                   />
                 </label>
                 <label className="metadata-field">
-                  Beschreibung
+                  <span className="inspector-inline-label">
+                    Beschreibung
+                    <InspectorHint text="Freitext; erscheint im Präsentations-Popup und in der Bibliothek." />
+                  </span>
                   <textarea
                     rows={2}
                     value={singleSelected.metadata.description ?? ''}
-                    onChange={(event) =>
-                      updateSingleMetadata('description', event.target.value, 'description')
-                    }
+                    onChange={(event) => patchSimpleMetadata('description', event.target.value)}
                   />
                 </label>
                 <label className="metadata-field">
-                  Zonen-/Typ-Hinweis
+                  <span className="inspector-inline-label">
+                    Zonen-/Typ-Hinweis
+                    <InspectorHint text="Optionales Schlagwort (z. B. Produktion, Lager) für Filter und Anzeige." />
+                  </span>
                   <input
                     value={singleSelected.metadata.zoneType ?? ''}
-                    onChange={(event) =>
-                      updateSingleMetadata('zoneType', event.target.value, 'zoneType')
-                    }
+                    onChange={(event) => patchSimpleMetadata('zoneType', event.target.value)}
                   />
                 </label>
 
@@ -3109,23 +3318,55 @@ export default function PlannerApp() {
                   </>
                 )}
 
-                <h3>Custom Metadata</h3>
-                {Object.entries(singleSelected.metadata.customData ?? {}).map(([key, value]) => (
-                  <div key={key} className="custom-field-row">
-                    <label className="metadata-field">
-                      {key}
+                <h3>
+                  <span className="inspector-inline-label">
+                    Custom Metadata
+                    <InspectorHint text="Eigene Felder (Name + Wert). Namen sind editierbar; Einträge werden im Layout gespeichert." />
+                  </span>
+                </h3>
+                {getCustomRows(singleSelected.metadata).map((row) => (
+                  <div key={row.id} className="custom-field-row custom-field-row--meta">
+                    <div className="custom-field-name-col">
+                      {metadataNameEditId === row.id ? (
+                        <input
+                          className="custom-field-name-input"
+                          value={row.name}
+                          autoFocus
+                          onChange={(e) => renameCustomRow(row.id, e.target.value)}
+                          onBlur={() => setMetadataNameEdit(null)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === 'Escape') {
+                              setMetadataNameEdit(null)
+                            }
+                          }}
+                        />
+                      ) : (
+                        <button
+                          type="button"
+                          className="custom-field-name-btn"
+                          title="Namen bearbeiten"
+                          onClick={() =>
+                            setMetadataNameEdit({
+                              assetId: singleSelected.id,
+                              rowId: row.id,
+                            })
+                          }
+                        >
+                          {row.name}
+                        </button>
+                      )}
+                    </div>
+                    <label className="metadata-field custom-field-value">
                       <input
-                        value={value}
-                        onChange={(event) =>
-                          updateSingleMetadata(key, event.target.value, 'custom')
-                        }
+                        value={row.value}
+                        onChange={(event) => updateCustomRowValue(row.id, event.target.value)}
                       />
                     </label>
                     <button
                       type="button"
                       className="subtle-delete"
-                      onClick={() => removeCustomMetadataKey(key)}
-                      aria-label={`${key} entfernen`}
+                      onClick={() => removeCustomRow(row.id)}
+                      aria-label={`${row.name} entfernen`}
                     >
                       -
                     </button>

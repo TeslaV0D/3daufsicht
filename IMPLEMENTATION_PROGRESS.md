@@ -270,6 +270,22 @@ Ergebnis: beide Checks erfolgreich.
 
 - Projekt-Chronik nur noch in dieser Datei **`IMPLEMENTATION_PROGRESS.md`** (Root). Der Ordner **`docs/`** wurde entfernt.
 
+## Stand 18: Decals, Metadata-Fix, editierbare Feldnamen, Inspector-Hilfen
+
+### Abgeschlossen
+
+- **Bilder / Decals** auf Assets: Texturflächen (Plane + `TextureLoader`) auf gewählter Seite relativ zur Bounding-Box; Parameter Größe, Deckkraft, Offsets, Rotation, Seite; Speicherung in `AssetVisual.decals` (max. 6 Einträge in Sanitize; UI aktuell ein Haupt-Decal).
+- **Inspector (? )-Tooltips** (`InspectorHint`, CSS `data-tooltip`) an Farbe, Deckkraft, Sperre, Info-Feldern, Custom Metadata, Decal-Bereich; `ColorPickerPopover` mit optionalem `hint`.
+- **Metadata löschen repariert**: `updateAsset` / `updateAssets` mergen `customData` nicht mehr per Spread (entfernte Keys kamen zurück); `mergeAssetMetadata` ersetzt `customData` / `customRows` ganz, wenn im Patch gesetzt.
+- **Eigene Namen für Metadata**: `CustomMetadataRow` mit `id`, editierbarem `name`, `value`; `getCustomRows` + Migration aus `customData`; UI Klick auf Feldname → Inline-Edit.
+- Hilfsmodul `scene/assetDecalBounds.ts` für Decal-Placement; `AssetInfoModal` nutzt `getCustomRows`.
+
+### Kurzüberblick Features
+
+- Decal-System mit parametrierbarer Fläche (Bounding-Approximation).
+- Platzsparende Feldhilfen im Inspector.
+- Metadata vollständig löschbar und umbenennbar.
+
 ## Offene optionale Erweiterungen
 
 - Box-Selection fuer Mehrfachauswahl.
