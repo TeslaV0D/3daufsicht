@@ -661,8 +661,11 @@ export default function AssetRenderer({
   ]
 
   const zoneUserData = useMemo(
-    () => ({ isZone: asset.category === CATEGORY_ZONES }),
-    [asset.category],
+    () => ({
+      isZone: asset.category === CATEGORY_ZONES,
+      assetId: asset.id,
+    }),
+    [asset.category, asset.id],
   )
 
   const eventProps = {

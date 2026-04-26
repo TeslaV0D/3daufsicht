@@ -1,4 +1,4 @@
-import { Canvas, type ThreeEvent } from '@react-three/fiber'
+import { Canvas, useThree, type ThreeEvent } from '@react-three/fiber'
 import { List, type RowComponentProps } from 'react-window'
 import { Html, OrbitControls, TransformControls } from '@react-three/drei'
 import {
@@ -19,6 +19,7 @@ import {
   Euler,
   Group,
   Quaternion,
+  Raycaster,
   Vector3,
   type Vector3Tuple,
 } from 'three'
@@ -131,6 +132,75 @@ const DECAL_SIDE_OPTIONS: { id: AssetDecalSide; label: string }[] = [
   { id: 'right', label: 'Rechts' },
   { id: 'all', label: 'Alle Seiten' },
 ]
+
+/** Etwas großzügigere Line-/Points-Treffer für R3F-Pointer-Raycasts (ohne Mesh-Logik zu ändern). */
+const PLANNER_RAYCASTER_PROPS: Partial<Raycaster> = (() => {
+  const r = new Raycaster()
+  const line = r.params.Line ?? { threshold: 0.15 }
+  const pts = r.params.Points ?? { threshold: 0.15 }
+  return {
+    params: {
+      ...r.params,
+      Line: { ...line, threshold: Math.max(line.threshold ?? 0, 0.12) },
+      Points: { ...pts, threshold: Math.max(pts.threshold ?? 0, 0.12) },
+    },
+  }
+})()
+
+/** Hover-Highlight / Skalierung nur wenn dieses Asset wirklich „hovered“ wirken soll. */
+function assetShowsHoverHighlight(
+  asset: Asset,
+  hoveredId: string | null,
+  mode: PlannerMode,
+): boolean {
+  if (hoveredId !== asset.id) return false
+  if (mode === 'view' && (asset.isLocked === true || asset.category === CATEGORY_ZONES)) {
+    return false
+  }
+  return true
+}
+
+function applySceneInteractionCursorStyle(
+  canvas: HTMLCanvasElement,
+  mode: PlannerMode,
+  hoveredId: string | null,
+  assets: Asset[],
+) {
+  if (mode !== 'view') {
+    canvas.style.cursor = ''
+    return
+  }
+  if (!hoveredId) {
+    canvas.style.cursor = 'auto'
+    return
+  }
+  const a = assets.find((x) => x.id === hoveredId)
+  if (!a || a.isLocked || a.category === CATEGORY_ZONES) {
+    canvas.style.cursor = 'auto'
+  } else {
+    canvas.style.cursor = 'pointer'
+  }
+}
+
+function SceneInteractionCursor({
+  mode,
+  hoveredId,
+  assets,
+}: {
+  mode: PlannerMode
+  hoveredId: string | null
+  assets: Asset[]
+}) {
+  const gl = useThree((s) => s.gl)
+  useEffect(() => {
+    const el = gl.domElement
+    applySceneInteractionCursorStyle(el, mode, hoveredId, assets)
+    return () => {
+      el.style.cursor = ''
+    }
+  }, [gl, mode, hoveredId, assets])
+  return null
+}
 
 type LibraryTemplateVirtualRowData = {
   sectionAccent: string
@@ -1424,8 +1494,8 @@ export default function PlannerApp() {
     }
   }, [])
 
-  const onAssetClick = useCallback(
-    (event: ThreeEvent<MouseEvent>, asset: Asset) => {
+  const applyAssetPointerSelect = useCallback(
+    (event: ThreeEvent<PointerEvent> | ThreeEvent<MouseEvent>, asset: Asset) => {
       event.stopPropagation()
       if (mode === 'view') {
         if (asset.isLocked || asset.category === CATEGORY_ZONES) {
@@ -1450,32 +1520,22 @@ export default function PlannerApp() {
     [mode, selectedIds, setSelectedIds, tool],
   )
 
-  const onInstancedBoxPointerDown = useCallback(
+  const onAssetPointerDown = useCallback(
+    (event: ThreeEvent<PointerEvent>, asset: Asset) => {
+      if (event.button !== 0) return
+      applyAssetPointerSelect(event, asset)
+    },
+    [applyAssetPointerSelect],
+  )
+
+  const onInstancedAssetInteract = useCallback(
     (assetId: string, event: ThreeEvent<PointerEvent>) => {
+      if (event.button !== 0) return
       const asset = assets.find((a) => a.id === assetId)
       if (!asset) return
-      event.stopPropagation()
-      if (mode === 'view') {
-        if (asset.isLocked || asset.category === CATEGORY_ZONES) {
-          return
-        }
-        setInfoAssetId(asset.id)
-        return
-      }
-      if (tool === 'place') return
-      setFloorInspectorOpen(false)
-      const multi = event.ctrlKey || event.metaKey
-      if (multi) {
-        setSelectedIds(
-          selectedIds.includes(asset.id)
-            ? selectedIds.filter((id) => id !== asset.id)
-            : [...selectedIds, asset.id],
-        )
-        return
-      }
-      setSelectedIds([asset.id])
+      applyAssetPointerSelect(event, asset)
     },
-    [assets, mode, selectedIds, setSelectedIds, tool],
+    [assets, applyAssetPointerSelect],
   )
 
   const onAssetContextMenu = useCallback(
@@ -1493,13 +1553,21 @@ export default function PlannerApp() {
 
   const onAssetPointerOver = useCallback(
     (_event: ThreeEvent<PointerEvent>, asset: Asset) => {
+      if (mode === 'view' && (asset.isLocked || asset.category === CATEGORY_ZONES)) {
+        if (hoverLeaveTimerRef.current) {
+          clearTimeout(hoverLeaveTimerRef.current)
+          hoverLeaveTimerRef.current = null
+        }
+        setHoveredId(null)
+        return
+      }
       if (hoverLeaveTimerRef.current) {
         clearTimeout(hoverLeaveTimerRef.current)
         hoverLeaveTimerRef.current = null
       }
       setHoveredId(asset.id)
     },
-    [],
+    [mode],
   )
   const onAssetPointerOut = useCallback((_event: ThreeEvent<PointerEvent>, asset: Asset) => {
     const id = asset.id
@@ -3585,7 +3653,9 @@ export default function PlannerApp() {
             shadows
             dpr={[1, performanceSettings.maxDpr]}
             camera={{ position: canvasCamera.position, fov: canvasCamera.fov }}
+            raycaster={PLANNER_RAYCASTER_PROPS}
           >
+            <SceneInteractionCursor mode={mode} hoveredId={hoveredId} assets={assets} />
             <SceneAtmosphere settings={lighting} />
             <PostFxBloom enabled={lighting.bloomEnabled} intensity={lighting.bloomIntensity} />
             <Lighting settings={lighting} presentation={mode === 'view'} />
@@ -3619,7 +3689,7 @@ export default function PlannerApp() {
                 depth={batch.depth}
                 distanceCullEnabled={performanceSettings.distanceCullEnabled}
                 distanceCullMeters={performanceSettings.distanceCullMeters}
-                onInstancePointerDown={onInstancedBoxPointerDown}
+                onInstanceInteract={onInstancedAssetInteract}
               />
             ))}
 
@@ -3636,10 +3706,10 @@ export default function PlannerApp() {
                 <AssetRenderer
                   asset={asset}
                   isSelected={selectedIds.includes(asset.id)}
-                  isHovered={hoveredId === asset.id}
+                  isHovered={assetShowsHoverHighlight(asset, hoveredId, mode)}
                   isEditMode={mode === 'edit'}
                   selectionAccent={libraryAccentForSectionTitle(asset.category)}
-                  onClick={onAssetClick}
+                  onPointerDown={onAssetPointerDown}
                   onContextMenu={onAssetContextMenu}
                   onPointerOver={onAssetPointerOver}
                   onPointerOut={onAssetPointerOut}
@@ -3675,11 +3745,11 @@ export default function PlannerApp() {
                 <AssetRenderer
                   asset={singleSelected}
                   isSelected
-                  isHovered={hoveredId === singleSelected.id}
+                  isHovered={assetShowsHoverHighlight(singleSelected, hoveredId, mode)}
                   isEditMode
                   skipTransform
                   selectionAccent={libraryAccentForSectionTitle(singleSelected.category)}
-                  onClick={onAssetClick}
+                  onPointerDown={onAssetPointerDown}
                   onContextMenu={onAssetContextMenu}
                   onPointerOver={onAssetPointerOver}
                   onPointerOut={onAssetPointerOut}

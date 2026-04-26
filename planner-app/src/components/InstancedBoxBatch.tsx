@@ -31,7 +31,7 @@ export default function InstancedBoxBatch({
   depth,
   distanceCullEnabled,
   distanceCullMeters,
-  onInstancePointerDown,
+  onInstanceInteract,
 }: {
   assets: Asset[]
   width: number
@@ -40,7 +40,7 @@ export default function InstancedBoxBatch({
   /** Pro-Instanz: zu weit von der Kamera → Matrix auf ~0 skaliert (nur Rendering). */
   distanceCullEnabled?: boolean
   distanceCullMeters?: number
-  onInstancePointerDown?: (assetId: string, event: ThreeEvent<PointerEvent>) => void
+  onInstanceInteract?: (assetId: string, event: ThreeEvent<PointerEvent>) => void
 }) {
   const meshRef = useRef<InstancedMesh>(null!)
   const camera = useThree((s) => s.camera)
@@ -110,13 +110,14 @@ export default function InstancedBoxBatch({
       castShadow
       receiveShadow
       onPointerDown={(e) => {
-        if (!onInstancePointerDown) return
+        if (!onInstanceInteract) return
+        if (e.button !== 0) return
         const hit = e.intersections[0]
         const inst =
           hit && typeof hit.instanceId === 'number' ? hit.instanceId : undefined
         if (inst == null || inst < 0 || inst >= assets.length) return
         e.stopPropagation()
-        onInstancePointerDown(assets[inst]!.id, e)
+        onInstanceInteract(assets[inst]!.id, e)
       }}
     />
   )
