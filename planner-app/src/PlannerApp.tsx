@@ -114,6 +114,7 @@ import {
 import { libraryAccentForSectionTitle } from './types/libraryCategoryAccent'
 import { type FloorSettings, sanitizePlacementSnapStep } from './types/floor'
 import { FIELD_DESC } from './ui/fieldDescriptions'
+import { getPlannerPerfStats } from './perf/plannerPerfStats'
 
 type PlannerTool = 'select' | 'place'
 type PlannerMode = 'edit' | 'view'
@@ -121,6 +122,7 @@ type TransformMode = 'translate' | 'rotate' | 'scale'
 
 const FALLBACK_ASSET_COLOR = '#8ca0b6'
 const LIBRARY_SECTION_EXPANDED_STORAGE_KEY = 'factory-library-section-expanded-v2'
+const VIEW_MENU_PERF_EXPANDED_STORAGE_KEY = 'factory-planning-view-menu-performance-expanded'
 const TEMPLATE_DRAG_MIME = 'application/x-factory-template-type'
 const HOVER_POINTER_OUT_DEBOUNCE_MS = 50
 const TOOLBAR_POPOVER_GAP = 8
@@ -1097,6 +1099,16 @@ export default function PlannerApp() {
   const viewMenuButtonRef = useRef<HTMLButtonElement>(null)
   const viewPopoverRef = useRef<HTMLDivElement>(null)
   const [viewMenuOpen, setViewMenuOpen] = useState(false)
+  const [viewMenuPerfExpanded, setViewMenuPerfExpanded] = useState(() => {
+    if (typeof localStorage === 'undefined') return false
+    try {
+      return localStorage.getItem(VIEW_MENU_PERF_EXPANDED_STORAGE_KEY) === '1'
+    } catch {
+      return false
+    }
+  })
+  const [viewMenuPerfStatsTick, setViewMenuPerfStatsTick] = useState(0)
+  const [viewMenuPerfClock, setViewMenuPerfClock] = useState(() => Date.now())
   const [perspectiveCustomPresets, setPerspectiveCustomPresets] = useState(loadPerspectiveCustomPresets)
   const [newGroupDialogOpen, setNewGroupDialogOpen] = useState(false)
   const [newGroupNameDraft, setNewGroupNameDraft] = useState('')
@@ -1236,6 +1248,29 @@ export default function PlannerApp() {
     window.addEventListener('pointerdown', onDown)
     return () => window.removeEventListener('pointerdown', onDown)
   }, [toolsMenuOpen])
+
+  useEffect(() => {
+    if (typeof localStorage === 'undefined') return
+    try {
+      localStorage.setItem(
+        VIEW_MENU_PERF_EXPANDED_STORAGE_KEY,
+        viewMenuPerfExpanded ? '1' : '0',
+      )
+    } catch {
+      /* ignore quota / private mode */
+    }
+  }, [viewMenuPerfExpanded])
+
+  useEffect(() => {
+    if (!viewMenuOpen || !viewMenuPerfExpanded) return
+    const tick = () => {
+      setViewMenuPerfStatsTick((t) => t + 1)
+      setViewMenuPerfClock(Date.now())
+    }
+    tick()
+    const id = window.setInterval(tick, 400)
+    return () => window.clearInterval(id)
+  }, [viewMenuOpen, viewMenuPerfExpanded])
 
   useLayoutEffect(() => {
     if (!toolsMenuOpen) return
@@ -2372,6 +2407,16 @@ export default function PlannerApp() {
   }, [libraryMenu, resolvedTemplates])
 
   function renderViewMenuDropdown() {
+    void viewMenuPerfStatsTick
+    void viewMenuPerfClock
+    const perfSnap = getPlannerPerfStats()
+    const perfHudStaleMs = 2800
+    const perfHudLive =
+      performanceSettings.showHud &&
+      mode === 'edit' &&
+      perfSnap.updatedAt > 0 &&
+      viewMenuPerfClock - perfSnap.updatedAt < perfHudStaleMs
+
     return (
       <div className="toolbar-dropdown-wrap toolbar-view-menu-wrap" ref={viewMenuRef}>
         <button
@@ -2798,6 +2843,204 @@ export default function PlannerApp() {
                 </div>
               </>
             ) : null}
+
+            <div className="view-menu-performance-block">
+              <button
+                type="button"
+                className="view-menu-performance-toggle"
+                aria-expanded={viewMenuPerfExpanded}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setViewMenuPerfExpanded((v) => !v)
+                }}
+              >
+                <span
+                  className="view-menu-performance-chevron"
+                  aria-hidden
+                  data-expanded={viewMenuPerfExpanded ? 'true' : 'false'}
+                >
+                  ▶
+                </span>
+                <span>Performance</span>
+              </button>
+              <div
+                className={`view-menu-performance-panel${viewMenuPerfExpanded ? ' view-menu-performance-panel--open' : ''}`}
+              >
+                <div className="view-menu-performance-inner">
+                  <label className="checkbox-field view-menu-perf-field">
+                    <input
+                      type="checkbox"
+                      checked={performanceSettings.showHud}
+                      onChange={(e) =>
+                        setPerformanceSettings({ showHud: e.target.checked })
+                      }
+                    />
+                    <span>FPS / Draw-Calls / Speicher (Chrome)</span>
+                  </label>
+                  <label className="opacity-slider-field view-menu-slider">
+                    <span className="inspector-inline-label">Max. Pixel-Ratio</span>
+                    <input
+                      type="range"
+                      min={1}
+                      max={3}
+                      step={0.5}
+                      value={performanceSettings.maxDpr}
+                      onChange={(e) =>
+                        setPerformanceSettings({ maxDpr: Number(e.target.value) })
+                      }
+                    />
+                    <span className="slider-value-hint">
+                      {performanceSettings.maxDpr.toFixed(1)}
+                    </span>
+                  </label>
+                  <label className="checkbox-field view-menu-perf-field">
+                    <input
+                      type="checkbox"
+                      checked={performanceSettings.lodHintEnabled}
+                      onChange={(e) =>
+                        setPerformanceSettings({ lodHintEnabled: e.target.checked })
+                      }
+                    />
+                    <span>LOD-Hinweis (für große Szenen)</span>
+                  </label>
+                  <label className="checkbox-field view-menu-perf-field">
+                    <input
+                      type="checkbox"
+                      checked={performanceSettings.useInstancing}
+                      onChange={(e) =>
+                        setPerformanceSettings({ useInstancing: e.target.checked })
+                      }
+                    />
+                    <span>Instancing aktivieren (Opt-in)</span>
+                  </label>
+                  <p className="subtle-hint inspector-perf-footnote perf-instancing-hint">
+                    Verbessert die Performance bei vielen identischen Boxen (ein Draw-Call pro
+                    Gruppe). In der Regel sind Objekte dann nicht mehr per Klick auswählbar — nur
+                    einschalten, wenn nötig.
+                  </p>
+                  <label className="checkbox-field view-menu-perf-field">
+                    <input
+                      type="checkbox"
+                      checked={performanceSettings.distanceCullEnabled}
+                      onChange={(e) =>
+                        setPerformanceSettings({ distanceCullEnabled: e.target.checked })
+                      }
+                    />
+                    <span>Distanz-Culling (Rendering)</span>
+                  </label>
+                  <label className="opacity-slider-field view-menu-slider">
+                    <span className="inspector-inline-label">Max. Distanz (m)</span>
+                    <input
+                      type="range"
+                      min={80}
+                      max={800}
+                      step={10}
+                      value={performanceSettings.distanceCullMeters}
+                      onChange={(e) =>
+                        setPerformanceSettings({ distanceCullMeters: Number(e.target.value) })
+                      }
+                      disabled={!performanceSettings.distanceCullEnabled}
+                    />
+                    <span className="slider-value-hint">
+                      {performanceSettings.distanceCullMeters}
+                    </span>
+                  </label>
+                  <label className="checkbox-field view-menu-perf-field">
+                    <input
+                      type="checkbox"
+                      checked={performanceSettings.virtualLibraryScroll}
+                      onChange={(e) =>
+                        setPerformanceSettings({ virtualLibraryScroll: e.target.checked })
+                      }
+                    />
+                    <span>Virtuelle Bibliotheks-Liste (react-window)</span>
+                  </label>
+                  <label className="metadata-field view-menu-perf-field">
+                    <span className="inspector-inline-label">Ab Schwellwert (Templates)</span>
+                    <input
+                      type="number"
+                      min={4}
+                      max={200}
+                      step={1}
+                      value={performanceSettings.virtualLibraryThreshold}
+                      onChange={(e) =>
+                        setPerformanceSettings({
+                          virtualLibraryThreshold: Number(e.target.value),
+                        })
+                      }
+                      disabled={!performanceSettings.virtualLibraryScroll}
+                    />
+                  </label>
+                  <label className="opacity-slider-field view-menu-slider">
+                    <span className="inspector-inline-label">Zeilenhöhe (px)</span>
+                    <input
+                      type="range"
+                      min={40}
+                      max={76}
+                      step={2}
+                      value={performanceSettings.libraryRowHeight}
+                      onChange={(e) =>
+                        setPerformanceSettings({ libraryRowHeight: Number(e.target.value) })
+                      }
+                      disabled={!performanceSettings.virtualLibraryScroll}
+                    />
+                    <span className="slider-value-hint">{performanceSettings.libraryRowHeight}</span>
+                  </label>
+                  <label className="checkbox-field view-menu-perf-field">
+                    <input
+                      type="checkbox"
+                      checked={performanceSettings.shadowOptimize}
+                      onChange={(e) =>
+                        setPerformanceSettings({ shadowOptimize: e.target.checked })
+                      }
+                    />
+                    <span>Schatten-Optimierung (vorbereitet / Metadaten)</span>
+                  </label>
+                  <p className="subtle-hint inspector-perf-footnote">
+                    Frustum-Culling nutzt three.js pro Objekt. Bei Instancing ist die Kugel grob —
+                    pro Instanz zusätzlich Distanz-Culling in der Batch.
+                  </p>
+
+                  <div className="view-menu-performance-monitoring">
+                    <div className="view-menu-performance-monitoring-title">Monitoring</div>
+                    {perfHudLive ? (
+                      <ul className="view-menu-performance-stats">
+                        <li>
+                          <span>FPS</span>
+                          <strong>{perfSnap.fps}</strong>
+                        </li>
+                        <li>
+                          <span>Draw-Calls</span>
+                          <strong>{perfSnap.drawCalls}</strong>
+                        </li>
+                        <li>
+                          <span>Geometrien</span>
+                          <strong>{perfSnap.geometries}</strong>
+                        </li>
+                        {perfSnap.heapMb != null ? (
+                          <li>
+                            <span>JS Heap (MB)</span>
+                            <strong>{perfSnap.heapMb}</strong>
+                          </li>
+                        ) : null}
+                        <li>
+                          <span>Assets (Szene)</span>
+                          <strong>{assets.length}</strong>
+                        </li>
+                      </ul>
+                    ) : (
+                      <p className="subtle-hint view-menu-performance-monitoring-hint">
+                        {mode !== 'edit'
+                          ? 'Im Präsentationsmodus kein HUD. Wechsel zu Bearbeiten und „FPS / Draw-Calls“ aktivieren.'
+                          : !performanceSettings.showHud
+                            ? 'HUD aktivieren — Live-Werte werden hier und links oben in der Szene angezeigt.'
+                            : 'Werte erscheinen kurz nach Aktivierung des HUDs.'}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         ) : null}
       </div>
@@ -4079,141 +4322,7 @@ export default function PlannerApp() {
 
         <aside className="panel right" aria-hidden={mode === 'view'}>
           <h2>Inspector</h2>
-          <div className="inspector-global-blocks">
-            <section className="inspector-performance-panel">
-              <h3 className="inspector-panel-section-title">Performance</h3>
-              <label className="checkbox-field">
-                <input
-                  type="checkbox"
-                  checked={performanceSettings.showHud}
-                  onChange={(e) => setPerformanceSettings({ showHud: e.target.checked })}
-                />
-                <span>FPS / Draw-Calls / Speicher (Chrome)</span>
-              </label>
-              <label className="opacity-slider-field">
-                <span className="inspector-inline-label">Max. Pixel-Ratio</span>
-                <input
-                  type="range"
-                  min={1}
-                  max={3}
-                  step={0.5}
-                  value={performanceSettings.maxDpr}
-                  onChange={(e) =>
-                    setPerformanceSettings({ maxDpr: Number(e.target.value) })
-                  }
-                />
-                <span className="slider-value-hint">{performanceSettings.maxDpr.toFixed(1)}</span>
-              </label>
-              <label className="checkbox-field">
-                <input
-                  type="checkbox"
-                  checked={performanceSettings.lodHintEnabled}
-                  onChange={(e) =>
-                    setPerformanceSettings({ lodHintEnabled: e.target.checked })
-                  }
-                />
-                <span>LOD-Hinweis (für große Szenen)</span>
-              </label>
-              <label className="checkbox-field">
-                <input
-                  type="checkbox"
-                  checked={performanceSettings.useInstancing}
-                  onChange={(e) =>
-                    setPerformanceSettings({ useInstancing: e.target.checked })
-                  }
-                />
-                <span>Instancing aktivieren (Opt-in)</span>
-              </label>
-              <p className="subtle-hint inspector-perf-footnote perf-instancing-hint">
-                Verbessert die Performance bei vielen identischen Boxen (ein Draw-Call pro Gruppe).
-                In der Regel sind Objekte dann nicht mehr per Klick auswählbar — nur einschalten, wenn
-                nötig.
-              </p>
-              <label className="checkbox-field">
-                <input
-                  type="checkbox"
-                  checked={performanceSettings.distanceCullEnabled}
-                  onChange={(e) =>
-                    setPerformanceSettings({ distanceCullEnabled: e.target.checked })
-                  }
-                />
-                <span>Distanz-Culling (Rendering)</span>
-              </label>
-              <label className="opacity-slider-field">
-                <span className="inspector-inline-label">Max. Distanz (m)</span>
-                <input
-                  type="range"
-                  min={80}
-                  max={800}
-                  step={10}
-                  value={performanceSettings.distanceCullMeters}
-                  onChange={(e) =>
-                    setPerformanceSettings({ distanceCullMeters: Number(e.target.value) })
-                  }
-                  disabled={!performanceSettings.distanceCullEnabled}
-                />
-                <span className="slider-value-hint">
-                  {performanceSettings.distanceCullMeters}
-                </span>
-              </label>
-              <label className="checkbox-field">
-                <input
-                  type="checkbox"
-                  checked={performanceSettings.virtualLibraryScroll}
-                  onChange={(e) =>
-                    setPerformanceSettings({ virtualLibraryScroll: e.target.checked })
-                  }
-                />
-                <span>Virtuelle Bibliotheks-Liste (react-window)</span>
-              </label>
-              <label className="metadata-field">
-                <span className="inspector-inline-label">Ab Schwellwert (Templates)</span>
-                <input
-                  type="number"
-                  min={4}
-                  max={200}
-                  step={1}
-                  value={performanceSettings.virtualLibraryThreshold}
-                  onChange={(e) =>
-                    setPerformanceSettings({
-                      virtualLibraryThreshold: Number(e.target.value),
-                    })
-                  }
-                  disabled={!performanceSettings.virtualLibraryScroll}
-                />
-              </label>
-              <label className="opacity-slider-field">
-                <span className="inspector-inline-label">Zeilenhöhe (px)</span>
-                <input
-                  type="range"
-                  min={40}
-                  max={76}
-                  step={2}
-                  value={performanceSettings.libraryRowHeight}
-                  onChange={(e) =>
-                    setPerformanceSettings({ libraryRowHeight: Number(e.target.value) })
-                  }
-                  disabled={!performanceSettings.virtualLibraryScroll}
-                />
-                <span className="slider-value-hint">{performanceSettings.libraryRowHeight}</span>
-              </label>
-              <label className="checkbox-field">
-                <input
-                  type="checkbox"
-                  checked={performanceSettings.shadowOptimize}
-                  onChange={(e) =>
-                    setPerformanceSettings({ shadowOptimize: e.target.checked })
-                  }
-                />
-                <span>Schatten-Optimierung (vorbereitet / Metadaten)</span>
-              </label>
-              <p className="subtle-hint inspector-perf-footnote">
-                Frustum-Culling nutzt three.js pro Objekt. Bei Instancing ist die Kugel grob — pro
-                Instanz zusätzlich Distanz-Culling in der Batch.
-              </p>
-            </section>
-          </div>
-            {singleSelected ? (
+          {singleSelected ? (
               <div
                 className={`inspector-content${singleSelected.isLocked ? ' inspector-asset-locked' : ''}`}
               >

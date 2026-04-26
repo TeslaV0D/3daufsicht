@@ -1,6 +1,7 @@
 import { Html } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { clearPlannerPerfStats, publishPlannerPerfStats } from '../perf/plannerPerfStats'
 
 /**
  * FPS und WebGL-Info (Draw Calls, Geometrien). Nur Anzeige — kein Einfluss auf das Rendering.
@@ -18,6 +19,7 @@ export default function PerformanceHud({ visible }: { visible: boolean }) {
     if (!visible) {
       last.current = 0
       frames.current = 0
+      clearPlannerPerfStats()
     }
   }, [visible])
 
@@ -46,20 +48,33 @@ export default function PerformanceHud({ visible }: { visible: boolean }) {
     if (last.current === 0) last.current = now
     frames.current += 1
     if (now - last.current >= 1000) {
-      setFps(Math.round((frames.current * 1000) / (now - last.current)))
+      const nextFps = Math.round((frames.current * 1000) / (now - last.current))
       frames.current = 0
       last.current = now
       const info = gl.info.render
-      setCalls(info.calls)
-      setGeometries(gl.info.memory.geometries)
+      const nextCalls = info.calls
+      const nextGeom = gl.info.memory.geometries
+      setFps(nextFps)
+      setCalls(nextCalls)
+      setGeometries(nextGeom)
       const perfMem = (
         performance as Performance & {
           memory?: { usedJSHeapSize?: number }
         }
       ).memory
+      let nextHeap: number | null = null
       if (perfMem?.usedJSHeapSize != null) {
-        setHeapMb(Math.round(perfMem.usedJSHeapSize / (1024 * 1024)))
+        nextHeap = Math.round(perfMem.usedJSHeapSize / (1024 * 1024))
+        setHeapMb(nextHeap)
+      } else {
+        setHeapMb(null)
       }
+      publishPlannerPerfStats({
+        fps: nextFps,
+        drawCalls: nextCalls,
+        geometries: nextGeom,
+        heapMb: nextHeap,
+      })
     }
   })
 

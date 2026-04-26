@@ -417,7 +417,7 @@ Ergebnis: beide Checks erfolgreich.
 ### Performance / Instancing
 
 - **`useInstancing`** Standard: **aus** (`DEFAULT_PERFORMANCE`); **`sanitizePerformanceSettings`**: nur bei `useInstancing === true` aktiv (explizites Opt-in).
-- Kurzer Hinweistext im Performance-Panel zu Trade-off (Performance vs. Selektion).
+- Kurzer Hinweistext zu Instancing-Trade-off im Performance-Bereich (Toolbar **Ansicht**).
 
 ### Ansicht (Top / Front / Seite)
 
@@ -432,6 +432,23 @@ Ergebnis: beide Checks erfolgreich.
 ### Kurzüberblick
 
 - Standardmäßig alle Objekte normal selektierbar; Instancing nur bei Bedarf; feinere Kamera-Kontrolle für technische Ansichten; schlankeres Licht-Preset-UI.
+
+## Stand 28: Performance im Ansicht-Menü (einklappbar)
+
+### UI
+
+- Alle **Performance-Einstellungen** aus dem Inspector in das **Ansicht**-Popover verschoben.
+- Sektion **„Performance“** mit **Chevron**; **Standard: zugeklappt**; Animation über **max-height** + **opacity**.
+- **Persistenz:** `localStorage` `factory-planning-view-menu-performance-expanded` (`1` wenn aufgeklappt).
+
+### Monitoring
+
+- **`perf/plannerPerfStats.ts`**: `PerformanceHud` veröffentlicht FPS / Draw-Calls / Geometrien / optional Heap.
+- Im geöffneten Performance-Bereich: Live-Liste, wenn HUD im **Edit**-Modus läuft und Daten frisch sind; sonst kurzer Hinweis.
+
+### Kurzüberblick
+
+- Inspector schlanker; Performance zentral unter **Ansicht** mit optionalem Monitoring.
 
 ## Offene optionale Erweiterungen
 
