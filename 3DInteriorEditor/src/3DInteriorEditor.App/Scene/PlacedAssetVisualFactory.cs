@@ -62,11 +62,12 @@ public static class PlacedAssetVisualFactory
         foreach (var part in parts)
         {
             var material = CreateImportedPartMaterial(part, placementColorHex, selectionHex, isSelected);
+            var useBack = isSelected || part.DoubleSided;
             group.Children.Add(new GeometryModel3D
             {
                 Geometry = part.Geometry,
                 Material = material,
-                BackMaterial = material,
+                BackMaterial = useBack ? material : null,
             });
         }
 

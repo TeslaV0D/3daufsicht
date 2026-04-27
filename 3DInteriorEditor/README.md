@@ -43,5 +43,6 @@ From repo root:
 - ✅ Phase 23: **KHR_texture_transform** (scale/rotate/offset + optional `texCoord` override) on base/diffuse UVs
 - ✅ Phase 24: glTF **sampler wrap** (S/T) → WPF **`ImageBrush.TileMode`** (mixed axes approximated)
 - ✅ Phase 25: glTF **sampler min/mag** → **`RenderOptions.BitmapScalingMode`** on **`ImageBrush`** (nearest vs smooth heuristic; no GPU mips)
-- ⏳ Next: further polish / UX (per-axis wrap if needed, …)
+- ✅ Phase 26: glTF **`doubleSided`** → **`GeometryModel3D.BackMaterial`** only when double-sided or **selected** (single-sided culling style)
+- ⏳ Next: further polish / UX (per-axis wrap if needed, alpha modes, …)
 

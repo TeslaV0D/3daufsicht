@@ -35,4 +35,10 @@ public sealed class ImportedMeshPart
     /// Maps glTF sampler min/mag hint to WPF scaling (see Phase 25); null when no textured import path.
     /// </summary>
     public BitmapScalingMode? BaseColorBitmapScalingMode { get; init; }
+
+    /// <summary>
+    /// glTF <c>material.doubleSided</c> (default <c>false</c> in the spec). When <c>false</c>, the viewport uses
+    /// <see cref="GeometryModel3D.Material"/> only so back faces are not lit (WPF back-face culling style).
+    /// </summary>
+    public bool DoubleSided { get; init; }
 }

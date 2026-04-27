@@ -124,7 +124,10 @@ public static class GltfModelLoader
         Vector3 center,
         float uniformScale)
     {
-        var albedo = GltfAlbedoResolver.TryResolve(primitive.Material);
+        var mat = primitive.Material;
+        var doubleSided = mat?.DoubleSided ?? false;
+
+        var albedo = GltfAlbedoResolver.TryResolve(mat);
 
         var canSampleTexture =
             albedo.Texture is not null
@@ -195,6 +198,7 @@ public static class GltfModelLoader
             BaseColorBitmapScalingMode = canSampleTexture
                 ? GltfSamplerBitmapScalingMapping.ToBitmapScalingMode(albedo.MagFilter, albedo.MinFilter)
                 : null,
+            DoubleSided = doubleSided,
         };
     }
 }

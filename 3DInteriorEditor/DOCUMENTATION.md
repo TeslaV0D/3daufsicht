@@ -403,3 +403,15 @@
 - **Mip chains** are not sampled in WPF like a GPU; **min filter** only influences the nearest-vs-smooth **bitmap scaling** heuristic above.
 - Other **`TextureMipMapFilter`** values (e.g. **LINEAR_MIPMAP_LINEAR**) follow the **`HighQuality`** path.
 
+## Phase 26 (glTF `doubleSided` → WPF back material)
+
+### What’s implemented
+
+- **`Scene/GltfModelLoader.cs`**: Reads **`Schema2.Material.DoubleSided`** per primitive (default **false** when the material is missing, matching glTF).
+- **`Scene/ImportedMeshPart.cs`**: **`DoubleSided`** flag.
+- **`Scene/PlacedAssetVisualFactory.cs`**: For each **`GeometryModel3D`**, sets **`BackMaterial`** to the same material only when **`DoubleSided`** is true **or** the instance is **selected** (selection still tints the full shell for visibility). When **false** and not selected, **`BackMaterial`** is **null** so WPF does not render the back side of the mesh (culling-style).
+
+### Notes
+
+- This is a **rasterization** approximation; it is not a full glTF **front-face** / winding test, but it matches the common “no back pass” reading of **`doubleSided: false`** for the viewport.
+
