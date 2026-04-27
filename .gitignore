@@ -1,0 +1,8 @@
+tools/dotnet/
+.nuget/packages/
+.worktrees/
+**/bin/
+**/obj/
+.vs/
+*.log
+*.tmp
