@@ -19,5 +19,6 @@ From repo root:
 ## Status
 
 - ✅ Phase 1: project setup, local .NET 8 SDK + NuGet cache, WPF scaffold, MaterialDesign dark theme baseline
-- ⏳ Next: Phase 2 (Constants + Models + Enums)
+- ✅ Phase 2: `Constants.cs`, enums, and persisted layout models (`Models/*`)
+- ⏳ Next: Phase 3 (`DefaultAssets.cs` — 12 built-in templates)
 

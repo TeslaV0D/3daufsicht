@@ -25,3 +25,25 @@
 
 - SharpGLTF: The spec mentions `SharpGLTF.Runtime.WPF`, but the available NuGet package is `SharpGLTF.Runtime`. We use `SharpGLTF.Runtime` + `SharpGLTF.Core` as the baseline.
 
+## Phase 2 (Domain models)
+
+### What’s implemented
+
+- `Constants.cs`: centralized numeric/string constants for snap, history, autosave paths, schema version, etc.
+- Enums (serialized as strings in JSON):
+  - `Models/Enums/AssetShapeKind`
+  - `Models/Enums/ShadowQuality`
+  - `Models/Enums/HdriPreset`
+- Persisted document model (`System.Text.Json`-friendly):
+  - `Models/LayoutFile` (root JSON document)
+  - `Models/AssetDefinition`, `Models/PlacedAsset`
+  - `Models/TextLabel`, `Models/Decal`
+  - `Models/LightingSettings`, `Models/HistorySnapshot`
+  - `Models/JsonVector3` (meters/vector data in layout files)
+
+### Conventions
+
+- Vectors in layout JSON use `JsonVector3` with **X/Y/Z doubles** in meters.
+- Colors are **hex strings** (e.g. `#RRGGBB`) at the data layer; WPF `Color` conversion comes later in `Helpers/ColorHelper`.
+- `LayoutFile.SchemaVersion` is always `Constants.LayoutSchemaVersion` (`v3`).
+
