@@ -35,5 +35,6 @@ From repo root:
 - ✅ Phase 15: viewport drag translate (Shift+Drag) on XZ plane with undo snapshot + inspector live update
 - ✅ Phase 16: viewport drag rotate yaw (Alt+Drag) with undo snapshot + inspector live update
 - ✅ Phase 17: viewport drag uniform scale (Strg+Umschalt+Drag) with undo snapshot
-- ⏳ Next: richer gizmo UX / non-uniform scale UX, more inspector properties (dims, color, …), optional glTF material mapping
+- ✅ Phase 18: inspector dimensions + color (#RRGGBB), palette swatches, undo on apply (single selection)
+- ⏳ Next: richer gizmo UX, inspector metadata/other fields, optional glTF material mapping
 

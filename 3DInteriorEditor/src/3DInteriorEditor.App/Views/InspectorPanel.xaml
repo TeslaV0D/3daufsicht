@@ -4,11 +4,13 @@
                xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
                xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
                xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+               xmlns:helpers="clr-namespace:_3DInteriorEditor.App.Helpers"
                mc:Ignorable="d"
                d:DesignWidth="280">
 
   <UserControl.Resources>
     <BooleanToVisibilityConverter x:Key="BoolToVis" />
+    <helpers:HexStringToColorConverter x:Key="HexStringToColorConverter" />
   </UserControl.Resources>
 
   <DockPanel Background="{DynamicResource App.PanelBrush}">
@@ -101,6 +103,95 @@
                 <Button Margin="6,0,0,0"
                         Style="{DynamicResource MaterialDesignOutlinedButton}"
                         Command="{Binding ResetInspectorTransformCommand}"
+                        Content="Zurücksetzen" />
+              </UniformGrid>
+            </StackPanel>
+          </Border>
+
+          <!-- Phase 18: dimensions + color when exactly one asset is selected -->
+          <Border Margin="0,0,0,12"
+                  Padding="10"
+                  CornerRadius="10"
+                  Background="{DynamicResource App.ElevatedBrush}"
+                  Visibility="{Binding IsInspectorTransformVisible, Converter={StaticResource BoolToVis}}">
+            <StackPanel>
+              <TextBlock Margin="0,0,0,10"
+                         FontWeight="SemiBold"
+                         Foreground="{DynamicResource App.TextPrimaryBrush}"
+                         Text="Maße / Farbe" />
+
+              <TextBlock Margin="0,0,0,4"
+                         FontSize="11"
+                         Foreground="{DynamicResource App.TextSecondaryBrush}"
+                         Text="Abmessungen (m), Breite X · Höhe Y · Tiefe Z · Min." />
+
+              <UniformGrid Columns="3" Margin="0,0,0,10">
+                <TextBox Margin="0,0,6,0"
+                         materialDesign:HintAssist.Hint="X"
+                         Style="{DynamicResource MaterialDesignOutlinedTextBox}"
+                         Text="{Binding InspectorDimXText, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBox Margin="0,0,6,0"
+                         materialDesign:HintAssist.Hint="Y"
+                         Style="{DynamicResource MaterialDesignOutlinedTextBox}"
+                         Text="{Binding InspectorDimYText, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBox materialDesign:HintAssist.Hint="Z"
+                         Style="{DynamicResource MaterialDesignOutlinedTextBox}"
+                         Text="{Binding InspectorDimZText, UpdateSourceTrigger=PropertyChanged}" />
+              </UniformGrid>
+
+              <TextBlock Margin="0,0,0,4"
+                         FontSize="11"
+                         Foreground="{DynamicResource App.TextSecondaryBrush}"
+                         Text="Farbe (#RRGGBB oder #AARRGGBB)" />
+
+              <TextBox Margin="0,0,0,10"
+                       materialDesign:HintAssist.Hint="#RRGGBB"
+                       Style="{DynamicResource MaterialDesignOutlinedTextBox}"
+                       Text="{Binding InspectorColorHexText, UpdateSourceTrigger=PropertyChanged}" />
+
+              <TextBlock Margin="0,0,0,6"
+                         FontSize="11"
+                         Foreground="{DynamicResource App.TextSecondaryBrush}"
+                         Text="Palette (Klick)" />
+
+              <ItemsControl ItemsSource="{Binding InspectorColorPalette}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <WrapPanel />
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Button Width="26"
+                            Height="26"
+                            Margin="2"
+                            Padding="0"
+                            Style="{DynamicResource MaterialDesignIconButton}"
+                            ToolTip="{Binding}"
+                            Command="{Binding DataContext.PickInspectorColorSwatchCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                            CommandParameter="{Binding}">
+                      <Border Width="18"
+                              Height="18"
+                              CornerRadius="3"
+                              BorderBrush="{DynamicResource App.BorderBrush}"
+                              BorderThickness="1">
+                        <Border.Background>
+                          <SolidColorBrush Color="{Binding Converter={StaticResource HexStringToColorConverter}}" />
+                        </Border.Background>
+                      </Border>
+                    </Button>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+
+              <UniformGrid Margin="0,12,0,0" Columns="2">
+                <Button Margin="0,0,6,0"
+                        Style="{DynamicResource MaterialDesignRaisedButton}"
+                        Command="{Binding ApplyInspectorAppearanceCommand}"
+                        Content="Übernehmen" />
+                <Button Margin="6,0,0,0"
+                        Style="{DynamicResource MaterialDesignOutlinedButton}"
+                        Command="{Binding ResetInspectorAppearanceCommand}"
                         Content="Zurücksetzen" />
               </UniformGrid>
             </StackPanel>

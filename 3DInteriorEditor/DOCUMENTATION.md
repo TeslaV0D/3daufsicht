@@ -291,5 +291,20 @@
 
 ### Notes
 
-- Non-uniform per-axis scaling remains **inspector/editor tooling** for a later phase.
+- Typed **non-uniform** dimensions editing is Phase 18 (inspector); viewport drag scaling remains uniform.
+
+## Phase 18 (Inspector dimensions + color)
+
+### What’s implemented
+
+- **`ViewModels/MainViewModel.InspectorEditing.cs`** extended with invariant text fields for **dimensions** (width X · height Y · depth Z in meters) and **color** (`#RRGGBB`; `#AARRGGBB` accepted when parsing).
+- **`ApplyInspectorAppearanceCommand`**: **`History.Push(...)`** then updates `PlacedAssets` via **`CloneAsset(..., dimensionsMeters, colorHex)`**. Values below `Constants.MinAssetDimension` are clamped upward on apply.
+- **`ResetInspectorAppearanceCommand`** reloads fields from the scene.
+- **Swatches**: inspector binds to `Constants.DefaultColorSwatches` (`InspectorColorPalette`) with click-to-copy into the hex field (`PickInspectorColorSwatchCommand`).
+- **`Helpers/HexStringToColorConverter.cs`**: XAML converter for palette preview squares.
+- **`Views/InspectorPanel.xaml`**: second editor card (**Maße / Farbe**) visible under the same rule as Phase 13 (**exactly one** selected asset).
+
+### Notes
+
+- Applying appearance does **not** implicitly apply transform text fields (two independent **Übernehmen** actions).
 
