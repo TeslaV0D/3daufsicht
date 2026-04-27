@@ -28,7 +28,7 @@ export interface AssetRendererProps {
   isEditMode: boolean
   /** Kategorie-Akzent bei Auswahl (Outline/Emissive) */
   selectionAccent?: string
-  onPointerDown?: (event: ThreeEvent<PointerEvent>, asset: Asset) => void
+  onPointerDown?: (event: ThreeEvent<PointerEvent>) => void
   onClick?: (event: ThreeEvent<MouseEvent>, asset: Asset) => void
   onContextMenu?: (event: ThreeEvent<MouseEvent>, asset: Asset) => void
   onPointerOver?: (event: ThreeEvent<PointerEvent>, asset: Asset) => void
@@ -671,7 +671,7 @@ export default function AssetRenderer({
   const eventProps = {
     onClick: (event: ThreeEvent<MouseEvent>) => onClick?.(event, asset),
     onContextMenu: (event: ThreeEvent<MouseEvent>) => onContextMenu?.(event, asset),
-    onPointerDown: (event: ThreeEvent<PointerEvent>) => onPointerDown?.(event, asset),
+    onPointerDown: (event: ThreeEvent<PointerEvent>) => onPointerDown?.(event),
     onPointerEnter: (event: ThreeEvent<PointerEvent>) => {
       event.stopPropagation()
       onPointerOver?.(event, asset)

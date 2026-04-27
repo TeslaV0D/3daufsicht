@@ -1,4 +1,4 @@
-import { Canvas, useThree, type ThreeEvent } from '@react-three/fiber'
+import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import { List, type RowComponentProps } from 'react-window'
 import { Html, OrbitControls, TransformControls } from '@react-three/drei'
 import {
@@ -18,13 +18,15 @@ import {
 import {
   Euler,
   Group,
+  type Intersection,
+  type Object3D,
   Quaternion,
   Raycaster,
   Vector3,
   type Vector3Tuple,
 } from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
-
+import type { TransformControls as TransformControlsImpl } from 'three-stdlib'
 import './App.css'
 import AnimatedCameraRig from './components/AnimatedCameraRig'
 import DistanceCullWrap from './components/DistanceCullWrap'
@@ -208,6 +210,68 @@ function SceneInteractionCursor({
       el.style.cursor = ''
     }
   }, [gl, mode, hoveredId, assets])
+  return null
+}
+
+function isTransformGizmoObject(o: Object3D): boolean {
+  return (o as { isTransformControlsGizmo?: boolean }).isTransformControlsGizmo === true
+}
+
+function findRootAssetIdFromObject(object: Object3D | null): string | null {
+  let o: Object3D | null = object
+  while (o) {
+    if (isTransformGizmoObject(o)) return null
+    const id = o.userData?.assetId
+    if (typeof id === 'string' && id.length > 0) return id
+    o = o.parent
+  }
+  return null
+}
+
+function findInstancedAssetIdFromHit(hit: Intersection): string | null {
+  const mesh = hit.object
+  if (!mesh || !('isInstancedMesh' in mesh) || !(mesh as { isInstancedMesh?: boolean }).isInstancedMesh) {
+    return null
+  }
+  const inst = hit.instanceId
+  if (typeof inst !== 'number' || inst < 0) return null
+  const list = (mesh as Object3D).userData?.instancedAssetIds
+  if (!Array.isArray(list) || inst >= list.length) return null
+  const id = list[inst]
+  return typeof id === 'string' ? id : null
+}
+
+/**
+ * R3F liefert Treffer ab Nah → Fern; wähle das oberste Asset-Root (löst Überlappungen).
+ */
+function pickAssetIdFromIntersections(intersections: Intersection[], assets: Asset[]): string | null {
+  const byId = new Map(assets.map((a) => [a.id, a]))
+  for (const h of intersections) {
+    const inst = findInstancedAssetIdFromHit(h)
+    if (inst) {
+      if (byId.has(inst)) return inst
+    }
+    const id = findRootAssetIdFromObject(h.object)
+    if (id && byId.has(id)) return id
+  }
+  return null
+}
+
+function SyncOrbitWithTransformGizmo({
+  transformRef,
+  orbitRef,
+}: {
+  transformRef: RefObject<TransformControlsImpl | null>
+  orbitRef: RefObject<OrbitControlsImpl | null>
+}) {
+  useFrame(() => {
+    const t = transformRef.current
+    const o = orbitRef.current
+    if (!t || !o) return
+    // `dragging` is a runtime property on three-stdlib TransformControls; TS marks it private.
+    const dragging = (t as unknown as { dragging: boolean }).dragging
+    o.enabled = !dragging
+  })
   return null
 }
 
@@ -826,6 +890,7 @@ function SingleTransformGizmo({
   children,
 }: SingleTransformGizmoProps) {
   const groupRef = useRef<Group>(null!)
+  const transformRef = useRef<TransformControlsImpl | null>(null)
   const draggingRef = useRef(false)
 
   useEffect(() => {
@@ -839,7 +904,6 @@ function SingleTransformGizmo({
   const finishDrag = useCallback(() => {
     if (!draggingRef.current) return
     draggingRef.current = false
-    if (orbitRef.current) orbitRef.current.enabled = true
 
     const group = groupRef.current
     if (!group) return
@@ -862,7 +926,7 @@ function SingleTransformGizmo({
     ]
     onCommit(asset.id, { position: nextPosition, rotation: nextRotation, scale: nextScale })
     onTransformPointerChange?.(false)
-  }, [asset.id, mode, onCommit, onTransformPointerChange, orbitRef, translationSnap])
+  }, [asset.id, mode, onCommit, onTransformPointerChange, translationSnap])
 
   useEffect(() => {
     const onPointerUp = () => finishDrag()
@@ -885,7 +949,9 @@ function SingleTransformGizmo({
       >
         {children}
       </group>
+      <SyncOrbitWithTransformGizmo transformRef={transformRef} orbitRef={orbitRef} />
       <TransformControls
+        ref={transformRef}
         object={groupRef}
         mode={mode}
         translationSnap={
@@ -898,7 +964,6 @@ function SingleTransformGizmo({
         onMouseDown={() => {
           draggingRef.current = true
           onTransformPointerChange?.(true)
-          if (orbitRef.current) orbitRef.current.enabled = false
         }}
         onMouseUp={finishDrag}
       />
@@ -926,6 +991,7 @@ function MultiTransformGizmo({
   onTransformPointerChange,
 }: MultiTransformGizmoProps) {
   const pivotRef = useRef<Group>(null!)
+  const transformRef = useRef<TransformControlsImpl | null>(null)
   const draggingRef = useRef(false)
   const dragStartRef = useRef<{
     pivotPosition: Vector3
@@ -967,7 +1033,6 @@ function MultiTransformGizmo({
   const finishDrag = useCallback(() => {
     if (!draggingRef.current) return
     draggingRef.current = false
-    if (orbitRef.current) orbitRef.current.enabled = true
 
     const pivot = pivotRef.current
     const start = dragStartRef.current
@@ -1011,7 +1076,7 @@ function MultiTransformGizmo({
     onCommit(updates)
     dragStartRef.current = null
     onTransformPointerChange?.(false)
-  }, [onCommit, onTransformPointerChange, orbitRef])
+  }, [onCommit, onTransformPointerChange])
 
   useEffect(() => {
     const onPointerUp = () => finishDrag()
@@ -1027,7 +1092,9 @@ function MultiTransformGizmo({
   return (
     <group>
       <group ref={pivotRef} position={center} />
+      <SyncOrbitWithTransformGizmo transformRef={transformRef} orbitRef={orbitRef} />
       <TransformControls
+        ref={transformRef}
         object={pivotRef}
         mode={mode}
         translationSnap={
@@ -1041,7 +1108,6 @@ function MultiTransformGizmo({
           const pivot = pivotRef.current
           draggingRef.current = true
           onTransformPointerChange?.(true)
-          if (orbitRef.current) orbitRef.current.enabled = false
           dragStartRef.current = {
             pivotPosition: pivot.position.clone(),
             pivotQuaternion: pivot.quaternion.clone(),
@@ -1639,8 +1705,12 @@ export default function PlannerApp() {
   }, [])
 
   const applyAssetPointerSelect = useCallback(
-    (event: ThreeEvent<PointerEvent> | ThreeEvent<MouseEvent>, asset: Asset) => {
+    (event: ThreeEvent<PointerEvent> | ThreeEvent<MouseEvent>) => {
       event.stopPropagation()
+      const pickId = pickAssetIdFromIntersections(event.intersections, assets)
+      if (!pickId) return
+      const asset = assets.find((a) => a.id === pickId)
+      if (!asset) return
       if (mode === 'view') {
         if (asset.isLocked || asset.category === CATEGORY_ZONES) {
           return
@@ -1668,28 +1738,26 @@ export default function PlannerApp() {
       setSelectedIds([asset.id])
       assetPointerSuppressFloorUntilRef.current = Date.now() + 400
     },
-    [mode, selectedIds, setInfoAssetId, setSelectedIds, tool],
+    [assets, mode, selectedIds, setInfoAssetId, setSelectedIds, tool],
   )
   const closePresentationDetails = useCallback(() => {
     setInfoAssetId(null)
   }, [setInfoAssetId])
 
   const onAssetPointerDown = useCallback(
-    (event: ThreeEvent<PointerEvent>, asset: Asset) => {
+    (event: ThreeEvent<PointerEvent>) => {
       if (event.button !== 0) return
-      applyAssetPointerSelect(event, asset)
+      applyAssetPointerSelect(event)
     },
     [applyAssetPointerSelect],
   )
 
   const onInstancedAssetInteract = useCallback(
-    (assetId: string, event: ThreeEvent<PointerEvent>) => {
+    (event: ThreeEvent<PointerEvent>) => {
       if (event.button !== 0) return
-      const asset = assets.find((a) => a.id === assetId)
-      if (!asset) return
-      applyAssetPointerSelect(event, asset)
+      applyAssetPointerSelect(event)
     },
-    [assets, applyAssetPointerSelect],
+    [applyAssetPointerSelect],
   )
 
   const onAssetContextMenu = useCallback(

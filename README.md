@@ -88,6 +88,14 @@ npm run lint
 
 - **Debounce** für `localStorage`-Serialisierung (verhindert spürbare Pausen nach Kamera-/Klicks); **Klick-Guard** (~80 ms) im **View-Mode** gegen doppelte Handler.
 
+### Transform Gizmo & Orbit-Kamera
+
+- **`OrbitControls`** (Standard-`controls` in R3F) und **`TransformControls`**: `SyncOrbitWithTransformGizmo` stellt in jedem Frame `orbit.enabled = !transformControls.dragging` (liest den echten Drag-Status) — behebt den Fall, dass nach **Gizmo-Drag** die Orbit-Navigation „tot“ blieb, weil `enabled` manuell getoggelt und nicht mit dem internen `dragging` synchron blieb.
+
+### Objekt-Auswahl: Überlappung
+
+- Klick-Selektion nutzt die **sortierte** R3F-`intersections`-Liste und wählt das **vorderste** sichtbare Asset-Root (über `userData.assetId` am Root-`group`; **Instancing:** `userData.instancedAssetIds[instanceId]`). Damit trifft man bei Stapel-Überlappung das in der Blickrichtung **nahe** liegende Mesh, nicht ein dahinter.
+
 ### Bibliothek & Gruppen (Feinschliff)
 
 - Drag & Drop oder Gruppen-Dialog einer **User-Gruppe**: Vorlage wird als **Kopie** („… (Kopie)“, neue Typ-ID) in die Ziel-Gruppe gelegt; die ursprüngliche Zuordnung bleibt erhalten. Zurück in die **Kategorie (Standard)** wie bisher ohne Duplikat (`assign` entfernt nur die Gruppen-Zuordnung).
@@ -103,6 +111,7 @@ npm run lint
 
 ### Objekt-Auswahl & Klicks
 
+- **Richtiger Treffer bei Überlappung**: Siehe Abschnitt *Objekt-Auswahl: Überlappung*; nicht nur der erste per Mesh-Listener ausgelöste Treffer, sondern die vollständige Ray-Sortierung.
 - **Zuverlässige Auswahl**: Selektion läuft über **`pointerdown`** (Primärtaste), damit `OrbitControls` und verzögerte `click`-Events die Auswahl nicht „schlucken“.
 - **Fokus bleibt beim Loslassen**: Boden-Deselektion nutzt ebenfalls **`pointerdown`** (nicht **`click`**). So wird vermieden, dass nach einem Pick das getroffene Mesh zwischen **Down** und **Up** aus der Szene verschwindet (Wechsel Instancing → Einzelmesh / Gizmo) und der **mouseup**/`click`-Raycast fälschlich den **Boden** trifft — zuvor wirkte das wie „Deselektion beim Loslassen“.
 - **Raycasting**: R3F nutzt die **Canvas-Bounding-Box** für Pointer-Normalisierung; **`PLANNER_RAYCASTER_PROPS`** auf dem `Canvas` setzt etwas höhere **Line-/Points-Thresholds** für dünnere Geometrien.

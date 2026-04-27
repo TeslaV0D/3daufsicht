@@ -488,6 +488,19 @@ Ergebnis: beide Checks erfolgreich.
 
 - `README.md` (Presentation + Performance) aktualisiert. `npm run build` & `npm run lint` (planner-app) grün nach Merge.
 
+## Stand 31: Orbit nach Gizmo-Drag; vorderer Treffer bei Überlappung
+
+### Transform + Orbit
+
+- `SyncOrbitWithTransformGizmo`: `useFrame` setzt `orbitRef.enabled` aus `TransformControls` **dragging** (Lesezugriff per Cast, da TS `dragging` private markiert). Manuelles `orbitRef.enabled` in Gizmo-`onMouseDown`/`finishDrag` entfernt, damit kein Zustand hängen bleibt.
+
+### Selection (Ray)
+
+- `pickAssetIdFromIntersections` + `userData.assetId` / Instanced-IDs; Klick-Handler nur noch `event` (kein festes „Mesh-Asset“-Argument).
+- `InstancedBoxBatch.userData.instancedAssetIds` für `instanceId`-Auflösung.
+
+- README + Build/Lint: ok.
+
 ## Offene optionale Erweiterungen
 
 - Box-Selection fuer Mehrfachauswahl.
