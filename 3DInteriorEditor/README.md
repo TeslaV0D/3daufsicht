@@ -16,6 +16,20 @@ From repo root:
 .\dotnet.cmd publish .\3DInteriorEditor\3DInteriorEditor.sln -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true
 ```
 
+### Fertige Desktop-App (ein Doppelklick, keine .NET-Installation)
+
+Im **Repository-Root** (`Interior-Planner`) liegt **`publish-app.cmd`**. Einmal ausführen (Doppelklick oder in PowerShell):
+
+```text
+.\publish-app.cmd
+```
+
+Damit wird unter **`artifacts\DesktopApp\`** eine **selbstständige** Windows-x64-Variante gebaut (**.NET-Laufzeit und Abhängigkeiten** sind in der **Single-File**-EXE enthalten bzw. werden beim Start automatisch entpackt — **kein** `dotnet run` und **kein** SDK auf dem Zielrechner nötig).
+
+**Endnutzer:** den Ordner **`artifacts\DesktopApp`** komplett weitergeben (z. B. als ZIP) und **`3DInteriorEditor.App.exe`** starten. Neben der EXE können Hilfsdateien liegen (z. B. `samples\`); den **ganzen Ordner** mitgeben, nicht nur die eine Datei.
+
+**Hinweis:** Zum **Bauen** brauchst du weiterhin das portable SDK unter `tools\dotnet\` (siehe Phase 1 in `DOCUMENTATION.md`). Das ist nur auf dem **Entwickler-PC** nötig, nicht beim Anwender.
+
 ## Status
 
 - ✅ Phase 1: project setup, local .NET 8 SDK + NuGet cache, WPF scaffold, MaterialDesign dark theme baseline

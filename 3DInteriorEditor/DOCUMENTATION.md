@@ -21,6 +21,8 @@
 .\dotnet.cmd publish .\3DInteriorEditor\3DInteriorEditor.sln -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true
 ```
 
+Alternatively, from repo root run **`publish-app.cmd`**, which publishes the app project to **`artifacts/DesktopApp/`** (self-contained **win-x64** single-file for end users).
+
 ### Notes
 
 - SharpGLTF: The spec mentions `SharpGLTF.Runtime.WPF`, but the available NuGet package is `SharpGLTF.Runtime`. We use `SharpGLTF.Runtime` + `SharpGLTF.Core` as the baseline.

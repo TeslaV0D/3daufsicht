@@ -10,6 +10,9 @@ tools/dotnet/
 # VS
 .vs/
 
+# Desktop publish output (single-file build)
+artifacts/
+
 # Logs / temp
 *.log
 *.tmp
