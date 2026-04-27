@@ -28,5 +28,6 @@ From repo root:
 - ✅ Phase 8: scene sync for `PlacedAssets` (primitive shapes via Helix), double-click library to place, Strg+click pick → inspector
 - ✅ Phase 9: undo/redo UX (`HistoryService`: snapshot before placement, toolbar + Bearbeiten menu + Strg+Z / Strg+Y)
 - ✅ Phase 10: selection model (selected ids in `MainViewModel`), Ctrl+click toggle selection, viewport highlight + inspector selection list
-- ⏳ Next: transforms / gizmo, mesh import rendering, richer inspector fields
+- ✅ Phase 11: keyboard transforms (move/rotate/delete) with undo snapshots + inspector shows pos/rot
+- ⏳ Next: gizmo/drag transforms, mesh import rendering, richer inspector fields
 

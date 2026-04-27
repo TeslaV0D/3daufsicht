@@ -182,3 +182,21 @@
 
 - Currently, selection changes are **not** pushed into undo/redo history on their own (only captured as part of edit snapshots like placement). This keeps the history focused on document edits.
 
+## Phase 11 (Keyboard transforms)
+
+### What’s implemented
+
+- `MainViewModel` edit commands (all capture history **before** mutation):
+  - `DeleteSelectedCommand`: deletes selected placed assets (Delete key).
+  - `NudgeSelectedCommand`: moves selection on the ground plane (arrow keys) in steps of `Constants.SnapUnitDefault`.
+  - `RotateSelectedCommand`: rotates selection around Y (Q/E) in steps of `Constants.RotationSnapDegrees`.
+- `MainWindow` key bindings:
+  - Arrow keys → `NudgeSelectedCommand` (Forward/Back/Left/Right)
+  - `Q` / `E` → rotate left/right
+  - `Delete` → delete selection
+- `InspectorPanel` now shows `PositionMeters` and `RotationDegrees` for selected assets (read-only).
+
+### Notes
+
+- This phase intentionally uses **keyboard transforms** to avoid introducing a full gizmo/drag-manipulation system yet.
+

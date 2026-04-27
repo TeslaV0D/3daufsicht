@@ -197,6 +197,110 @@ public sealed partial class MainViewModel : ObservableObject
         };
 
         PlacedAssets.Add(placed);
+        SetSelectionIds(new[] { placed.Id });
+        MarkDirty();
+        NotifyUndoRedoCommands();
+    }
+
+    [RelayCommand(CanExecute = nameof(HasAnySelection))]
+    private void DeleteSelected()
+    {
+        if (SelectedAssetIds.Count == 0)
+        {
+            return;
+        }
+
+        History.Push(PlacedAssets.ToList(), CurrentSelectionIds());
+
+        var toDelete = SelectedAssetIds.ToHashSet(StringComparer.Ordinal);
+        for (var i = PlacedAssets.Count - 1; i >= 0; i--)
+        {
+            if (toDelete.Contains(PlacedAssets[i].Id))
+            {
+                PlacedAssets.RemoveAt(i);
+            }
+        }
+
+        SelectedAssetIds.Clear();
+        MarkDirty();
+        NotifyUndoRedoCommands();
+        StatusText = "Gelöscht";
+    }
+
+    [RelayCommand(CanExecute = nameof(HasAnySelection))]
+    private void NudgeSelected(string direction)
+    {
+        if (SelectedAssetIds.Count == 0)
+        {
+            return;
+        }
+
+        // Fine nudge when Shift is held (wired via separate key bindings).
+        var step = Constants.SnapUnitDefault;
+
+        (double dx, double dz) = direction switch
+        {
+            "Left" => (-step, 0d),
+            "Right" => (step, 0d),
+            "Forward" => (0d, -step),
+            "Back" => (0d, step),
+            _ => (0d, 0d),
+        };
+
+        if (dx == 0 && dz == 0)
+        {
+            return;
+        }
+
+        History.Push(PlacedAssets.ToList(), CurrentSelectionIds());
+
+        foreach (var id in SelectedAssetIds.ToList())
+        {
+            UpdatePlacedAsset(id, a => CloneAsset(a, positionMeters: new JsonVector3
+            {
+                X = a.PositionMeters.X + dx,
+                Y = a.PositionMeters.Y,
+                Z = a.PositionMeters.Z + dz,
+            }));
+        }
+
+        MarkDirty();
+        NotifyUndoRedoCommands();
+    }
+
+    [RelayCommand(CanExecute = nameof(HasAnySelection))]
+    private void RotateSelected(string direction)
+    {
+        if (SelectedAssetIds.Count == 0)
+        {
+            return;
+        }
+
+        var step = Constants.RotationSnapDegrees;
+        var delta = direction switch
+        {
+            "Left" => -step,
+            "Right" => step,
+            _ => 0,
+        };
+
+        if (delta == 0)
+        {
+            return;
+        }
+
+        History.Push(PlacedAssets.ToList(), CurrentSelectionIds());
+
+        foreach (var id in SelectedAssetIds.ToList())
+        {
+            UpdatePlacedAsset(id, a => CloneAsset(a, rotationDegrees: new JsonVector3
+            {
+                X = a.RotationDegrees.X,
+                Y = a.RotationDegrees.Y + delta,
+                Z = a.RotationDegrees.Z,
+            }));
+        }
+
         MarkDirty();
         NotifyUndoRedoCommands();
     }
@@ -234,6 +338,8 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     private bool CanRedo() => History.CanRedo;
+
+    private bool HasAnySelection() => SelectedAssetIds.Count > 0;
 
     private HistorySnapshot CaptureSnapshot()
     {
@@ -307,6 +413,47 @@ public sealed partial class MainViewModel : ObservableObject
         }
 
         SelectedAssetIds.Add(id);
+    }
+
+    private void UpdatePlacedAsset(string id, Func<PlacedAsset, PlacedAsset> updater)
+    {
+        for (var i = 0; i < PlacedAssets.Count; i++)
+        {
+            if (!string.Equals(PlacedAssets[i].Id, id, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var updated = updater(PlacedAssets[i]);
+            if (!string.Equals(updated.Id, id, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException("Updater must not change the instance id.");
+            }
+
+            PlacedAssets[i] = updated;
+            return;
+        }
+    }
+
+    private static PlacedAsset CloneAsset(
+        PlacedAsset a,
+        JsonVector3? positionMeters = null,
+        JsonVector3? rotationDegrees = null,
+        JsonVector3? dimensionsMeters = null,
+        string? colorHex = null,
+        bool? isVisible = null)
+    {
+        return new PlacedAsset
+        {
+            Id = a.Id,
+            AssetDefinitionId = a.AssetDefinitionId,
+            PositionMeters = positionMeters ?? a.PositionMeters,
+            RotationDegrees = rotationDegrees ?? a.RotationDegrees,
+            DimensionsMeters = dimensionsMeters ?? a.DimensionsMeters,
+            ColorHex = colorHex ?? a.ColorHex,
+            Metadata = new Dictionary<string, string>(a.Metadata, StringComparer.Ordinal),
+            IsVisible = isVisible ?? a.IsVisible,
+        };
     }
 
     private void SyncSelectionToInspector()

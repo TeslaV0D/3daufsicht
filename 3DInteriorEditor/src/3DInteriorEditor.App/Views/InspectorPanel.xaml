@@ -46,11 +46,35 @@
                         Padding="10,8"
                         CornerRadius="8"
                         Background="{DynamicResource App.ElevatedBrush}">
-                  <TextBlock FontSize="12"
-                             Foreground="{DynamicResource App.TextSecondaryBrush}">
-                    <Run Text="ID: " />
-                    <Run Text="{Binding Id}" />
-                  </TextBlock>
+                  <StackPanel>
+                    <TextBlock FontSize="12"
+                               Foreground="{DynamicResource App.TextSecondaryBrush}">
+                      <Run Text="ID: " />
+                      <Run Text="{Binding Id}" />
+                    </TextBlock>
+
+                    <TextBlock Margin="0,6,0,0"
+                               FontSize="12"
+                               Foreground="{DynamicResource App.TextSecondaryBrush}">
+                      Pos:
+                      <Run Text="{Binding PositionMeters.X, StringFormat={}{0:0.##}}" />
+                      <Run Text=", " />
+                      <Run Text="{Binding PositionMeters.Y, StringFormat={}{0:0.##}}" />
+                      <Run Text=", " />
+                      <Run Text="{Binding PositionMeters.Z, StringFormat={}{0:0.##}}" />
+                    </TextBlock>
+
+                    <TextBlock Margin="0,4,0,0"
+                               FontSize="12"
+                               Foreground="{DynamicResource App.TextSecondaryBrush}">
+                      Rot:
+                      <Run Text="{Binding RotationDegrees.X, StringFormat={}{0:0.#}}" />
+                      <Run Text=", " />
+                      <Run Text="{Binding RotationDegrees.Y, StringFormat={}{0:0.#}}" />
+                      <Run Text=", " />
+                      <Run Text="{Binding RotationDegrees.Z, StringFormat={}{0:0.#}}" />
+                    </TextBlock>
+                  </StackPanel>
                 </Border>
               </DataTemplate>
             </ItemsControl.ItemTemplate>

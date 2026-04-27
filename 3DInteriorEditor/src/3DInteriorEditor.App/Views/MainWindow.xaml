@@ -19,6 +19,15 @@
     <KeyBinding Key="S" Modifiers="Control+Shift" Command="{Binding SaveLayoutAsCommand}" />
     <KeyBinding Key="Z" Modifiers="Control" Command="{Binding UndoCommand}" />
     <KeyBinding Key="Y" Modifiers="Control" Command="{Binding RedoCommand}" />
+    <KeyBinding Key="Delete" Command="{Binding DeleteSelectedCommand}" />
+
+    <KeyBinding Key="Left" Command="{Binding NudgeSelectedCommand}" CommandParameter="Left" />
+    <KeyBinding Key="Right" Command="{Binding NudgeSelectedCommand}" CommandParameter="Right" />
+    <KeyBinding Key="Up" Command="{Binding NudgeSelectedCommand}" CommandParameter="Forward" />
+    <KeyBinding Key="Down" Command="{Binding NudgeSelectedCommand}" CommandParameter="Back" />
+
+    <KeyBinding Key="Q" Command="{Binding RotateSelectedCommand}" CommandParameter="Left" />
+    <KeyBinding Key="E" Command="{Binding RotateSelectedCommand}" CommandParameter="Right" />
   </Window.InputBindings>
 
   <Grid>
