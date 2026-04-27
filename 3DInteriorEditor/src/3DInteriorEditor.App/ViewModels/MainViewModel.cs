@@ -155,6 +155,62 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Place a library template into the scene (spread on the ground plane so instances do not overlap).
+    /// </summary>
+    [RelayCommand]
+    private void PlaceAssetFromLibrary(AssetDefinition? definition)
+    {
+        if (definition is null)
+        {
+            return;
+        }
+
+        var dims = definition.DefaultDimensionsMeters;
+        var halfY = dims.Y * 0.5;
+
+        var idx = PlacedAssets.Count;
+        const int columns = 8;
+        var x = (idx % columns) * (dims.X + 0.35);
+        var z = (idx / columns) * (dims.Z + 0.35);
+
+        var placed = new PlacedAsset
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            AssetDefinitionId = definition.Id,
+            PositionMeters = new JsonVector3 { X = x, Y = halfY, Z = z },
+            RotationDegrees = new JsonVector3 { X = 0, Y = 0, Z = 0 },
+            DimensionsMeters = new JsonVector3 { X = dims.X, Y = dims.Y, Z = dims.Z },
+            ColorHex = definition.DefaultColorHex,
+            Metadata = new Dictionary<string, string>(definition.MetadataTemplates, StringComparer.Ordinal),
+            IsVisible = true,
+        };
+
+        PlacedAssets.Add(placed);
+        MarkDirty();
+    }
+
+    /// <summary>
+    /// Clears viewport-driven selection (inspector + status).
+    /// </summary>
+    public void ClearViewportSelection()
+    {
+        Inspector.SetSelection(Array.Empty<PlacedAsset>());
+        StatusText = "Bereit";
+    }
+
+    /// <summary>
+    /// Applies selection after a viewport hit-test (single asset).
+    /// </summary>
+    public void ApplyViewportPick(PlacedAsset picked)
+    {
+        Inspector.SetSelection(new[] { picked });
+        var label = AssetDefinitions.FirstOrDefault(d =>
+                string.Equals(d.Id, picked.AssetDefinitionId, StringComparison.Ordinal))
+            ?.DisplayName ?? picked.AssetDefinitionId;
+        StatusText = $"Auswahl: {label}";
+    }
+
+    /// <summary>
     /// Marks the document dirty (call from future editing commands).
     /// </summary>
     public void MarkDirty()

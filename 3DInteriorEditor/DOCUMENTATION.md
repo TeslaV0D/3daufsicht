@@ -132,3 +132,18 @@
 
 - Navigation uses Helix **built-in** camera handlers (no custom manipulation code in this phase). Scene graph content for placed assets arrives in a later phase.
 
+## Phase 8 (Scene graph — placed assets)
+
+### What’s implemented
+
+- `Scene/PlacedAssetVisualFactory.cs`: maps `AssetShapeKind` to Helix primitives (`BoxVisual3D`, `SphereVisual3D`, `TruncatedConeVisual3D` for cylinder/cone); hex/rhombus/circle fall back to box for now.
+- `Scene/PlacedAssetScenePresenter.cs`: rebuilds dynamic `ModelVisual3D` children from `MainViewModel.PlacedAssets` (world transform from position + Euler degrees X→Y→Z); registers visuals for hit-testing.
+- `Helpers/ColorHexHelper.cs`: parses `#RRGGBB` / `#AARRGGBB` for diffuse materials.
+- `ViewModels/MainViewModel.cs`: `PlaceAssetFromLibraryCommand` lays instances on the XZ plane with spacing; `ApplyViewportPick` / `ClearViewportSelection` drive the inspector status line.
+- `Views/ViewportPanel`: `Viewport3DHelper.FindHits` on the inner `Viewport` + **Strg+Linksklick** selection (marks event handled so camera drag does not steal the gesture).
+- `Views/AssetLibraryPanel`: **double-click** a template row to place an instance.
+
+### Notes
+
+- Imported mesh paths (`AssetDefinition.ImportedModelPath`) are not rendered yet — definitions still draw as primitives using instance dimensions.
+

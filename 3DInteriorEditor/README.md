@@ -25,5 +25,6 @@ From repo root:
 - ✅ Phase 5: MVVM skeleton (`MainViewModel`, `AssetLibraryViewModel`, `InspectorViewModel`) + window composition
 - ✅ Phase 6: main window chrome (menu, 48px toolbar, 240/280 sidebars, status bar) + Asset Library / Inspector panels bound to VMs
 - ✅ Phase 7: `HelixViewport3D` viewport host + built-in orbit / pan / zoom (reference grid + coordinate triad)
-- ⏳ Next: scene graph for layout content (placed assets, meshes, picking)
+- ✅ Phase 8: scene sync for `PlacedAssets` (primitive shapes via Helix), double-click library to place, Strg+click pick → inspector
+- ⏳ Next: transforms / gizmos, mesh import rendering, undo-redo UX
 

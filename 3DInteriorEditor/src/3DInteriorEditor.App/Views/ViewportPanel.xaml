@@ -13,7 +13,8 @@
     <h:HelixViewport3D x:Name="Viewport"
                        Background="{DynamicResource App.BackgroundBrush}"
                        ZoomExtentsWhenLoaded="True"
-                       RotateAroundMouseDownPoint="True">
+                       RotateAroundMouseDownPoint="True"
+                       PreviewMouseLeftButtonDown="Viewport_OnPreviewMouseLeftButtonDown">
 
       <!-- Y-up scene: floor lies in XZ at y = 0 -->
       <h:HelixViewport3D.DefaultCamera>
@@ -68,7 +69,7 @@
       </Border.Effect>
       <TextBlock FontSize="11"
                  Foreground="{DynamicResource App.TextSecondaryBrush}">
-        <Run Text="Linke Maustaste: Drehen · Rechte Maustaste / Mittlere Taste: Schwenken · Mausrad: Zoomen" />
+        <Run Text="Linke Maustaste: Drehen · Rechte/Mitte: Schwenken · Rad: Zoom · Strg+Klick: Auswahl" />
       </TextBlock>
     </Border>
   </Grid>
