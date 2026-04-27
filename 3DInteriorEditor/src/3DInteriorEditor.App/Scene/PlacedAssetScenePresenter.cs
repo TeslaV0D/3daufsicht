@@ -27,10 +27,14 @@ public sealed class PlacedAssetScenePresenter : IDisposable
         _staticChildCount = viewport.Children.Count;
 
         viewModel.PlacedAssets.CollectionChanged += OnPlacedAssetsChanged;
+        viewModel.SelectedAssetIds.CollectionChanged += OnSelectionChanged;
         RebuildPlacedVisuals();
     }
 
     private void OnPlacedAssetsChanged(object? sender, NotifyCollectionChangedEventArgs e) =>
+        RebuildPlacedVisuals();
+
+    private void OnSelectionChanged(object? sender, NotifyCollectionChangedEventArgs e) =>
         RebuildPlacedVisuals();
 
     /// <summary>
@@ -64,6 +68,9 @@ public sealed class PlacedAssetScenePresenter : IDisposable
         }
 
         _placedIdByVisual.Clear();
+        var selected = _viewModel.SelectedAssetIds.Count == 0
+            ? null
+            : _viewModel.SelectedAssetIds.ToHashSet(StringComparer.Ordinal);
 
         foreach (var asset in _viewModel.PlacedAssets)
         {
@@ -75,7 +82,8 @@ public sealed class PlacedAssetScenePresenter : IDisposable
             var def = _viewModel.AssetDefinitions.FirstOrDefault(d =>
                 string.Equals(d.Id, asset.AssetDefinitionId, StringComparison.Ordinal));
 
-            var visual = PlacedAssetVisualFactory.CreateVisual(asset, def);
+            var isSelected = selected?.Contains(asset.Id) == true;
+            var visual = PlacedAssetVisualFactory.CreateVisual(asset, def, isSelected);
             visual.Transform = BuildWorldTransform(asset);
             _placedIdByVisual[visual] = asset.Id;
 
@@ -123,5 +131,6 @@ public sealed class PlacedAssetScenePresenter : IDisposable
 
         _disposed = true;
         _viewModel.PlacedAssets.CollectionChanged -= OnPlacedAssetsChanged;
+        _viewModel.SelectedAssetIds.CollectionChanged -= OnSelectionChanged;
     }
 }

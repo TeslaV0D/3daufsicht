@@ -16,11 +16,14 @@ public static class PlacedAssetVisualFactory
     /// </summary>
     public static ModelVisual3D CreateVisual(
         PlacedAsset asset,
-        AssetDefinition? definition)
+        AssetDefinition? definition,
+        bool isSelected)
     {
         var shape = definition?.Shape ?? AssetShapeKind.Box;
 
-        var fill = ColorHexHelper.ToDiffuseBrush(asset.ColorHex);
+        // Selection highlight: keep it simple (bright accent tint).
+        var colorHex = isSelected ? "#7986CB" : asset.ColorHex;
+        var fill = ColorHexHelper.ToDiffuseBrush(colorHex);
         var material = MaterialHelper.CreateMaterial(fill);
         var dim = asset.DimensionsMeters;
 

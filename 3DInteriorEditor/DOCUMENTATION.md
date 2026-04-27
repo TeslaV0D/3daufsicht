@@ -164,3 +164,21 @@
 
 - Undo history is cleared on **Neu** and **Öffnen** (`History.Clear`). Further editing actions should call the same **`History.Push`** pattern before mutating scene data.
 
+## Phase 10 (Selection plumbing + highlight)
+
+### What’s implemented
+
+- Selection state:
+  - `MainViewModel.SelectedAssetIds` stores the selection as **instance ids** (stable across rebuilds).
+  - `SyncSelectionToInspector()` projects ids back to `PlacedAsset` references and calls `Inspector.SetSelection(...)`.
+  - History restore (`ApplySnapshot`) now restores both placed assets **and** selection ids.
+- Viewport highlight:
+  - `PlacedAssetScenePresenter` rebuilds visuals on both asset changes and selection changes.
+  - `PlacedAssetVisualFactory` applies a simple accent tint when `isSelected`.
+- Inspector UI:
+  - `InspectorPanel` lists selected asset ids and shows the selection count.
+
+### Notes
+
+- Currently, selection changes are **not** pushed into undo/redo history on their own (only captured as part of edit snapshots like placement). This keeps the history focused on document edits.
+

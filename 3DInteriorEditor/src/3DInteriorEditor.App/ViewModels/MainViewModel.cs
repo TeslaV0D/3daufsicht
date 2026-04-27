@@ -62,6 +62,12 @@ public sealed partial class MainViewModel : ObservableObject
     public ObservableCollection<PlacedAsset> PlacedAssets { get; } = new();
 
     /// <summary>
+    /// Current selection (placed asset instance ids).
+    /// Kept as ids so it can be persisted/restored via history without holding stale references.
+    /// </summary>
+    public ObservableCollection<string> SelectedAssetIds { get; } = new();
+
+    /// <summary>
     /// Observable definitions for UI/list bindings (kept in sync with <see cref="Layout"/>).
     /// </summary>
     public ObservableCollection<AssetDefinition> AssetDefinitions { get; } = new();
@@ -70,6 +76,8 @@ public sealed partial class MainViewModel : ObservableObject
     {
         Library = new AssetLibraryViewModel();
         Inspector = new InspectorViewModel();
+
+        SelectedAssetIds.CollectionChanged += (_, _) => SyncSelectionToInspector();
 
         BootstrapLayoutCollections();
         RefreshInspectorSelection();
@@ -246,18 +254,12 @@ public sealed partial class MainViewModel : ObservableObject
 
         SyncCollectionsToLayout();
 
-        var selected = snap.SelectedAssetIds
-            .Select(id => PlacedAssets.FirstOrDefault(p => string.Equals(p.Id, id, StringComparison.Ordinal)))
-            .Where(a => a is not null)
-            .Cast<PlacedAsset>()
-            .ToList();
-
-        Inspector.SetSelection(selected);
+        SetSelectionIds(snap.SelectedAssetIds);
         MarkDirty();
     }
 
     private List<string> CurrentSelectionIds() =>
-        Inspector.SelectedAssets.Select(a => a.Id).ToList();
+        SelectedAssetIds.ToList();
 
     private void NotifyUndoRedoCommands()
     {
@@ -270,7 +272,7 @@ public sealed partial class MainViewModel : ObservableObject
     /// </summary>
     public void ClearViewportSelection()
     {
-        Inspector.SetSelection(Array.Empty<PlacedAsset>());
+        SelectedAssetIds.Clear();
         StatusText = "Bereit";
     }
 
@@ -279,11 +281,43 @@ public sealed partial class MainViewModel : ObservableObject
     /// </summary>
     public void ApplyViewportPick(PlacedAsset picked)
     {
-        Inspector.SetSelection(new[] { picked });
+        ToggleSelectionId(picked.Id);
         var label = AssetDefinitions.FirstOrDefault(d =>
                 string.Equals(d.Id, picked.AssetDefinitionId, StringComparison.Ordinal))
             ?.DisplayName ?? picked.AssetDefinitionId;
         StatusText = $"Auswahl: {label}";
+    }
+
+    public void SetSelectionIds(IEnumerable<string> ids)
+    {
+        SelectedAssetIds.Clear();
+        foreach (var id in ids.Distinct(StringComparer.Ordinal))
+        {
+            SelectedAssetIds.Add(id);
+        }
+    }
+
+    private void ToggleSelectionId(string id)
+    {
+        var idx = SelectedAssetIds.IndexOf(id);
+        if (idx >= 0)
+        {
+            SelectedAssetIds.RemoveAt(idx);
+            return;
+        }
+
+        SelectedAssetIds.Add(id);
+    }
+
+    private void SyncSelectionToInspector()
+    {
+        var selected = SelectedAssetIds
+            .Select(id => PlacedAssets.FirstOrDefault(p => string.Equals(p.Id, id, StringComparison.Ordinal)))
+            .Where(a => a is not null)
+            .Cast<PlacedAsset>()
+            .ToList();
+
+        Inspector.SetSelection(selected);
     }
 
     /// <summary>

@@ -27,5 +27,6 @@ From repo root:
 - ✅ Phase 7: `HelixViewport3D` viewport host + built-in orbit / pan / zoom (reference grid + coordinate triad)
 - ✅ Phase 8: scene sync for `PlacedAssets` (primitive shapes via Helix), double-click library to place, Strg+click pick → inspector
 - ✅ Phase 9: undo/redo UX (`HistoryService`: snapshot before placement, toolbar + Bearbeiten menu + Strg+Z / Strg+Y)
+- ✅ Phase 10: selection model (selected ids in `MainViewModel`), Ctrl+click toggle selection, viewport highlight + inspector selection list
 - ⏳ Next: transforms / gizmo, mesh import rendering, richer inspector fields
 

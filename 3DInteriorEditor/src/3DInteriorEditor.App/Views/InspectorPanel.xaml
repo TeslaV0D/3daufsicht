@@ -21,7 +21,7 @@
           <TextBlock Margin="0,4,0,0"
                      FontSize="12"
                      Foreground="{DynamicResource App.TextSecondaryBrush}"
-                     Text="Selektion/Gizmo folgt in späteren Phasen" />
+                     Text="Strg+Klick im Viewport: Auswahl (Toggle)" />
         </StackPanel>
       </DockPanel>
     </Border>
@@ -31,8 +31,30 @@
                            materialDesign:ElevationAssist.Elevation="Dp1">
         <StackPanel>
           <TextBlock FontSize="13"
-                     Foreground="{DynamicResource App.TextSecondaryBrush}"
-                     Text="Noch keine Felder aktiv — Platzierung/Auswahl kommt später." />
+                     Foreground="{DynamicResource App.TextSecondaryBrush}">
+            Ausgewählt:
+            <Run Text="{Binding Inspector.SelectedCount, Mode=OneWay}" />
+          </TextBlock>
+
+          <Separator Margin="0,12,0,12"
+                     Background="{DynamicResource App.BorderBrush}" />
+
+          <ItemsControl ItemsSource="{Binding Inspector.SelectedAssets}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border Margin="0,0,0,8"
+                        Padding="10,8"
+                        CornerRadius="8"
+                        Background="{DynamicResource App.ElevatedBrush}">
+                  <TextBlock FontSize="12"
+                             Foreground="{DynamicResource App.TextSecondaryBrush}">
+                    <Run Text="ID: " />
+                    <Run Text="{Binding Id}" />
+                  </TextBlock>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
 
           <Separator Margin="0,12,0,12"
                      Background="{DynamicResource App.BorderBrush}" />
