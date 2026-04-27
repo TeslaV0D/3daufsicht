@@ -1,4 +1,4 @@
-import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
+import { Canvas, useThree, type ThreeEvent } from '@react-three/fiber'
 import { List, type RowComponentProps } from 'react-window'
 import { Html, OrbitControls, TransformControls } from '@react-three/drei'
 import {
@@ -13,7 +13,6 @@ import {
   type DragEvent,
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
-  type RefObject,
 } from 'react'
 import {
   Euler,
@@ -257,22 +256,16 @@ function pickAssetIdFromIntersections(intersections: Intersection[], assets: Ass
   return null
 }
 
-function SyncOrbitWithTransformGizmo({
-  transformRef,
-  orbitRef,
-}: {
-  transformRef: RefObject<TransformControlsImpl | null>
-  orbitRef: RefObject<OrbitControlsImpl | null>
-}) {
-  useFrame(() => {
-    const t = transformRef.current
-    const o = orbitRef.current
-    if (!t || !o) return
-    // `dragging` is a runtime property on three-stdlib TransformControls; TS marks it private.
-    const dragging = (t as unknown as { dragging: boolean }).dragging
-    o.enabled = !dragging
-  })
-  return null
+/** Clicks on Transform-gizmo must NOT call stopPropagation — R3F needs the event for the gizmo. */
+function intersectionsTouchTransformGizmo(intersections: Intersection[]): boolean {
+  for (const h of intersections) {
+    let o: Object3D | null = h.object
+    while (o) {
+      if (isTransformGizmoObject(o)) return true
+      o = o.parent
+    }
+  }
+  return false
 }
 
 type LibraryTemplateVirtualRowData = {
@@ -872,10 +865,10 @@ interface SingleTransformGizmoProps {
   mode: TransformMode
   isCtrlPressed: boolean
   translationSnap?: number
-  orbitRef: RefObject<OrbitControlsImpl | null>
   onCommit: (id: string, patch: Partial<Asset>) => void
   /** Verhindert Boden-Klicks direkt nach Gizmo-Interaktion (Fokus / Auswahl). */
   onTransformPointerChange?: (pointerDown: boolean) => void
+  onTransformControlsRef?: (t: TransformControlsImpl | null) => void
   children?: React.ReactNode
 }
 
@@ -884,14 +877,22 @@ function SingleTransformGizmo({
   mode,
   isCtrlPressed,
   translationSnap,
-  orbitRef,
   onCommit,
   onTransformPointerChange,
+  onTransformControlsRef,
   children,
 }: SingleTransformGizmoProps) {
   const groupRef = useRef<Group>(null!)
   const transformRef = useRef<TransformControlsImpl | null>(null)
   const draggingRef = useRef(false)
+
+  const setTransformRef = useCallback(
+    (instance: TransformControlsImpl | null) => {
+      transformRef.current = instance
+      onTransformControlsRef?.(instance)
+    },
+    [onTransformControlsRef],
+  )
 
   useEffect(() => {
     const group = groupRef.current
@@ -949,9 +950,8 @@ function SingleTransformGizmo({
       >
         {children}
       </group>
-      <SyncOrbitWithTransformGizmo transformRef={transformRef} orbitRef={orbitRef} />
       <TransformControls
-        ref={transformRef}
+        ref={setTransformRef}
         object={groupRef}
         mode={mode}
         translationSnap={
@@ -976,9 +976,9 @@ interface MultiTransformGizmoProps {
   mode: TransformMode
   isCtrlPressed: boolean
   translationSnap?: number
-  orbitRef: RefObject<OrbitControlsImpl | null>
   onCommit: (updates: Array<{ id: string; patch: Partial<Asset> }>) => void
   onTransformPointerChange?: (pointerDown: boolean) => void
+  onTransformControlsRef?: (t: TransformControlsImpl | null) => void
 }
 
 function MultiTransformGizmo({
@@ -986,13 +986,21 @@ function MultiTransformGizmo({
   mode,
   isCtrlPressed,
   translationSnap,
-  orbitRef,
   onCommit,
   onTransformPointerChange,
+  onTransformControlsRef,
 }: MultiTransformGizmoProps) {
   const pivotRef = useRef<Group>(null!)
   const transformRef = useRef<TransformControlsImpl | null>(null)
   const draggingRef = useRef(false)
+
+  const setTransformRef = useCallback(
+    (instance: TransformControlsImpl | null) => {
+      transformRef.current = instance
+      onTransformControlsRef?.(instance)
+    },
+    [onTransformControlsRef],
+  )
   const dragStartRef = useRef<{
     pivotPosition: Vector3
     pivotQuaternion: Quaternion
@@ -1092,9 +1100,8 @@ function MultiTransformGizmo({
   return (
     <group>
       <group ref={pivotRef} position={center} />
-      <SyncOrbitWithTransformGizmo transformRef={transformRef} orbitRef={orbitRef} />
       <TransformControls
-        ref={transformRef}
+        ref={setTransformRef}
         object={pivotRef}
         mode={mode}
         translationSnap={
@@ -1151,6 +1158,11 @@ export default function PlannerApp() {
   const [mode, setMode] = useState<PlannerMode>(() => (s0?.shellMode === 'view' ? 'view' : 'edit'))
   const [tool, setTool] = useState<PlannerTool>(() => (s0?.tool === 'place' ? 'place' : 'select'))
   const [transformMode, setTransformMode] = useState<TransformMode>('translate')
+  const transformControlsRef = useRef<TransformControlsImpl | null>(null)
+  const setActiveTransformControls = useCallback((t: TransformControlsImpl | null) => {
+    transformControlsRef.current = t
+  }, [])
+  const transformDebugRef = useRef(false)
   const [selectedTemplateType, setSelectedTemplateType] = useState<string | null>(null)
   const [previewPosition, setPreviewPosition] = useState<Vector3Tuple | null>(null)
   const [multiPlaceMode, setMultiPlaceMode] = useState(false)
@@ -1616,6 +1628,33 @@ export default function PlannerApp() {
     [assets, presentationInfoId],
   )
 
+  useEffect(() => {
+    try {
+      const u = new URLSearchParams(window.location.search)
+      transformDebugRef.current = u.get('plannerDebug') === 'transform'
+    } catch {
+      transformDebugRef.current = false
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!transformDebugRef.current || mode !== 'edit') return
+    const t = window.setTimeout(() => {
+      const tr = transformControlsRef.current
+      if (!tr) {
+        console.log('[planner transform debug] no TransformControls (select an unlocked asset)')
+        return
+      }
+      console.log('[planner transform debug]', {
+        mode: transformMode,
+        dragging: (tr as unknown as { dragging: boolean }).dragging,
+        orbitEnabled: orbitRef.current?.enabled,
+        selectedId: singleSelected?.id,
+      })
+    }, 200)
+    return () => clearTimeout(t)
+  }, [mode, transformMode, singleSelected?.id, selectedIds])
+
   const changeMode = useCallback((nextMode: PlannerMode) => {
     setMode(nextMode)
     if (nextMode === 'view') {
@@ -1706,6 +1745,9 @@ export default function PlannerApp() {
 
   const applyAssetPointerSelect = useCallback(
     (event: ThreeEvent<PointerEvent> | ThreeEvent<MouseEvent>) => {
+      if (intersectionsTouchTransformGizmo(event.intersections)) {
+        return
+      }
       event.stopPropagation()
       const pickId = pickAssetIdFromIntersections(event.intersections, assets)
       if (!pickId) return
@@ -1740,6 +1782,13 @@ export default function PlannerApp() {
     },
     [assets, mode, selectedIds, setInfoAssetId, setSelectedIds, tool],
   )
+  const onUpdatePresentationCoreMetadata = useCallback(
+    (id: string, metadata: Pick<AssetMetadata, 'name' | 'description' | 'presentationNotes'>) => {
+      updateAsset(id, { metadata })
+    },
+    [updateAsset],
+  )
+
   const closePresentationDetails = useCallback(() => {
     setInfoAssetId(null)
   }, [setInfoAssetId])
@@ -4331,7 +4380,12 @@ export default function PlannerApp() {
 
         <main className="scene-wrapper">
           {mode === 'view' && infoAsset && (
-            <PresentationDetailsModal asset={infoAsset} onClose={closePresentationDetails} />
+            <PresentationDetailsModal
+              key={infoAsset.id}
+              asset={infoAsset}
+              onClose={closePresentationDetails}
+              onUpdateCoreMetadata={onUpdatePresentationCoreMetadata}
+            />
           )}
 
           <Canvas
@@ -4423,9 +4477,9 @@ export default function PlannerApp() {
                 asset={singleSelected}
                 mode={transformMode}
                 isCtrlPressed={isCtrlPressed}
-                orbitRef={orbitRef}
                 translationSnap={gizmoTranslateSnap}
                 onTransformPointerChange={onTransformPointerChange}
+                onTransformControlsRef={setActiveTransformControls}
                 onCommit={(id, patch) => updateAsset(id, patch)}
               >
                 <AssetRenderer
@@ -4448,9 +4502,9 @@ export default function PlannerApp() {
                 selectedAssets={transformableSelected}
                 mode={transformMode}
                 isCtrlPressed={isCtrlPressed}
-                orbitRef={orbitRef}
                 translationSnap={gizmoTranslateSnap}
                 onTransformPointerChange={onTransformPointerChange}
+                onTransformControlsRef={setActiveTransformControls}
                 onCommit={(updates) => updateAssets(updates)}
               />
             )}
