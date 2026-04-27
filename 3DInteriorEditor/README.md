@@ -20,5 +20,6 @@ From repo root:
 
 - ✅ Phase 1: project setup, local .NET 8 SDK + NuGet cache, WPF scaffold, MaterialDesign dark theme baseline
 - ✅ Phase 2: `Constants.cs`, enums, and persisted layout models (`Models/*`)
-- ⏳ Next: Phase 3 (`DefaultAssets.cs` — 12 built-in templates)
+- ✅ Phase 3: `Data/DefaultAssets.cs` built-in library templates (IDs + categories + defaults)
+- ⏳ Next: Phase 4 (`FileService`, `AutoSaveService`, `HistoryService`)
 

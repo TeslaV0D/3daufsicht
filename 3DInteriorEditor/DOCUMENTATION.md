@@ -47,3 +47,16 @@
 - Colors are **hex strings** (e.g. `#RRGGBB`) at the data layer; WPF `Color` conversion comes later in `Helpers/ColorHelper`.
 - `LayoutFile.SchemaVersion` is always `Constants.LayoutSchemaVersion` (`v3`).
 
+## Phase 3 (Built-in asset templates)
+
+### What’s implemented
+
+- `Data/DefaultAssets.cs`:
+  - Stable IDs under `DefaultAssets.Ids.*`
+  - Category labels under `DefaultAssets.Categories.*`
+  - `DefaultAssets.All` exposes the built-in `AssetDefinition` templates (dimensions/colors/shapes + metadata key templates).
+
+### Notes
+
+- The original requirements doc headline says “12 default assets”, but the detailed bullet list enumerates additional “Basis” templates too. `DefaultAssets.All` follows the **explicit template bullets** (unique definitions).
+
