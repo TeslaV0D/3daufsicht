@@ -501,6 +501,24 @@ Ergebnis: beide Checks erfolgreich.
 
 - README + Build/Lint: ok.
 
+## Stand 32: Transform-Drag jenseits des Viewports, Meta-only Präsentations-Dialog, View-Buttons
+
+### Transform (global während Drags)
+
+- Patch auf `TransformControls` **`getPointer`**: bei `pointermove`/`mousemove` `button: -1`, damit `pointerMove` in three-stdlib nicht wegen `button === 0` abbricht — **Bewegen/Drehen/Skalieren** per Gizmo hört nicht auf, wenn der Mauszeiger den **Canvas** verlässt.
+
+### Präsentations-Details-Dialog
+
+- `PresentationDetailsModal` zeigt **nur Metadaten** (inkl. `presentationNotes` und `customRows`), **kein** Transform/Material/Geometrie, **keine** Bearbeitung (read-only).
+
+### Präsentations-Top-Bar
+
+- In **View Mode** zusätzlich zu **Ansicht** die Schnell-Buttons **Perspektive / Top / Front / Seite** (`setCameraView`).
+
+### Doku
+
+- `README.md` (Toolbar, Transform, Präsentations-Dialog) angepasst.
+
 ## Offene optionale Erweiterungen
 
 - Box-Selection fuer Mehrfachauswahl.

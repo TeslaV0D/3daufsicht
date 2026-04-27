@@ -30,7 +30,7 @@ npm run lint
 
 - **Edit-Modus**: volle Bearbeitung (Platzieren, Gizmos, Inspector, Library, Undo/Redo).
 - **Praesentationsmodus (View Mode)**: read-only, Klick auf ein **nicht gesperrtes** Asset (keine **Zonen**-Assets) öffnet das Info-Popup mit rein semantischen Infos. **Gesperrte** Objekte und **Zonen** verhalten sich wie nicht vorhanden: kein Hover-Highlight, kein Zeiger-Cursor, keine Selektion/kein Info-Popup; dahinter liegende, nicht gesperrte Objekte bleiben klickbar.
-- **Präsentations-Toolbar**: nur **Ansicht**-Menü (alle Kameras Perspektive/Top/Front/Seite, Perspektive-Slider, Presets, Custom-Presets); keine separaten View-Buttons mehr. Badge `VIEW MODE`, Button **„Präsentation beenden (ESC)“** — keine Modus-Tools, keine Beleuchtung, kein Speichern/Laden/Export, kein Shortcuts-„?“-FAB.
+- **Präsentations-Toolbar**: schnelle **Kamera-Buttons** **Perspektive / Top / Front / Seite** in der Top-Bar (aktive Ansicht hervorgehoben) **plus** das bestehende **Ansicht**-Menü (Slider, Presets, Performance, …). Badge `VIEW MODE`, Button **„Präsentation beenden (ESC)“** — keine Modus-Tools, keine Beleuchtung, kein Speichern/Laden/Export, kein Shortcuts-„?“-FAB.
 - Klarer Mode-Badge (`EDIT MODE` / `VIEW MODE`) in der Top-Bar, fade-Transition beim Wechsel.
 - View Mode nutzt weicheres Kamera-Profil; `OrbitControls` werden beim Wechsel per `key={mode}` sauber resettet. **ESC** schließt schichtweise offene UI (Farbwähler, Vorschau, Dialoge, Toolbar-Menüs, Suche) und beendet danach die Präsentation bzw. setzt im Edit-Modus das Auswahl-Tool.
 
@@ -81,7 +81,7 @@ npm run lint
 
 ### Presentation Mode (Details-Dialog)
 
-- **Klick** auf **nicht gesperrtes** Asset (kein **Zonen**-Asset): zentriertes **Vollbild-Overlay** (`PresentationDetailsModal`) mit abgedunkeltem Hintergrund — **alle relevanten Instanzdaten nur lesend** (Basis-Infos, **Transform,** Geometrie, **Material** inkl. Farb-Swatch und **Deckkraft,** weitere **Custom-Metadaten**).
+- **Klick** auf **nicht gesperrtes** Asset (kein **Zonen**-Asset): zentriertes **Vollbild-Overlay** (`PresentationDetailsModal`) mit abgedunkeltem Hintergrund — **nur semantische Metadaten, strikt read-only** (Name, Beschreibung, Präsentations-Notizen, Typ/Vorlage, Zonen-Typ, **weitere benutzerdefinierte Metadaten**). **Keine** technischen Instanz-Infos (keine Position/Rotation/Skalierung, keine Geometrie, kein Material).
 - **Schließen:** X, **Schließen**-Button, Klick ins Overlay (nach kurzer Schutzphase), **ESC** (wenn Fokus nicht woanders fängt). **Gesperrte** / **Zonen:** unverändert **nicht** wählbar. **Rechter Inspector** ist im **View-Mode** ausgeblendet — **Edit** nutzt weiter **Inspector**-Sidebar. Kein doppelter **Selektions-Ring** in der 3D-Ansicht im **View-Mode** (bessere Performance bei Instancing).
 
 ### Performance (Auswahl & Speichern)
@@ -90,7 +90,8 @@ npm run lint
 
 ### Transform Gizmo & Orbit-Kamera
 
-- **`OrbitControls`** (Standard-`controls` in R3F) und **`TransformControls`**: `SyncOrbitWithTransformGizmo` stellt in jedem Frame `orbit.enabled = !transformControls.dragging` (liest den echten Drag-Status) — behebt den Fall, dass nach **Gizmo-Drag** die Orbit-Navigation „tot“ blieb, weil `enabled` manuell getoggelt und nicht mit dem internen `dragging` synchron blieb.
+- **`OrbitControls`** und **`@react-three/drei` `TransformControls`**: `dragging-changed` der TransformControls schaltet die Orbit-Navigation; kein manuelles Frame-Override.
+- **Dragglobales Gizmo-Tracking:** `three-stdlib` wertet Pointer-Moves mit `button === 0` so ab, dass **kein** `pointerMove` mehr in die eigentliche Transform-Logik geht — Drags brechen ab, sobald der Zeiger **vom WebGL-Canvas** weg ist. Dafür wird `getPointer` per Patch so angepasst, dass bei `pointermove`/`mousemove` faktisch `button: -1` (Konvention) übergeben wird — Gizmo-Transformation läuft **global** weiter, solange die primäre Taste gedrückt bleibt, nicht nur solange der Cursor **über** dem Viewport bleibt (`transformControlsPlumbing.ts`).
 
 ### Objekt-Auswahl: Überlappung
 

@@ -27,6 +27,7 @@ import {
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import type { TransformControls as TransformControlsImpl } from 'three-stdlib'
 import './App.css'
+import { patchTransformControlsGetPointer } from './transformControlsPlumbing'
 import AnimatedCameraRig from './components/AnimatedCameraRig'
 import DistanceCullWrap from './components/DistanceCullWrap'
 import InstancedBoxBatch from './components/InstancedBoxBatch'
@@ -1161,6 +1162,7 @@ export default function PlannerApp() {
   const transformControlsRef = useRef<TransformControlsImpl | null>(null)
   const setActiveTransformControls = useCallback((t: TransformControlsImpl | null) => {
     transformControlsRef.current = t
+    patchTransformControlsGetPointer(t)
   }, [])
   const transformDebugRef = useRef(false)
   const [selectedTemplateType, setSelectedTemplateType] = useState<string | null>(null)
@@ -1782,13 +1784,6 @@ export default function PlannerApp() {
     },
     [assets, mode, selectedIds, setInfoAssetId, setSelectedIds, tool],
   )
-  const onUpdatePresentationCoreMetadata = useCallback(
-    (id: string, metadata: Pick<AssetMetadata, 'name' | 'description' | 'presentationNotes'>) => {
-      updateAsset(id, { metadata })
-    },
-    [updateAsset],
-  )
-
   const closePresentationDetails = useCallback(() => {
     setInfoAssetId(null)
   }, [setInfoAssetId])
@@ -3641,6 +3636,41 @@ export default function PlannerApp() {
               Präsentation beenden (ESC)
             </button>
             <ToolbarSeparator />
+            <ButtonGroup>
+              <button
+                type="button"
+                className={cameraView === 'perspective' ? 'active' : ''}
+                onClick={() => setCameraView('perspective')}
+                title="Perspektive"
+              >
+                Perspektive
+              </button>
+              <button
+                type="button"
+                className={cameraView === 'top' ? 'active' : ''}
+                onClick={() => setCameraView('top')}
+                title="Draufsicht (Top)"
+              >
+                Top
+              </button>
+              <button
+                type="button"
+                className={cameraView === 'front' ? 'active' : ''}
+                onClick={() => setCameraView('front')}
+                title="Vorderansicht (Front)"
+              >
+                Front
+              </button>
+              <button
+                type="button"
+                className={cameraView === 'side' ? 'active' : ''}
+                onClick={() => setCameraView('side')}
+                title="Seitenansicht (Seite)"
+              >
+                Seite
+              </button>
+            </ButtonGroup>
+            <ToolbarSeparator />
             {renderViewMenuDropdown()}
           </>
         )}
@@ -4384,7 +4414,6 @@ export default function PlannerApp() {
               key={infoAsset.id}
               asset={infoAsset}
               onClose={closePresentationDetails}
-              onUpdateCoreMetadata={onUpdatePresentationCoreMetadata}
             />
           )}
 
