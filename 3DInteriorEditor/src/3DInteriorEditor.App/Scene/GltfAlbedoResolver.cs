@@ -19,12 +19,16 @@ internal static class GltfAlbedoResolver
             Color? factorRgb,
             ImageSource? texture,
             int uvSetIndex,
-            TextureTransform? textureUvTransform)
+            TextureTransform? textureUvTransform,
+            TextureWrapMode wrapS = TextureWrapMode.REPEAT,
+            TextureWrapMode wrapT = TextureWrapMode.REPEAT)
         {
             FactorRgb = factorRgb;
             Texture = texture;
             UvSetIndex = uvSetIndex;
             TextureUvTransform = textureUvTransform;
+            WrapS = wrapS;
+            WrapT = wrapT;
         }
 
         public Color? FactorRgb { get; }
@@ -33,6 +37,12 @@ internal static class GltfAlbedoResolver
 
         /// <summary>Optional <c>KHR_texture_transform</c> taken from the same channel as <see cref="Texture"/>.</summary>
         public TextureTransform? TextureUvTransform { get; }
+
+        /// <summary>glTF sampler wrap S / T from the resolved texture (defaults <see cref="TextureWrapMode.REPEAT"/>).</summary>
+        public TextureWrapMode WrapS { get; }
+
+        /// <inheritdoc cref="WrapS"/>
+        public TextureWrapMode WrapT { get; }
     }
 
     internal static AlbedoResolve TryResolve(GltfMaterial? material)
@@ -56,6 +66,7 @@ internal static class GltfAlbedoResolver
 
             ImageSource? texSource = null;
             var gt = ch.Texture;
+            var (wrapS, wrapT) = TryGetSamplerWrapModes(gt);
             if (gt is not null)
             {
                 texSource = TryDecodeTexture(gt);
@@ -70,11 +81,26 @@ internal static class GltfAlbedoResolver
 
             if (texSource is not null || factorRgb.HasValue)
             {
-                return new AlbedoResolve(factorRgb, texSource, uvSet, texTransform);
+                return new AlbedoResolve(factorRgb, texSource, uvSet, texTransform, wrapS, wrapT);
             }
         }
 
         return new AlbedoResolve(null, null, 0, null);
+    }
+
+    private static (TextureWrapMode WrapS, TextureWrapMode WrapT) TryGetSamplerWrapModes(GltfTexture? texture)
+    {
+        if (texture?.Sampler is not TextureSampler sampler)
+        {
+            return (TextureWrapMode.REPEAT, TextureWrapMode.REPEAT);
+        }
+
+        return (NormalizeSamplerWrap(sampler.WrapS), NormalizeSamplerWrap(sampler.WrapT));
+    }
+
+    private static TextureWrapMode NormalizeSamplerWrap(TextureWrapMode mode)
+    {
+        return (int)mode == 0 ? TextureWrapMode.REPEAT : mode;
     }
 
     private static Color? TryChannelFactorRgb(MaterialChannel channel)

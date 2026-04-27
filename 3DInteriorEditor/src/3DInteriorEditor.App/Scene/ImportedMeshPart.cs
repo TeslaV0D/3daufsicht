@@ -1,5 +1,6 @@
 using System.Windows.Media;
 using System.Windows.Media.Media3D;
+using TextureWrapMode = SharpGLTF.Schema2.TextureWrapMode;
 
 namespace _3DInteriorEditor.App.Scene;
 
@@ -20,4 +21,13 @@ public sealed class ImportedMeshPart
     /// Base color / diffuse texture when decoded (PNG/JPEG/WebP via WPF); otherwise null.
     /// </summary>
     public ImageSource? BaseColorTexture { get; init; }
+
+    /// <summary>
+    /// glTF sampler wrap S/T for <see cref="BaseColorTexture"/> (viewport maps to WPF <see cref="System.Windows.Media.TileMode"/>).
+    /// Null when no sampled texture is used.
+    /// </summary>
+    public TextureWrapMode? BaseColorWrapS { get; init; }
+
+    /// <inheritdoc cref="BaseColorWrapS"/>
+    public TextureWrapMode? BaseColorWrapT { get; init; }
 }

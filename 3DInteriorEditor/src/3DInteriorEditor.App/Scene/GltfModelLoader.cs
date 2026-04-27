@@ -190,6 +190,8 @@ public static class GltfModelLoader
             Geometry = mesh,
             BaseColorRgb = albedo.FactorRgb,
             BaseColorTexture = canSampleTexture ? albedo.Texture : null,
+            BaseColorWrapS = canSampleTexture ? albedo.WrapS : null,
+            BaseColorWrapT = canSampleTexture ? albedo.WrapT : null,
         };
     }
 }

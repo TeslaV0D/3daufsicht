@@ -360,7 +360,7 @@
 ### Notes
 
 - Unsupported or undecodable images (e.g. **KTX2** without a decoder) fall back to **factor-only** / placement color when possible.
-- Texture **sampler** wrap modes are approximated (**Tile**); **mirror** / precise repeat vs clamp mapping is not implemented.
+- Texture **sampler** wrap modes: see Phase 24.
 
 ## Phase 23 (`KHR_texture_transform` on base / diffuse UVs)
 
@@ -374,4 +374,18 @@
 
 - If **`TextureCoordinateOverride`** points at a missing UV set on the primitive, sampling falls back (no texture mapping) like any other mismatch.
 - Sampler wrap / repeat behavior is unchanged from Phase 22 (**ImageBrush** tiling approximation).
+
+## Phase 24 (glTF sampler wrap → `ImageBrush.TileMode`)
+
+### What’s implemented
+
+- **`Scene/GltfSamplerImageBrushMapping.cs`**: Maps **`TextureSampler.WrapS` / `WrapT`** (`TextureWrapMode`) to **`TileMode`**: **clamp+clamp** → **`None`** (single tile); **mirrored+mirrored** → **`FlipXY`**; **mirrored** on one axis → **`FlipX`** / **`FlipY`**; otherwise **`Tile`** (repeat/repeat or mixed repeat+clamp approximated as tiling).
+- **`Scene/GltfAlbedoResolver.cs`**: Reads **`texture.Sampler`** for the resolved base/diffuse **`Schema2.Texture`** (defaults **REPEAT** when no sampler / sentinel wrap `0`).
+- **`Scene/ImportedMeshPart.cs`**: **`BaseColorWrapS` / `BaseColorWrapT`** when a textured import is active.
+- **`Scene/PlacedAssetVisualFactory.cs`**: Sets **`ImageBrush.TileMode`** from the mapping instead of always **`Tile`**.
+
+### Notes
+
+- WPF uses **one** `TileMode` for both UV axes; **mixed** wrap (e.g. clamp S + repeat T) is **approximated** as **`Tile`**.
+- **Min/mag filter** (linear vs nearest) is not implemented — mipmaps are ignored at the **ImageBrush** level.
 

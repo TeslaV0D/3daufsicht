@@ -1,6 +1,7 @@
 using System.Windows.Media;
 using System.Windows.Media.Media3D;
 using HelixToolkit.Wpf;
+using TextureWrapMode = SharpGLTF.Schema2.TextureWrapMode;
 using _3DInteriorEditor.App.Helpers;
 using _3DInteriorEditor.App.Models;
 using _3DInteriorEditor.App.Models.Enums;
@@ -85,9 +86,11 @@ public static class PlacedAssetVisualFactory
 
         if (part.BaseColorTexture is { } texSrc)
         {
+            var ws = part.BaseColorWrapS ?? TextureWrapMode.REPEAT;
+            var wt = part.BaseColorWrapT ?? TextureWrapMode.REPEAT;
             var ib = new ImageBrush(texSrc)
             {
-                TileMode = TileMode.Tile,
+                TileMode = GltfSamplerImageBrushMapping.ToTileMode(ws, wt),
                 Stretch = Stretch.Fill,
             };
             ib.Freeze();
