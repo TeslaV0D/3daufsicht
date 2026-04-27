@@ -1,7 +1,7 @@
 <Window x:Class="_3DInteriorEditor.App.Views.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="3D Interior Editor"
+        Title="{Binding WindowTitle}"
         Width="1280"
         Height="800"
         MinWidth="800"
@@ -23,6 +23,13 @@
                    FontSize="14"
                    FontWeight="SemiBold"
                    Text="3D Interior Editor" />
+
+        <TextBlock DockPanel.Dock="Right"
+                   VerticalAlignment="Center"
+                   Margin="12,0,0,0"
+                   FontSize="12"
+                   Foreground="{DynamicResource App.TextSecondaryBrush}"
+                   Text="{Binding ModeLabel}" />
       </DockPanel>
     </Border>
 
@@ -31,7 +38,7 @@
         <TextBlock HorizontalAlignment="Center"
                    VerticalAlignment="Center"
                    Foreground="{DynamicResource App.TextSecondaryBrush}"
-                   Text="Phase 1 shell — viewport comes in Phase 7" />
+                   Text="Phase 5 MVVM skeleton — viewport comes in Phase 7" />
       </Grid>
     </Border>
 
@@ -40,7 +47,7 @@
         <TextBlock VerticalAlignment="Center"
                    FontSize="12"
                    Foreground="{DynamicResource App.TextSecondaryBrush}"
-                   Text="Ready" />
+                   Text="{Binding StatusText}" />
       </DockPanel>
     </Border>
   </Grid>

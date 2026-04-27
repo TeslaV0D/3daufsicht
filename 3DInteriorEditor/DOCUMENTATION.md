@@ -82,3 +82,18 @@
 
 - Persisted JSON uses **camelCase** property names (`AppJson.Options`), even though C# models use PascalCase properties.
 
+## Phase 5 (MVVM skeleton)
+
+### What’s implemented
+
+- ViewModels (`CommunityToolkit.Mvvm`):
+  - `ViewModels/MainViewModel`: owns `LayoutFile`, window title formatting, optional load/save via `Microsoft.Win32` dialogs (early wiring)
+  - `ViewModels/AssetLibraryViewModel`: binds to built-in definitions + supports search filtering
+  - `ViewModels/InspectorViewModel`: placeholder selection header until selection exists
+- Composition:
+  - `App.xaml.cs` constructs `MainViewModel` and assigns `MainWindow.DataContext`
+
+### Notes
+
+- The 3D viewport + toolbars/sidebars UI wiring comes in Phase 6/7; Phase 5 focuses on **state ownership** and MVVM seams.
+

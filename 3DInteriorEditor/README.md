@@ -22,5 +22,6 @@ From repo root:
 - ✅ Phase 2: `Constants.cs`, enums, and persisted layout models (`Models/*`)
 - ✅ Phase 3: `Data/DefaultAssets.cs` built-in library templates (IDs + categories + defaults)
 - ✅ Phase 4: `Services/*` file IO + auto-save loop + undo/redo history (no UI wiring yet)
-- ⏳ Next: Phase 5 (ViewModels: `MainViewModel` + `AssetLibrary` + `Inspector` state)
+- ✅ Phase 5: MVVM skeleton (`MainViewModel`, `AssetLibraryViewModel`, `InspectorViewModel`) + window composition
+- ⏳ Next: Phase 6 (`MainWindow` chrome: toolbars/sidebars wiring to VM commands)
 
