@@ -30,7 +30,6 @@ import AnimatedCameraRig from './components/AnimatedCameraRig'
 import DistanceCullWrap from './components/DistanceCullWrap'
 import InstancedBoxBatch from './components/InstancedBoxBatch'
 import PerformanceHud from './components/PerformanceHud'
-import AssetInfoModal from './components/AssetInfoModal'
 import AssetRenderer, { GhostAssetRenderer } from './components/AssetRenderer'
 import ColorPickerPopover from './components/ColorPickerPopover'
 import ExportLayoutModal from './components/ExportLayoutModal'
@@ -42,7 +41,7 @@ import PostFxBloom from './components/PostFxBloom'
 import SceneAtmosphere from './components/SceneAtmosphere'
 import LoadLayoutModal from './components/LoadLayoutModal'
 import ScenePlacementRaycast from './components/ScenePlacementRaycast'
-import { OrbitControlsCleanup } from './components/OrbitControlsCleanup'
+import PresentationDetailsModal from './components/PresentationDetailsModal'
 import CustomMetadataRowEditModal from './components/CustomMetadataRowEditModal'
 import SaveAssetFromSceneModal from './components/SaveAssetFromSceneModal'
 import ShortcutsModal from './components/ShortcutsModal'
@@ -1066,6 +1065,11 @@ function MultiTransformGizmo({
 export default function PlannerApp() {
   const orbitRef = useRef<OrbitControlsImpl | null>(null)
   const store = useAssetsStore()
+  const persistToStorageRef = useRef(store.save)
+  const clickGuardViewRef = useRef(0)
+  useEffect(() => {
+    persistToStorageRef.current = store.save
+  }, [store.save])
   const s0: LayoutSessionState | undefined = store.initialLayoutSession
     ? sanitizeLayoutSession(store.initialLayoutSession)
     : undefined
@@ -1546,11 +1550,6 @@ export default function PlannerApp() {
     [assets, presentationInfoId],
   )
 
-  const presentationInspectorReadOnly =
-    mode === 'view' && singleSelected != null && !singleSelected.isLocked
-
-  const showPresentationSideInspector = presentationInspectorReadOnly && !rightPanelHidden
-
   const changeMode = useCallback((nextMode: PlannerMode) => {
     setMode(nextMode)
     if (nextMode === 'view') {
@@ -1590,20 +1589,25 @@ export default function PlannerApp() {
   ])
 
   useEffect(() => {
-    try {
-      save()
-    } catch {
-      /* ignore */
-    }
+    const t = window.setTimeout(() => {
+      try {
+        persistToStorageRef.current()
+      } catch {
+        /* ignore */
+      }
+    }, 300)
     const id = window.setInterval(() => {
       try {
-        save()
+        persistToStorageRef.current()
       } catch {
         /* ignore */
       }
     }, 30_000)
-    return () => clearInterval(id)
-  }, [save, mode, tool, selectedIds, infoAssetId, floorInspectorOpen, lightingPanelOpen, leftPanelHidden, rightPanelHidden])
+    return () => {
+      clearTimeout(t)
+      clearInterval(id)
+    }
+  }, [mode, tool, selectedIds, infoAssetId, floorInspectorOpen, lightingPanelOpen, leftPanelHidden, rightPanelHidden])
 
   useEffect(() => {
     if (!libraryMenu) return
@@ -1641,7 +1645,11 @@ export default function PlannerApp() {
         if (asset.isLocked || asset.category === CATEGORY_ZONES) {
           return
         }
-        setSelectedIds([asset.id])
+        const t = performance.now()
+        if (t - clickGuardViewRef.current < 80) {
+          return
+        }
+        clickGuardViewRef.current = t
         setInfoAssetId(asset.id)
         return
       }
@@ -1662,6 +1670,9 @@ export default function PlannerApp() {
     },
     [mode, selectedIds, setInfoAssetId, setSelectedIds, tool],
   )
+  const closePresentationDetails = useCallback(() => {
+    setInfoAssetId(null)
+  }, [setInfoAssetId])
 
   const onAssetPointerDown = useCallback(
     (event: ThreeEvent<PointerEvent>, asset: Asset) => {
@@ -1991,7 +2002,9 @@ export default function PlannerApp() {
       setMode(s.shellMode === 'view' ? 'view' : 'edit')
       setTool(s.tool === 'place' ? 'place' : 'select')
       setInfoAssetId(null)
-      if (r.restorableSelectedIds.length > 0) {
+      if (s.shellMode === 'view') {
+        setSelectedIds([])
+      } else if (r.restorableSelectedIds.length > 0) {
         setSelectedIds(r.restorableSelectedIds)
       } else {
         setSelectedIds([])
@@ -3517,7 +3530,7 @@ export default function PlannerApp() {
       </header>
 
       <div
-        className={`workspace${mode === 'view' ? ' view-mode' : ''}${leftPanelHidden ? ' workspace--hide-library' : ''}${rightPanelHidden ? ' workspace--hide-inspector' : ''}${showPresentationSideInspector ? ' workspace--view-with-inspector' : ''}`}
+        className={`workspace${mode === 'view' ? ' view-mode' : ''}${leftPanelHidden ? ' workspace--hide-library' : ''}${rightPanelHidden ? ' workspace--hide-inspector' : ''}`}
       >
         <aside className="panel left" aria-hidden={mode === 'view'}>
           <h2 className="inspector-inline-label panel-library-heading">
@@ -4249,8 +4262,8 @@ export default function PlannerApp() {
         </aside>
 
         <main className="scene-wrapper">
-          {mode === 'view' && infoAsset && rightPanelHidden && (
-            <AssetInfoModal asset={infoAsset} onClose={() => setInfoAssetId(null)} />
+          {mode === 'view' && infoAsset && (
+            <PresentationDetailsModal asset={infoAsset} onClose={closePresentationDetails} />
           )}
 
           <Canvas
@@ -4310,7 +4323,7 @@ export default function PlannerApp() {
               const renderer = (
                 <AssetRenderer
                   asset={asset}
-                  isSelected={selectedIds.includes(asset.id)}
+                  isSelected={mode === 'edit' && selectedIds.includes(asset.id)}
                   isHovered={assetShowsHoverHighlight(asset, hoveredId, mode)}
                   isEditMode={mode === 'edit'}
                   selectionAccent={libraryAccentForSectionTitle(asset.category)}
@@ -4418,7 +4431,6 @@ export default function PlannerApp() {
               rotateSpeed={mode === 'view' ? 0.85 : 1}
               zoomSpeed={mode === 'view' ? 0.9 : 1}
             />
-            <OrbitControlsCleanup controlsRef={orbitRef} />
           </Canvas>
 
           {saveFeedback ? (
@@ -4437,17 +4449,9 @@ export default function PlannerApp() {
           )}
         </main>
 
-        <aside
-          className="panel right"
-          aria-hidden={mode === 'view' && !showPresentationSideInspector}
-        >
+        <aside className="panel right" aria-hidden={mode === 'view'}>
           <h2>Inspector</h2>
-          {singleSelected ? (
-              <fieldset
-                className="inspector-content-fieldset"
-                disabled={presentationInspectorReadOnly}
-                style={{ border: 'none', margin: 0, padding: 0, minWidth: 0 }}
-              >
+          {mode === 'edit' && singleSelected ? (
               <div
                 className={`inspector-content${singleSelected.isLocked ? ' inspector-asset-locked' : ''}`}
               >
@@ -5378,8 +5382,7 @@ export default function PlannerApp() {
                   + Feld hinzufügen
                 </button>
               </div>
-              </fieldset>
-            ) : selectedAssets.length > 1 ? (
+            ) : mode === 'edit' && selectedAssets.length > 1 ? (
               <div className="inspector-content">
                 <p className="selected-title">{selectedAssets.length} Assets ausgewählt</p>
                 <h3 className="inspector-inline-label">
@@ -5449,7 +5452,7 @@ export default function PlannerApp() {
                   </button>
                 </div>
               </div>
-            ) : floorInspectorOpen ? (
+            ) : mode === 'edit' && floorInspectorOpen ? (
               <div className="inspector-content inspector-floor">
                 <p className="selected-title inspector-inline-label">
                   Boden
@@ -5543,14 +5546,14 @@ export default function PlannerApp() {
                   </select>
                 </label>
               </div>
-            ) : (
+            ) : mode === 'edit' ? (
               <div className="inspector-content inspector-empty-state">
                 <p className="inspector-inline-label inspector-empty-hint">
                   Auswahl
                   <InfoIcon title={FIELD_DESC.inspectorEmpty} />
                 </p>
               </div>
-            )}
+            ) : null}
         </aside>
       </div>
       <TemplatePreviewDialog

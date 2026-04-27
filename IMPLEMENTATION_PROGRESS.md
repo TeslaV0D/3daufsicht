@@ -463,17 +463,30 @@ Ergebnis: beide Checks erfolgreich.
 
 ### Camera
 
-- `OrbitControlsCleanup`: `dispose` beim Unmount; **copy/paste**-Listener: `document.exitPointerLock` wenn nötig; **View-Mode:** `Ctrl/Cmd + C` / `V` nicht mehr durch frühen Return in `handleKeyDown` abgeschnitten.
+- **copy/paste**-Listener: `document.exitPointerLock` wenn nötig; **View-Mode:** `Ctrl/Cmd + C` / `V` nicht mehr durch frühen Return in `handleKeyDown` abgeschnitten. (Hinweis **Stand 30:** zusätzliches `OrbitControlsCleanup dispose` entfernt — siehe unten.)
 
-### Presentation Mode
-
-- Klick: **setSelectedIds +** Info-Referenz; **rechter Inspector** sichtbar und **disabled**-Fieldset in View für nicht-gesperrte Selektion (CSS `workspace--view-with-inspector`); **AssetInfoModal** oben **nur** wenn **Inspector** mit H aus; **500 ms** Ignore nach Mount gegen Close durch denselben Klick.
-
-### Test / QA
+### Test / QA (Stand 29)
 
 - `npm run build` und `npm run lint` im `planner-app` erfolgreich.
 
-**Alle relevanten Commits in Branch `cursor/factory-bugfixes-bb8a`**
+## Stand 30: Präsentation — nur Details-Dialog; Performance (Save, Instancing) — in **main** gemergt
+
+### Presentation (final)
+
+- **`PresentationDetailsModal`:** zentriert, festes **Overlay** mit Abdunkelung, Body-**scroll**, X + **Schließen** + Overlay-Klick (mit kurzer Ignore-Phase); **nur** **View-Mode**.
+- Rechter **Inspector** in **View** ausgeblendet (`aria-hidden`); reines **Edit**-Werkzeug bleibt **rechts**.
+- Klick: **nur** `setInfoAssetId` (kein `setSelectedIds` im **View**), damit **kein** Selektions-Highlight in 3D und **InstancedBoxBatch**-Pfad unverändert schnell bleibt.
+- `AssetInfoModal` aus `PlannerApp` entfernt (ersetzt durch **PresentationDetailsModal**).
+
+### Performance
+
+- **localStorage-Write:** 300 **ms** Debounce + 30 s Intervall, Ref auf `store.save` — entfernt synchrones, großes `JSON.stringify` pro State-Tick; Main-Thread bleibt beim Orbit/Selektion reaktionsschneller.
+- **`OrbitControlsCleanup` entfernt** (Drei-`OrbitControls` nicht mehr in Cleanup `dispose` — vermeidet Konflikt mit R3F-Loop / eingefrorenes Orbiten).
+- **Klick-Guard** ~80 **ms** im **View-Mode** gegen doppelte Auswahl-Handler.
+
+### Doku & QA
+
+- `README.md` (Presentation + Performance) aktualisiert. `npm run build` & `npm run lint` (planner-app) grün nach Merge.
 
 ## Offene optionale Erweiterungen
 
