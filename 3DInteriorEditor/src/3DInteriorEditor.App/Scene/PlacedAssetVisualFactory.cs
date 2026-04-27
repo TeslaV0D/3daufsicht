@@ -35,7 +35,7 @@ public static class PlacedAssetVisualFactory
             var imported = GltfModelLoader.TryLoadMeshParts(resolvedImportedModelPath, dim);
             if (imported is not null && imported.Count > 0)
             {
-                return CreateFromImportedParts(imported, material);
+                return CreateFromImportedParts(imported, asset.ColorHex, isSelected);
             }
         }
 
@@ -50,14 +50,34 @@ public static class PlacedAssetVisualFactory
         };
     }
 
-    private static ModelVisual3D CreateFromImportedParts(IReadOnlyList<MeshGeometry3D> parts, Material material)
+    private static ModelVisual3D CreateFromImportedParts(
+        IReadOnlyList<ImportedMeshPart> parts,
+        string placementColorHex,
+        bool isSelected)
     {
+        const string selectionHex = "#7986CB";
         var group = new Model3DGroup();
-        foreach (var geometry in parts)
+        foreach (var part in parts)
         {
+            string hex;
+            if (isSelected)
+            {
+                hex = selectionHex;
+            }
+            else if (part.BaseColorRgb is { } rgb)
+            {
+                hex = ColorHexHelper.ToRgbHex(rgb);
+            }
+            else
+            {
+                hex = placementColorHex;
+            }
+
+            var fill = ColorHexHelper.ToDiffuseBrush(hex);
+            var material = MaterialHelper.CreateMaterial(fill);
             group.Children.Add(new GeometryModel3D
             {
-                Geometry = geometry,
+                Geometry = part.Geometry,
                 Material = material,
                 BackMaterial = material,
             });

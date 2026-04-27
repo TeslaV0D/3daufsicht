@@ -241,13 +241,13 @@
 
 - **Path resolution** (`Scene/ImportedModelPathResolver.cs`): `AssetDefinition.ImportedModelPath` resolves to an absolute path when it is rooted, relative to the **layout file directory**, or relative to the **application base directory** (for shipped `samples/` content).
 - **Loading** (`Scene/GltfModelLoader.cs`): SharpGLTF **Runtime** decodes meshes, evaluates the default scene’s bounding box (with bind pose), then builds WPF `MeshGeometry3D` parts. Geometry is **centered** and **uniformly scaled** so the full model fits inside the instance’s `DimensionsMeters` (axis-aligned tight box).
-- **Viewport** (`Scene/PlacedAssetVisualFactory.cs`, `Scene/PlacedAssetScenePresenter.cs`): When a resolved `.gltf`/`.glb` loads successfully, instances render as imported **triangle meshes** with the same selection tint and diffuse material color as primitives; otherwise the definition’s **primitive** shape is used.
+- **Viewport** (`Scene/PlacedAssetVisualFactory.cs`, `Scene/PlacedAssetScenePresenter.cs`): When a resolved `.gltf`/`.glb` loads successfully, instances render as imported **triangle meshes**; per-primitive diffuse can follow glTF **factor** data (see Phase 21). Otherwise the definition’s **primitive** shape is used.
 - **Sample asset**: `Data/DefaultAssets` includes **“glTF-Beispiel (Würfel)”** (`builtin.imported-sample-box`) pointing at `samples/built-in-box.gltf` (+ `built-in-box.bin`), copied next to the executable via the `.csproj` `samples/**` rule.
 - **Caching**: Decoded mesh parts are cached by file path, last-write time, and target dimensions to avoid reloading on every viewport rebuild.
 
 ### Notes
 
-- Materials from the glTF file are not mapped yet — all triangles use the instance **color** (`PlacedAsset.ColorHex` / selection tint).
+- **Texture** maps from glTF are not sampled in the viewport yet; **baseColorTexture** / normal / metallic-roughness images are ignored. Per-primitive **factor** colors (Phase 21) are applied when present.
 - Skinning / animation / morph targets are not evaluated beyond the default **bind pose** for placement and bounds.
 
 ## Phase 15 (Viewport drag translate)
@@ -334,4 +334,17 @@
 ### Notes
 
 - Presentation mode (`EditorMode.View`) still blocks transform drags via existing edit checks.
+
+## Phase 21 (glTF material factor → viewport diffuse)
+
+### What’s implemented
+
+- **`Scene/ImportedMeshPart.cs`**: bundles `MeshGeometry3D` with optional diffuse RGB parsed from the primitive’s glTF material.
+- **`Scene/GltfModelLoader.cs`**: For each primitive, reads **`FindChannel("BaseColor")`** (metallic roughness) or **`FindChannel("Diffuse")`** (Specular-Glossiness) and converts the channel **`Color`** (linear RGB factor) to sRGB-ish **WPF `Color`** bytes. **Textures are not sampled** — factor-only mapping for this phase.
+- **`Scene/PlacedAssetVisualFactory.cs`**: Builds one **`GeometryModel3D`** per imported part with **`MaterialHelper.CreateMaterial`** per resolved color: **selection** still forces the accent tint (**`#7986CB`**); otherwise **factor RGB** wins when present, else **`PlacedAsset.ColorHex`** as before.
+- **`Helpers/ColorHexHelper.cs`**: **`ToRgbHex`** for bridging WPF colors back into the existing hex brush path.
+
+### Notes
+
+- Cached imports include factor data in the **`ImportedMeshPart`** list keyed like geometry (path, mtime, target dimensions).
 

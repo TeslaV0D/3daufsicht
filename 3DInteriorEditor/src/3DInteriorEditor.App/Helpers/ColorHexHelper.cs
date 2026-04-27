@@ -64,4 +64,8 @@ public static class ColorHexHelper
         brush.Freeze();
         return brush;
     }
+
+    /// <summary>Returns <c>#RRGGBB</c> for <paramref name="color"/> (alpha ignored).</summary>
+    public static string ToRgbHex(Color color) =>
+        $"#{color.R:X2}{color.G:X2}{color.B:X2}";
 }
