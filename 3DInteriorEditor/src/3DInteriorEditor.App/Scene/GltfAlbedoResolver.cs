@@ -21,7 +21,9 @@ internal static class GltfAlbedoResolver
             int uvSetIndex,
             TextureTransform? textureUvTransform,
             TextureWrapMode wrapS = TextureWrapMode.REPEAT,
-            TextureWrapMode wrapT = TextureWrapMode.REPEAT)
+            TextureWrapMode wrapT = TextureWrapMode.REPEAT,
+            TextureInterpolationFilter magFilter = TextureInterpolationFilter.LINEAR,
+            TextureMipMapFilter minFilter = TextureMipMapFilter.DEFAULT)
         {
             FactorRgb = factorRgb;
             Texture = texture;
@@ -29,6 +31,8 @@ internal static class GltfAlbedoResolver
             TextureUvTransform = textureUvTransform;
             WrapS = wrapS;
             WrapT = wrapT;
+            MagFilter = magFilter;
+            MinFilter = minFilter;
         }
 
         public Color? FactorRgb { get; }
@@ -43,6 +47,10 @@ internal static class GltfAlbedoResolver
 
         /// <inheritdoc cref="WrapS"/>
         public TextureWrapMode WrapT { get; }
+
+        public TextureInterpolationFilter MagFilter { get; }
+
+        public TextureMipMapFilter MinFilter { get; }
     }
 
     internal static AlbedoResolve TryResolve(GltfMaterial? material)
@@ -67,6 +75,7 @@ internal static class GltfAlbedoResolver
             ImageSource? texSource = null;
             var gt = ch.Texture;
             var (wrapS, wrapT) = TryGetSamplerWrapModes(gt);
+            var (magF, minF) = TryGetSamplerFilters(gt);
             if (gt is not null)
             {
                 texSource = TryDecodeTexture(gt);
@@ -81,11 +90,21 @@ internal static class GltfAlbedoResolver
 
             if (texSource is not null || factorRgb.HasValue)
             {
-                return new AlbedoResolve(factorRgb, texSource, uvSet, texTransform, wrapS, wrapT);
+                return new AlbedoResolve(factorRgb, texSource, uvSet, texTransform, wrapS, wrapT, magF, minF);
             }
         }
 
         return new AlbedoResolve(null, null, 0, null);
+    }
+
+    private static (TextureInterpolationFilter Mag, TextureMipMapFilter Min) TryGetSamplerFilters(GltfTexture? texture)
+    {
+        if (texture?.Sampler is not TextureSampler sampler)
+        {
+            return (TextureInterpolationFilter.LINEAR, TextureMipMapFilter.DEFAULT);
+        }
+
+        return (sampler.MagFilter, sampler.MinFilter);
     }
 
     private static (TextureWrapMode WrapS, TextureWrapMode WrapT) TryGetSamplerWrapModes(GltfTexture? texture)

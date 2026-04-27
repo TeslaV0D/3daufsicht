@@ -30,4 +30,9 @@ public sealed class ImportedMeshPart
 
     /// <inheritdoc cref="BaseColorWrapS"/>
     public TextureWrapMode? BaseColorWrapT { get; init; }
+
+    /// <summary>
+    /// Maps glTF sampler min/mag hint to WPF scaling (see Phase 25); null when no textured import path.
+    /// </summary>
+    public BitmapScalingMode? BaseColorBitmapScalingMode { get; init; }
 }

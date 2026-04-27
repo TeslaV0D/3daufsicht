@@ -192,6 +192,9 @@ public static class GltfModelLoader
             BaseColorTexture = canSampleTexture ? albedo.Texture : null,
             BaseColorWrapS = canSampleTexture ? albedo.WrapS : null,
             BaseColorWrapT = canSampleTexture ? albedo.WrapT : null,
+            BaseColorBitmapScalingMode = canSampleTexture
+                ? GltfSamplerBitmapScalingMapping.ToBitmapScalingMode(albedo.MagFilter, albedo.MinFilter)
+                : null,
         };
     }
 }

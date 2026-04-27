@@ -41,6 +41,7 @@ From repo root:
 - ✅ Phase 21: glTF **baseColor** / **diffuse** **factor** → per-part viewport diffuse
 - ✅ Phase 22: glTF **baseColorTexture** / **diffuseTexture** + UVs (`TEXCOORD_*`) → **ImageBrush** viewport materials (factor tint multiply approximated)
 - ✅ Phase 23: **KHR_texture_transform** (scale/rotate/offset + optional `texCoord` override) on base/diffuse UVs
-- ✅ Phase 24: glTF **sampler wrap** (S/T) → WPF **`ImageBrush.TileMode`** (mixed axes approximated; filters unchanged)
-- ⏳ Next: further polish / UX (min/mag filter, per-axis wrap if needed, …)
+- ✅ Phase 24: glTF **sampler wrap** (S/T) → WPF **`ImageBrush.TileMode`** (mixed axes approximated)
+- ✅ Phase 25: glTF **sampler min/mag** → **`RenderOptions.BitmapScalingMode`** on **`ImageBrush`** (nearest vs smooth heuristic; no GPU mips)
+- ⏳ Next: further polish / UX (per-axis wrap if needed, …)
 

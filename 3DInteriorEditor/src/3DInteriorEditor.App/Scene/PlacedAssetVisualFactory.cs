@@ -93,6 +93,7 @@ public static class PlacedAssetVisualFactory
                 TileMode = GltfSamplerImageBrushMapping.ToTileMode(ws, wt),
                 Stretch = Stretch.Fill,
             };
+            RenderOptions.SetBitmapScalingMode(ib, part.BaseColorBitmapScalingMode ?? BitmapScalingMode.HighQuality);
             ib.Freeze();
             var mat = MaterialHelper.CreateMaterial(ib, 100.0, (byte)255, true);
             ApplyBaseColorFactorTint(mat, part.BaseColorRgb ?? Colors.White);

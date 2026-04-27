@@ -387,5 +387,19 @@
 ### Notes
 
 - WPF uses **one** `TileMode` for both UV axes; **mixed** wrap (e.g. clamp S + repeat T) is **approximated** as **`Tile`**.
-- **Min/mag filter** (linear vs nearest) is not implemented — mipmaps are ignored at the **ImageBrush** level.
+- **Min/mag filter** mapping: see Phase 25.
+
+## Phase 25 (glTF sampler min/mag → `BitmapScalingMode`)
+
+### What’s implemented
+
+- **`Scene/GltfSamplerBitmapScalingMapping.cs`**: Maps **`TextureSampler.MagFilter`** / **`MinFilter`** to **`BitmapScalingMode`**: **`NearestNeighbor`** when magnification is **NEAREST** or minification is **NEAREST** / **NEAREST_MIPMAP_NEAREST**; otherwise **`HighQuality`** (linear-ish upscaling).
+- **`Scene/GltfAlbedoResolver.cs`**: Reads **`sampler.MagFilter`** / **`sampler.MinFilter`** (defaults **LINEAR** / **DEFAULT** when no sampler).
+- **`Scene/ImportedMeshPart.cs`**: **`BaseColorBitmapScalingMode`** when texturing is active.
+- **`Scene/PlacedAssetVisualFactory.cs`**: **`RenderOptions.SetBitmapScalingMode`** on the **`ImageBrush`** before **`Freeze`**.
+
+### Notes
+
+- **Mip chains** are not sampled in WPF like a GPU; **min filter** only influences the nearest-vs-smooth **bitmap scaling** heuristic above.
+- Other **`TextureMipMapFilter`** values (e.g. **LINEAR_MIPMAP_LINEAR**) follow the **`HighQuality`** path.
 
