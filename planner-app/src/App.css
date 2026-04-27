@@ -931,21 +931,6 @@ input {
   background: radial-gradient(circle at top left, #12202e 0%, #050a11 75%);
 }
 
-/* Presentation + inspector column visible (read-only) */
-.workspace.view-mode.workspace--view-with-inspector {
-  grid-template-columns: 0 1fr 320px;
-  background: radial-gradient(circle at top left, #12202e 0%, #050a11 75%);
-}
-
-.workspace.view-mode.workspace--view-with-inspector .panel.right {
-  opacity: 1;
-  transform: none;
-  pointer-events: auto;
-  padding: inherit;
-  border-color: inherit;
-  overflow: auto;
-}
-
 .workspace.view-mode .scene-wrapper {
   cursor: pointer;
 }
@@ -982,6 +967,200 @@ input {
   display: flex;
   gap: 0.9rem;
   align-items: center;
+  z-index: 100;
+  pointer-events: none;
+}
+
+/* Full-screen read-only details (presentation / view mode) */
+.presentation-details-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2100;
+  background: rgba(0, 0, 0, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  animation: presentation-details-fade-in 0.2s ease-out;
+  cursor: default;
+}
+
+@keyframes presentation-details-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.presentation-details-dialog {
+  width: min(32rem, 100%);
+  max-height: min(80vh, 640px);
+  display: flex;
+  flex-direction: column;
+  background: #121a24;
+  color: #e8f0f8;
+  border: 1px solid #2a3c54;
+  border-radius: 0.6rem;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.75);
+  overflow: hidden;
+  animation: presentation-details-slide-up 0.25s ease-out;
+}
+
+@keyframes presentation-details-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.presentation-details-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 1rem 1rem 0.75rem;
+  border-bottom: 1px solid rgba(42, 60, 84, 0.6);
+  flex-shrink: 0;
+}
+
+.presentation-details-color-swatch {
+  width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  margin-top: 0.2rem;
+  flex-shrink: 0;
+}
+
+.presentation-details-title {
+  margin: 0;
+  font-size: 1.1rem;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+}
+
+.presentation-details-sub {
+  margin: 0.25rem 0 0;
+  font-size: 0.8rem;
+  color: #9eb4cc;
+}
+
+.presentation-details-close {
+  margin-left: auto;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: #7a8fa8;
+  font-size: 1.35rem;
+  line-height: 1;
+  border-radius: 0.35rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.presentation-details-close:hover {
+  color: #f0f6ff;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.presentation-details-body {
+  padding: 0.9rem 1rem 0.5rem;
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.presentation-details-section-title {
+  margin: 0 0 0.45rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #7a8fa8;
+  font-weight: 600;
+}
+
+.presentation-details-dl {
+  margin: 0;
+}
+
+.presentation-details-row {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.35rem 0;
+  font-size: 0.8rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  align-items: flex-start;
+}
+
+.presentation-details-row dt {
+  flex: 0 0 8.2rem;
+  color: #7a8fa8;
+  margin: 0;
+  font-weight: 500;
+}
+
+.presentation-details-row dd {
+  margin: 0;
+  text-align: right;
+  flex: 1;
+  min-width: 0;
+  color: #c8d6e8;
+}
+
+.presentation-details-multiline {
+  text-align: left;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.presentation-details-mono {
+  font-size: 0.78em;
+  word-break: break-all;
+}
+
+.presentation-details-color-row .presentation-details-swatch {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 0.2rem;
+  border: 1px solid #4a5c6e;
+  vertical-align: middle;
+  margin-right: 0.45rem;
+}
+
+.presentation-details-footer {
+  padding: 0.6rem 1rem 0.9rem;
+  border-top: 1px solid rgba(42, 60, 84, 0.6);
+  display: flex;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+
+.presentation-details-btn-close {
+  padding: 0.45rem 0.9rem;
+  font-size: 0.8rem;
+  border-radius: 0.4rem;
+  border: 1px solid #3a4f68;
+  background: #1e2a3a;
+  color: #d0dce8;
+  cursor: pointer;
+}
+
+.presentation-details-btn-close:hover {
+  background: #26364a;
+  color: #fff;
 }
 
 
