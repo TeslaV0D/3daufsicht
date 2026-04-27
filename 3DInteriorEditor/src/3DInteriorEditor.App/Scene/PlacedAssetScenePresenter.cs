@@ -1,4 +1,5 @@
 using System.Collections.Specialized;
+using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Media;
@@ -82,8 +83,11 @@ public sealed class PlacedAssetScenePresenter : IDisposable
             var def = _viewModel.AssetDefinitions.FirstOrDefault(d =>
                 string.Equals(d.Id, asset.AssetDefinitionId, StringComparison.Ordinal));
 
+            var layoutDir = Path.GetDirectoryName(_viewModel.CurrentFilePath);
+            var resolvedImport = ImportedModelPathResolver.Resolve(def?.ImportedModelPath, layoutDir);
+
             var isSelected = selected?.Contains(asset.Id) == true;
-            var visual = PlacedAssetVisualFactory.CreateVisual(asset, def, isSelected);
+            var visual = PlacedAssetVisualFactory.CreateVisual(asset, def, isSelected, resolvedImport);
             visual.Transform = BuildWorldTransform(asset);
             _placedIdByVisual[visual] = asset.Id;
 

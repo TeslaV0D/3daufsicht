@@ -145,7 +145,7 @@
 
 ### Notes
 
-- Imported mesh paths (`AssetDefinition.ImportedModelPath`) are not rendered yet — definitions still draw as primitives using instance dimensions.
+- Imported mesh rendering was added in **Phase 14** (see below).
 
 ## Phase 9 (Undo / Redo UX)
 
@@ -234,4 +234,19 @@
 ### Notes
 
 - The transform editor is only available for **exactly one** selected item. For multiple selection, the panel still shows the list, but the editor is hidden.
+
+## Phase 14 (Imported glTF / glB rendering)
+
+### What’s implemented
+
+- **Path resolution** (`Scene/ImportedModelPathResolver.cs`): `AssetDefinition.ImportedModelPath` resolves to an absolute path when it is rooted, relative to the **layout file directory**, or relative to the **application base directory** (for shipped `samples/` content).
+- **Loading** (`Scene/GltfModelLoader.cs`): SharpGLTF **Runtime** decodes meshes, evaluates the default scene’s bounding box (with bind pose), then builds WPF `MeshGeometry3D` parts. Geometry is **centered** and **uniformly scaled** so the full model fits inside the instance’s `DimensionsMeters` (axis-aligned tight box).
+- **Viewport** (`Scene/PlacedAssetVisualFactory.cs`, `Scene/PlacedAssetScenePresenter.cs`): When a resolved `.gltf`/`.glb` loads successfully, instances render as imported **triangle meshes** with the same selection tint and diffuse material color as primitives; otherwise the definition’s **primitive** shape is used.
+- **Sample asset**: `Data/DefaultAssets` includes **“glTF-Beispiel (Würfel)”** (`builtin.imported-sample-box`) pointing at `samples/built-in-box.gltf` (+ `built-in-box.bin`), copied next to the executable via the `.csproj` `samples/**` rule.
+- **Caching**: Decoded mesh parts are cached by file path, last-write time, and target dimensions to avoid reloading on every viewport rebuild.
+
+### Notes
+
+- Materials from the glTF file are not mapped yet — all triangles use the instance **color** (`PlacedAsset.ColorHex` / selection tint).
+- Skinning / animation / morph targets are not evaluated beyond the default **bind pose** for placement and bounds.
 

@@ -13,11 +13,14 @@ public static class PlacedAssetVisualFactory
 {
     /// <summary>
     /// Creates a visual centered at the origin with local dimensions; caller applies world transform.
+    /// When <paramref name="resolvedImportedModelPath"/> points to a loadable glTF/glB file, triangle geometry is used;
+    /// otherwise primitives from <see cref="AssetDefinition.Shape"/> apply.
     /// </summary>
     public static ModelVisual3D CreateVisual(
         PlacedAsset asset,
         AssetDefinition? definition,
-        bool isSelected)
+        bool isSelected,
+        string? resolvedImportedModelPath = null)
     {
         var shape = definition?.Shape ?? AssetShapeKind.Box;
 
@@ -26,6 +29,15 @@ public static class PlacedAssetVisualFactory
         var fill = ColorHexHelper.ToDiffuseBrush(colorHex);
         var material = MaterialHelper.CreateMaterial(fill);
         var dim = asset.DimensionsMeters;
+
+        if (!string.IsNullOrEmpty(resolvedImportedModelPath))
+        {
+            var imported = GltfModelLoader.TryLoadMeshParts(resolvedImportedModelPath, dim);
+            if (imported is not null && imported.Count > 0)
+            {
+                return CreateFromImportedParts(imported, material);
+            }
+        }
 
         return shape switch
         {
@@ -36,6 +48,22 @@ public static class PlacedAssetVisualFactory
                 CreateBox(dim, material),
             _ => CreateBox(dim, material),
         };
+    }
+
+    private static ModelVisual3D CreateFromImportedParts(IReadOnlyList<MeshGeometry3D> parts, Material material)
+    {
+        var group = new Model3DGroup();
+        foreach (var geometry in parts)
+        {
+            group.Children.Add(new GeometryModel3D
+            {
+                Geometry = geometry,
+                Material = material,
+                BackMaterial = material,
+            });
+        }
+
+        return new ModelVisual3D { Content = group };
     }
 
     private static ModelVisual3D CreateBox(JsonVector3 dim, Material material)

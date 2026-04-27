@@ -32,6 +32,11 @@ public static class DefaultAssets
 
         public const string SimpleRectangle = "builtin.simple-rectangle";
         public const string SimpleCircle = "builtin.simple-circle";
+
+        /// <summary>
+        /// Built-in glTF sample (ships under <c>samples/built-in-box.gltf</c> next to the executable).
+        /// </summary>
+        public const string ImportedSampleBox = "builtin.imported-sample-box";
     }
 
     /// <summary>
@@ -199,6 +204,18 @@ public static class DefaultAssets
             DefaultDimensionsMeters = Dim(1.0, 1.0, 1.0),
             Shape = AssetShapeKind.Circle,
             DefaultColorHex = "#20c997",
+            MetadataTemplates = new Dictionary<string, string>(StringComparer.Ordinal),
+        },
+
+        new AssetDefinition
+        {
+            Id = Ids.ImportedSampleBox,
+            DisplayName = "glTF-Beispiel (Würfel)",
+            CategoryName = Categories.Basics,
+            DefaultDimensionsMeters = Dim(1.0, 1.0, 1.0),
+            Shape = AssetShapeKind.Box,
+            DefaultColorHex = "#9775fa",
+            ImportedModelPath = "samples/built-in-box.gltf",
             MetadataTemplates = new Dictionary<string, string>(StringComparer.Ordinal),
         },
     ];
