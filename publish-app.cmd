@@ -40,9 +40,22 @@ if errorlevel 1 (
   exit /b 1
 )
 
+set "ROOT_EXE=%~dp0InteriorPlanner.exe"
+copy /Y "%OUT_DIR%\3DInteriorEditor.App.exe" "%ROOT_EXE%" >nul
+if errorlevel 1 (
+  echo [WARNUNG] Konnte Starter-EXE nicht nach "%ROOT_EXE%" kopieren.
+) else (
+  echo Starter im Projekt-Hauptordner: "%ROOT_EXE%"
+)
+
+if exist "%OUT_DIR%\samples\" (
+  xcopy /E /I /Y "%OUT_DIR%\samples\*" "%~dp0samples\" >nul
+)
+
 echo.
 echo Fertig. Die Anwendung startest du mit:
-echo   "%OUT_DIR%\3DInteriorEditor.App.exe"
+echo   "%ROOT_EXE%"   ^(Hauptordner^)
+echo   "%OUT_DIR%\3DInteriorEditor.App.exe"   ^(gleicher Build unter artifacts^)
 echo.
 echo Diesen gesamten Ordner kannst du weitergeben ^(ZIP^) — keine separate .NET-Installation noetig.
 echo.

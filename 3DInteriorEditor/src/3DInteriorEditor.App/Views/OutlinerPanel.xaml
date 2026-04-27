@@ -1,0 +1,63 @@
+<UserControl x:Class="_3DInteriorEditor.App.Views.OutlinerPanel"
+               xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+               xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+               xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+               xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+               xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+               xmlns:models="clr-namespace:_3DInteriorEditor.App.Models"
+               mc:Ignorable="d"
+               d:DesignWidth="240">
+
+  <DockPanel Background="{DynamicResource App.PanelBrush}">
+    <Border DockPanel.Dock="Top" Padding="12,12,12,8">
+      <DockPanel LastChildFill="True">
+        <materialDesign:PackIcon DockPanel.Dock="Left"
+                                 Kind="FormatListBulleted"
+                                 Margin="0,0,10,0"
+                                 VerticalAlignment="Center"
+                                 Foreground="{DynamicResource App.AccentBrush}" />
+        <StackPanel>
+          <TextBlock FontWeight="SemiBold" Text="Outliner" />
+          <TextBlock Margin="0,4,0,0"
+                     FontSize="11"
+                     Foreground="{DynamicResource App.TextSecondaryBrush}"
+                     TextWrapping="Wrap"
+                     Text="Instanzen · Multi-Auswahl · Sync mit Viewport" />
+        </StackPanel>
+      </DockPanel>
+    </Border>
+
+    <ListBox x:Name="SceneList"
+             Margin="8,0,8,12"
+             SelectionMode="Extended"
+             ItemsSource="{Binding PlacedAssets}"
+             SelectionChanged="SceneList_OnSelectionChanged">
+      <ListBox.ItemTemplate>
+        <DataTemplate DataType="{x:Type models:PlacedAsset}">
+          <Grid Margin="0,4">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <materialDesign:PackIcon Grid.Column="0"
+                                       Kind="CubeOutline"
+                                       Width="18"
+                                       Height="18"
+                                       Margin="0,0,8,0"
+                                       VerticalAlignment="Center"
+                                       Foreground="{DynamicResource App.TextSecondaryBrush}" />
+            <StackPanel Grid.Column="1">
+              <TextBlock FontWeight="SemiBold"
+                         Text="{Binding AssetDefinitionId}"
+                         TextTrimming="CharacterEllipsis" />
+              <TextBlock FontSize="11"
+                         Foreground="{DynamicResource App.TextSecondaryBrush}"
+                         FontFamily="Consolas"
+                         Text="{Binding Id, StringFormat={}id {0}}" />
+            </StackPanel>
+          </Grid>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+  </DockPanel>
+</UserControl>

@@ -8,7 +8,6 @@
                d:DesignHeight="600"
                d:DesignWidth="800">
 
-  <!-- Phase 7: HelixToolkit hosts orbit / pan / zoom on this viewport (see HelixViewport3D defaults). -->
   <Grid ClipToBounds="True">
     <h:HelixViewport3D x:Name="Viewport"
                        Background="{DynamicResource App.BackgroundBrush}"
@@ -17,9 +16,9 @@
                        PreviewMouseLeftButtonDown="Viewport_OnPreviewMouseLeftButtonDown"
                        PreviewMouseMove="Viewport_OnPreviewMouseMove"
                        PreviewMouseLeftButtonUp="Viewport_OnPreviewMouseLeftButtonUp"
+                       PreviewMouseRightButtonDown="Viewport_OnPreviewMouseRightButtonDown"
                        LostMouseCapture="Viewport_OnLostMouseCapture">
 
-      <!-- Y-up scene: floor lies in XZ at y = 0 -->
       <h:HelixViewport3D.DefaultCamera>
         <PerspectiveCamera Position="14,11,14"
                            LookDirection="-14,-11,-14"
@@ -31,7 +30,6 @@
 
       <h:SunLight />
 
-      <!-- Reference grid on the ground plane (XZ) -->
       <h:GridLinesVisual3D Width="48"
                            Length="48"
                            MajorDistance="2"
@@ -46,7 +44,6 @@
         </h:GridLinesVisual3D.Transform>
       </h:GridLinesVisual3D>
 
-      <!-- Subtle ground plate for depth perception -->
       <h:BoxVisual3D Center="0,-0.005,0"
                      Length="50"
                      Width="0.01"
@@ -57,7 +54,22 @@
 
     </h:HelixViewport3D>
 
-    <!-- Interaction legend (viewport interaction is viewport-local, not routed commands) -->
+    <!-- Box select overlay (hit-test only active in Box/Circle modes; see code-behind). -->
+    <Canvas x:Name="InteractionOverlay"
+            Background="Transparent"
+            IsHitTestVisible="False"
+            MouseLeftButtonDown="Overlay_OnMouseLeftButtonDown"
+            MouseMove="Overlay_OnMouseMove"
+            MouseLeftButtonUp="Overlay_OnMouseLeftButtonUp">
+      <Rectangle x:Name="BoxSelectRectangle"
+                 Stroke="#FFB74D"
+                 StrokeThickness="1"
+                 Fill="#33FFB74D"
+                 Visibility="Collapsed"
+                 Width="0"
+                 Height="0" />
+    </Canvas>
+
     <Border VerticalAlignment="Bottom"
             HorizontalAlignment="Left"
             Margin="10"
@@ -72,7 +84,7 @@
       </Border.Effect>
       <TextBlock FontSize="11"
                  Foreground="{DynamicResource App.TextSecondaryBrush}">
-        <Run Text="Transform-Modus (Toolbar) · Strg+Klick: Auswahl · Shift/Alt/Strg+Shift+Drag je nach Modus · Pfeile · Q/E · Strg+D · Entf" />
+        <Run Text="MMB/Drehen · Shift+MMB/Schwenken · Rad/Zoom · LMB/Auswahl · B Box · C Kreis · RMB/Menü · G/R/S · Esc Modus · Shift+X/Z Achse · / Isolate" />
       </TextBlock>
     </Border>
   </Grid>

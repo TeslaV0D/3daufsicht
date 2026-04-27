@@ -13,6 +13,11 @@ tools/dotnet/
 # Desktop publish output (single-file build)
 artifacts/
 
+# Root copies from publish-app.cmd (InteriorPlanner.exe + extracted samples)
+/InteriorPlanner.exe
+/InteriorPlanner.pdb
+/samples/
+
 # Logs / temp
 *.log
 *.tmp

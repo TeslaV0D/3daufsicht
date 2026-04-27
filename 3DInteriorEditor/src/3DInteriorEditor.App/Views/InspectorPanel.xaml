@@ -28,7 +28,7 @@
           <TextBlock Margin="0,4,0,0"
                      FontSize="12"
                      Foreground="{DynamicResource App.TextSecondaryBrush}"
-                     Text="Strg+Klick im Viewport: Auswahl (Toggle)" />
+                     Text="Viewport: Blender-Bedienung — LMB / Shift+LMB / Alt+LMB (siehe Dokumentation)" />
         </StackPanel>
       </DockPanel>
     </Border>

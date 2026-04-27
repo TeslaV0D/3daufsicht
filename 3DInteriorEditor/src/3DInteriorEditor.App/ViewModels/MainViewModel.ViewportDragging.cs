@@ -1,3 +1,4 @@
+using System.Linq;
 using _3DInteriorEditor.App.Models;
 
 namespace _3DInteriorEditor.App.ViewModels;
@@ -10,6 +11,9 @@ public sealed partial class MainViewModel
     private bool _isViewportTranslateDragActive;
     private bool _isViewportRotateDragActive;
     private bool _isViewportScaleDragActive;
+
+    private double _translateDragAnchorX;
+    private double _translateDragAnchorZ;
 
     /// <summary>
     /// Starts a translate drag operation (pushes undo snapshot once).
@@ -26,10 +30,22 @@ public sealed partial class MainViewModel
             return;
         }
 
+        var id = SelectedAssetIds[0];
+        var cur = PlacedAssets.FirstOrDefault(p => string.Equals(p.Id, id, StringComparison.Ordinal));
+        if (cur is null)
+        {
+            return;
+        }
+
+        _translateDragAnchorX = cur.PositionMeters.X;
+        _translateDragAnchorZ = cur.PositionMeters.Z;
+
         _isViewportTranslateDragActive = true;
         History.Push(PlacedAssets.ToList(), CurrentSelectionIds());
         NotifyUndoRedoCommands();
-        StatusText = "Verschieben…";
+        StatusText = TranslatePlaneConstraint == TranslatePlaneConstraint.None
+            ? "Verschieben…"
+            : $"Verschieben (Achse {TranslatePlaneConstraint})…";
     }
 
     /// <summary>
@@ -45,6 +61,18 @@ public sealed partial class MainViewModel
         if (string.IsNullOrWhiteSpace(assetId))
         {
             return;
+        }
+
+        switch (TranslatePlaneConstraint)
+        {
+            case TranslatePlaneConstraint.AxisX:
+                z = _translateDragAnchorZ;
+                break;
+            case TranslatePlaneConstraint.AxisZ:
+                x = _translateDragAnchorX;
+                break;
+            case TranslatePlaneConstraint.None:
+                break;
         }
 
         UpdatePlacedAsset(assetId, a => CloneAsset(a, positionMeters: new JsonVector3
@@ -69,6 +97,7 @@ public sealed partial class MainViewModel
         }
 
         _isViewportTranslateDragActive = false;
+        TranslatePlaneConstraint = TranslatePlaneConstraint.None;
         StatusText = "Verschoben";
     }
 

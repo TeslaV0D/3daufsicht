@@ -1,4 +1,5 @@
 ﻿using System.Windows;
+using _3DInteriorEditor.App.Services;
 using _3DInteriorEditor.App.ViewModels;
 using _3DInteriorEditor.App.Views;
 
@@ -14,7 +15,8 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
-        var mainVm = new MainViewModel();
+        var settings = new AppSettingsStore().Load();
+        var mainVm = new MainViewModel(settings);
 
         var window = new MainWindow
         {

@@ -21,11 +21,121 @@
 .\dotnet.cmd publish .\3DInteriorEditor\3DInteriorEditor.sln -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true
 ```
 
-Alternatively, from repo root run **`publish-app.cmd`**, which publishes the app project to **`artifacts/DesktopApp/`** (self-contained **win-x64** single-file for end users).
+Alternatively, from repo root run **`publish-app.cmd`**, which publishes the app project to **`artifacts/DesktopApp/`** (self-contained **win-x64** single-file for end users). The same script also copies **`InteriorPlanner.exe`** and the **`samples`** folder into the repository root so you can start the app from the main folder with one double-click (`samples` must stay next to that executable for the built-in glTF).
 
 ### Notes
 
 - SharpGLTF: The spec mentions `SharpGLTF.Runtime.WPF`, but the available NuGet package is `SharpGLTF.Runtime`. We use `SharpGLTF.Runtime` + `SharpGLTF.Core` as the baseline.
+
+## Blender-style viewport & workspace shell
+
+### Shell layout
+
+- **Menus**: Datei, Bearbeiten, Modellierung, Layout, Ansicht · Shading/Rendering are placeholders for later phases.
+- **Workspace strip**: quick switches (Layout / Modeling / Shading / Rendering — only tabs/menus that change `WorkspaceTab` today; shading/rendering tabs disabled in UI).
+- **Left**: tab **Szene** = Outliner (placed instances, multi-select, synced with viewport selection) · tab **Vorlagen** = asset library (double-click to place).
+- **Center**: `HelixViewport3D` with Blender-like camera gestures (see below).
+- **Right**: Inspector / properties (transform when one instance is selected).
+
+### Camera & framing (HelixToolkit)
+
+| Input | Action |
+| --- | --- |
+| **MMB** drag | Orbit (middle mouse) |
+| **Shift+MMB** drag | Pan |
+| **Mouse wheel** | Zoom |
+| **Home** | Frame all visible instances |
+| **F** or **NumPad .** | Frame current selection (or all if nothing selected) |
+| **NumPad 7 / 1 / 3** | Top / Front / Right cameras (Y-up scene, ground XZ) |
+| **NumPad 0** | Default perspective “home” |
+
+Implementation: `Views/ViewportPanel.xaml.cs` sets `RotateGesture` / `PanGesture` and clears `PanGesture2` so MMB is free for orbit; bounds use `Scene/PlacedAssetBounds.cs`.
+
+### Selection (viewport)
+
+| Input | Action |
+| --- | --- |
+| **LMB** on object | Replace selection |
+| **Shift+LMB** | Toggle instance in selection |
+| **Alt+LMB** | Select every instance with the same Vorlage (`AssetDefinitionId`) |
+| **LMB** on empty | Clear selection (no modifier) |
+
+Click-vs-drag threshold (`Constants.ViewportClickDragThresholdPixels`) distinguishes clicks from transform drags.
+
+### Transform tools
+
+| Input | Action |
+| --- | --- |
+| **G** / **R** / **S** | Activate Move / Rotate / Scale (same as toolbar) |
+| **Drag** (after threshold) | Moves / rotates / scales using the **active** tool — no extra modifier keys |
+
+Related VM APIs: `ApplyViewportPickReplace`, `ApplyViewportPickToggle`, `SelectAssetsSameDefinition`, `ClearViewportSelection`.
+
+### Translation axis lock (XZ plane)
+
+While moving (**G** + Drag), constrain motion to one world horizontal axis:
+
+| Input | Effect |
+| --- | --- |
+| **Shift+X** | Only move along **world X** (Z locked to drag start) |
+| **Shift+Z** | Only move along **world Z** (X locked to drag start) |
+| **Esc** | Clears axis lock together with box/circle modes (`CancelViewportModesCommand`) |
+
+Implementation clamps in `ApplyViewportTranslateDrag` using anchors set in `BeginViewportTranslateDrag`.
+
+### Box & circle selection
+
+| Input | Effect |
+| --- | --- |
+| **B** | Enter **Box Select** — drag a rectangle on the viewport overlay; instances whose projected **center** lies inside are selected. **Shift** adds to the existing selection. Ends with **Esc** or automatically after the drag completes. |
+| **C** | Enter **Circle Select** — click to apply a circular brush (radius `Constants.CircleSelectRadiusPixels`) in screen space; **Shift** is additive. |
+
+Overlay/hit-testing: `Views/ViewportPanel.Interaction.cs` + transparent `Canvas` over `HelixViewport3D`. Selection applies `ApplyViewportBrushSelection`.
+
+### Local view / Isolate (/)
+
+| Input | Effect |
+| --- | --- |
+| **/ (Oem2)** or **NumPad /** | **Toggle Local View**: hides every instance that is **not** in the current selection and stores prior visibility in memory; run again to **restore** all visibilities (with undo snapshot). Requires selection to enter; while isolated, command stays enabled to exit. |
+
+### Context menu (viewport)
+
+**RMB** on a hit instance opens a short menu: Duplicate, Delete, Hide, Local View. Implementation: `Viewport_OnPreviewMouseRightButtonDown` in `ViewportPanel.Interaction.cs`.
+
+### Preferences & persisted settings
+
+- Dialog: `Views/PreferencesWindow.*` (opened via **Strg+,** / menu).
+- Model: `Models/AppSettings.cs` (`UiScale`, `ZoomAroundMouseCursor`, last import/export folders).
+- Store: `Services/AppSettingsStore.cs` reads/writes JSON at **`Constants.SettingsPath`** (`%AppData%/3DInteriorEditor/settings.json`).
+- Startup: `App.xaml.cs` loads settings and passes them into `MainViewModel`.
+- **UI scale** applies via `LayoutTransform` / `ScaleTransform` on `MainWindow` bound to `MainViewModel.UiScale`.
+- **Zoom am Mauszeiger** maps to Helix `ZoomAroundMouseDownPoint` on `HelixViewport3D` (wired through `ApplyZoomAroundMousePreference`).
+
+### Import & export (Phase 2 wiring)
+
+| Menu / shortcut | Behavior |
+| --- | --- |
+| **Import…** (**Strg+Shift+I**) | Opens file dialog for **.gltf / .glb**, creates a new `AssetDefinition` (category **Import**) with `ImportedModelPath` set, adds it to the library, and places one instance via `PlaceAssetFromLibrary`. |
+| **Export… (JSON)** (**Strg+Shift+E**) | Writes the **full layout document** (same schema as `.3dei`) to a chosen `.json` path using `FileService.ExportJsonAsync`. |
+
+### Timeline strip
+
+`MainWindow` includes a reserved bottom strip (above the status bar) labeled for **Timeline / Keyframes** — UI placeholder only; no animation system yet.
+
+### Code map (updated)
+
+- `Views/MainWindow.xaml`: menus, workspace strip, **UiScale** transform, Outliner + Vorlagen tabs, **timeline** placeholder, window-level hotkeys (incl. **B**, **C**, **Esc**, **/**, **Shift+X/Z**).
+- `Views/ViewportPanel.*` + `ViewportPanel.Interaction.cs`: camera gestures, selection overlay, **RMB** menu.
+- `Views/OutlinerPanel.*`: list selection ↔ `MainViewModel.SelectedAssetIds`.
+- `ViewModels/MainViewModel.BlenderUi.cs`: navigation & workspace helpers.
+- `ViewModels/MainViewModel.SettingsAndModes.cs`: isolate, box/circle modes, axis lock, prefs dialog, import/export commands.
+- `Models/AppSettings.cs`, `Services/AppSettingsStore.cs`: persisted preferences.
+
+### Known gaps (optional follow-ups)
+
+- Full **modal** Blender transforms (numeric entry after **G/R/S**, **Esc**/**RMB** cancel mid-operation, **X/Y/Z** axis keys without Shift) are only partially approximated via axis lock + drag.
+- **Viewport shading pie** (**Z**) and **true** wireframe/rendered modes are not implemented (would need material/edge pipeline changes).
+- **Zoom** uses Helix defaults; pixel-perfect “zoom to mouse” consistency depends on driver/Helix behavior.
 
 ## Phase 2 (Domain models)
 
@@ -141,7 +251,7 @@ Alternatively, from repo root run **`publish-app.cmd`**, which publishes the app
 - `Scene/PlacedAssetVisualFactory.cs`: maps `AssetShapeKind` to Helix primitives (`BoxVisual3D`, `SphereVisual3D`, `TruncatedConeVisual3D` for cylinder/cone); hex/rhombus/circle fall back to box for now.
 - `Scene/PlacedAssetScenePresenter.cs`: rebuilds dynamic `ModelVisual3D` children from `MainViewModel.PlacedAssets` (world transform from position + Euler degrees X→Y→Z); registers visuals for hit-testing.
 - `Helpers/ColorHexHelper.cs`: parses `#RRGGBB` / `#AARRGGBB` for diffuse materials.
-- `ViewModels/MainViewModel.cs`: `PlaceAssetFromLibraryCommand` lays instances on the XZ plane with spacing; `ApplyViewportPick` / `ClearViewportSelection` drive the inspector status line.
+- `ViewModels/MainViewModel.cs`: `PlaceAssetFromLibraryCommand` lays instances on the XZ plane with spacing; viewport selection uses `ApplyViewportPickReplace` / `ApplyViewportPickToggle` / `SelectAssetsSameDefinition` / `ClearViewportSelection` for the inspector status line.
 - `Views/ViewportPanel`: `Viewport3DHelper.FindHits` on the inner `Viewport` + **Strg+Linksklick** selection (marks event handled so camera drag does not steal the gesture).
 - `Views/AssetLibraryPanel`: **double-click** a template row to place an instance.
 

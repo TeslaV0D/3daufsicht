@@ -30,6 +30,16 @@ Damit wird unter **`artifacts\DesktopApp\`** eine **selbstständige** Windows-x6
 
 **Hinweis:** Zum **Bauen** brauchst du weiterhin das portable SDK unter `tools\dotnet\` (siehe Phase 1 in `DOCUMENTATION.md`). Das ist nur auf dem **Entwickler-PC** nötig, nicht beim Anwender.
 
+## Steuerung (Blender-ähnlich)
+
+- **Kamera:** MMB drehen · **Shift+MMB** schwenken · **Mausrad** zoomen · optional **Zoom am Mauszeiger** in den Einstellungen · **Home** alles einpassen · **F** / **Num .** Auswahl einpassen · **Num 7/1/3** orthogonale Ansichten · **Num 0** Standard-Perspektive.
+- **Auswahl:** **LMB** ersetzt die Auswahl · **Shift+LMB** toggle · **Alt+LMB** alle gleiche Vorlage · Klick ins Leere deselektiert · **A** alles auswählen / nichts (toggle) · **B** Box Select · **C** Circle Select · **/** Local View (Isolate) · **RMB** Kontextmenü.
+- **Transform:** **G / R / S** · dann ziehen · **Shift+X** / **Shift+Z** Verschieben nur auf Welt-X bzw. Welt-Z (Boden-Ebene XZ).
+- **Datei:** **Strg+Shift+I** glTF/glB-Import (neue Vorlage + Platzierung) · **Strg+Shift+E** JSON-Export des Layouts · **Strg+,** Einstellungen (UI-Skalierung, Zoom-Option).
+- **Esc** beendet Box-/Circle-Modus und hebt Achsen-Lock auf.
+
+Details: `DOCUMENTATION.md` → **Blender-style viewport & workspace shell** und die folgenden Unterabschnitte (Box/Circle, Isolate, Import/Export, Einstellungen).
+
 ## Status
 
 - ✅ Phase 1: project setup, local .NET 8 SDK + NuGet cache, WPF scaffold, MaterialDesign dark theme baseline

@@ -43,6 +43,16 @@ public static class Constants
     public const double ViewportRotateDragDegreesPerPixel = 0.35;
 
     /// <summary>
+    /// Minimum pointer movement (pixels) before a viewport click becomes a transform drag (Blender-style click vs tweak).
+    /// </summary>
+    public const double ViewportClickDragThresholdPixels = 5.0;
+
+    /// <summary>
+    /// Circle-select brush radius in viewport pixels (screen space).
+    /// </summary>
+    public const double CircleSelectRadiusPixels = 72.0;
+
+    /// <summary>
     /// Viewport Strg+Umschalt+drag scale: uniform size multiplier change per vertical screen pixel (Y down = screen coordinates).
     /// Drag up (decreasing Y) increases size.
     /// </summary>

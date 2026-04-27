@@ -88,7 +88,7 @@ public sealed class PlacedAssetScenePresenter : IDisposable
 
             var isSelected = selected?.Contains(asset.Id) == true;
             var visual = PlacedAssetVisualFactory.CreateVisual(asset, def, isSelected, resolvedImport);
-            visual.Transform = BuildWorldTransform(asset);
+            visual.Transform = PlacedAssetBounds.BuildWorldTransform(asset);
             _placedIdByVisual[visual] = asset.Id;
 
             _viewport.Children.Add(visual);
@@ -110,19 +110,6 @@ public sealed class PlacedAssetScenePresenter : IDisposable
         }
 
         return false;
-    }
-
-    private static Transform3D BuildWorldTransform(PlacedAsset asset)
-    {
-        var rot = asset.RotationDegrees;
-        var pos = asset.PositionMeters;
-
-        var group = new Transform3DGroup();
-        group.Children.Add(new RotateTransform3D(new AxisAngleRotation3D(new Vector3D(1, 0, 0), rot.X)));
-        group.Children.Add(new RotateTransform3D(new AxisAngleRotation3D(new Vector3D(0, 1, 0), rot.Y)));
-        group.Children.Add(new RotateTransform3D(new AxisAngleRotation3D(new Vector3D(0, 0, 1), rot.Z)));
-        group.Children.Add(new TranslateTransform3D(pos.X, pos.Y, pos.Z));
-        return group;
     }
 
     /// <inheritdoc />

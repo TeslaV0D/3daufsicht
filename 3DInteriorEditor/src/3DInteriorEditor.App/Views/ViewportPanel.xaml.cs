@@ -1,7 +1,8 @@
 using System;
+using System.Linq;
 using System.Windows;
-using System.Windows.Media.Media3D;
 using System.Windows.Input;
+using System.Windows.Media.Media3D;
 using HelixToolkit.Wpf;
 using _3DInteriorEditor.App.Models;
 using _3DInteriorEditor.App.Scene;
@@ -11,7 +12,7 @@ using Constants = _3DInteriorEditor.App.Constants;
 namespace _3DInteriorEditor.App.Views;
 
 /// <summary>
-/// WPF 3D viewport host (HelixToolkit). Camera interaction is handled by <c>HelixViewport3D</c>.
+/// WPF 3D viewport host (HelixToolkit). Blender-style camera: MMB orbit, Shift+MMB pan, wheel zoom.
 /// </summary>
 public partial class ViewportPanel
 {
@@ -29,6 +30,12 @@ public partial class ViewportPanel
     private double _scalePointerStartY;
     private JsonVector3 _scaleStartDimensionsMeters = new();
 
+    private Point _lmbDownPos;
+    private bool _lmbDown;
+    private PlacedAsset? _lmbCandidate;
+    private ModifierKeys _lmbMods;
+    private bool _lmbDragCommitted;
+
     public ViewportPanel()
     {
         InitializeComponent();
@@ -38,61 +45,131 @@ public partial class ViewportPanel
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
+        ConfigureBlenderCameraGestures();
+
         if (DataContext is MainViewModel vm)
         {
+            vm.NavZoomExtentsAll = ZoomExtentsAll;
+            vm.NavZoomExtentsSelection = ZoomExtentsSelection;
+            vm.NavApplyStandardView = ApplyStandardView;
             _presenter = new PlacedAssetScenePresenter(Viewport, vm);
+            HookViewportChrome(vm);
         }
     }
 
+    /// <summary>
+    /// Blender defaults: orbit with MMB (free middle button from Helix pan #2).
+    /// </summary>
+    private void ConfigureBlenderCameraGestures()
+    {
+        Viewport.RotateGesture = new MouseGesture(MouseAction.MiddleClick);
+        Viewport.PanGesture = new MouseGesture(MouseAction.MiddleClick, ModifierKeys.Shift);
+        Viewport.ClearValue(HelixViewport3D.PanGesture2Property);
+    }
+
+    /// <summary>
+    /// Fits the entire scene in view (Home).
+    /// </summary>
+    public void ZoomExtentsAll()
+    {
+        var visible = ViewModel?.PlacedAssets.Where(a => a.IsVisible) ?? Enumerable.Empty<PlacedAsset>();
+        var rect = PlacedAssetBounds.UnionBounds(visible);
+        Viewport.ZoomExtents(rect, 1.05);
+    }
+
+    /// <summary>
+    /// Frames current selection (Numpad . / F — when selection exists).
+    /// </summary>
+    public void ZoomExtentsSelection()
+    {
+        var vm = ViewModel;
+        if (vm is null || vm.SelectedAssetIds.Count == 0)
+        {
+            ZoomExtentsAll();
+            return;
+        }
+
+        var sel = vm.SelectedAssetIds.ToHashSet(StringComparer.Ordinal);
+        var selectedAssets = vm.PlacedAssets.Where(p => sel.Contains(p.Id)).ToList();
+        if (selectedAssets.Count == 0)
+        {
+            ZoomExtentsAll();
+            return;
+        }
+
+        var rect = PlacedAssetBounds.UnionBounds(selectedAssets);
+        Viewport.ZoomExtents(rect, 1.15);
+    }
+
+    /// <summary>
+    /// Snaps camera to standard orthographic-like views (scene Y-up, ground XZ).
+    /// </summary>
+    public void ApplyStandardView(StandardViewKind kind)
+    {
+        if (Viewport.Camera is not PerspectiveCamera cam)
+        {
+            return;
+        }
+
+        switch (kind)
+        {
+            case StandardViewKind.Top:
+                cam.Position = new Point3D(0, 28, 0);
+                cam.LookDirection = new Vector3D(0, -1, 0);
+                cam.UpDirection = new Vector3D(0, 0, 1);
+                break;
+            case StandardViewKind.Front:
+                cam.Position = new Point3D(0, 6, 26);
+                cam.LookDirection = new Vector3D(0, 0, -1);
+                cam.UpDirection = new Vector3D(0, 1, 0);
+                break;
+            case StandardViewKind.Right:
+                cam.Position = new Point3D(26, 6, 0);
+                cam.LookDirection = new Vector3D(-1, 0, 0);
+                cam.UpDirection = new Vector3D(0, 1, 0);
+                break;
+            case StandardViewKind.HomePerspective:
+                cam.Position = new Point3D(14, 11, 14);
+                cam.LookDirection = new Vector3D(-14, -11, -14);
+                cam.UpDirection = new Vector3D(0, 1, 0);
+                cam.FieldOfView = 55;
+                break;
+        }
+    }
+
+    private MainViewModel? ViewModel => DataContext as MainViewModel;
+
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
+        if (DataContext is MainViewModel vm)
+        {
+            vm.NavZoomExtentsAll = null;
+            vm.NavZoomExtentsSelection = null;
+            vm.NavApplyStandardView = null;
+            UnhookViewportChrome();
+        }
+
         _presenter?.Dispose();
         _presenter = null;
     }
 
     private void Viewport_OnPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        // Phase 15: Shift+drag translates selection on a plane (XZ at asset Y).
-        if (Keyboard.Modifiers == ModifierKeys.Shift)
-        {
-            TryBeginTranslateDrag(e);
-            return;
-        }
-
-        // Phase 16: Alt+drag rotates selection around world Y (yaw).
-        if (Keyboard.Modifiers == ModifierKeys.Alt)
-        {
-            TryBeginRotateDrag(e);
-            return;
-        }
-
-        // Phase 17: Strg+Umschalt+drag uniformly scales instance dimensions.
-        if (Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift))
-        {
-            TryBeginScaleDrag(e);
-            return;
-        }
-
-        if (Keyboard.Modifiers != ModifierKeys.Control)
+        if (ViewModel is not { Mode: EditorMode.Edit })
         {
             return;
         }
 
-        if (_presenter is null || DataContext is not MainViewModel vm)
+        _lmbDown = true;
+        _lmbDragCommitted = false;
+        _lmbDownPos = e.GetPosition(Viewport.Viewport);
+        _lmbMods = Keyboard.Modifiers;
+
+        _lmbCandidate = null;
+        if (_presenter is not null && _presenter.TryPickPlaced(_lmbDownPos, out var picked) && picked is not null)
         {
-            return;
+            _lmbCandidate = picked;
         }
-
-        var pt = e.GetPosition(Viewport.Viewport);
-
-        if (!_presenter.TryPickPlaced(pt, out var picked) || picked is null)
-        {
-            vm.ClearViewportSelection();
-            return;
-        }
-
-        e.Handled = true;
-        vm.ApplyViewportPick(picked);
     }
 
     private void Viewport_OnPreviewMouseMove(object sender, MouseEventArgs e)
@@ -157,7 +234,45 @@ public partial class ViewportPanel
 
             vm.ApplyViewportScaleDrag(_dragAssetId, dims);
             e.Handled = true;
+            return;
         }
+
+        if (!_lmbDown || _lmbDragCommitted || ViewModel is not MainViewModel vmEdit || vmEdit.Mode != EditorMode.Edit)
+        {
+            return;
+        }
+
+        if (_lmbCandidate is null)
+        {
+            return;
+        }
+
+        var movePt = e.GetPosition(Viewport.Viewport);
+        var dist = (movePt - _lmbDownPos).Length;
+        if (dist < Constants.ViewportClickDragThresholdPixels)
+        {
+            return;
+        }
+
+        if (!vmEdit.SelectedAssetIds.Contains(_lmbCandidate.Id))
+        {
+            vmEdit.SetSelectionIds(new[] { _lmbCandidate.Id });
+        }
+
+        switch (vmEdit.TransformMode)
+        {
+            case TransformMode.Translate:
+                StartTranslateDragFromCandidate(_lmbCandidate);
+                break;
+            case TransformMode.Rotate:
+                StartRotateDragFromCandidate(_lmbCandidate);
+                break;
+            case TransformMode.Scale:
+                StartScaleDragFromCandidate(_lmbCandidate);
+                break;
+        }
+
+        _lmbDragCommitted = true;
     }
 
     private void Viewport_OnPreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
@@ -171,6 +286,7 @@ public partial class ViewportPanel
 
             CancelTranslateDrag();
             e.Handled = true;
+            ClearLmbState();
             return;
         }
 
@@ -183,6 +299,7 @@ public partial class ViewportPanel
 
             CancelRotateDrag();
             e.Handled = true;
+            ClearLmbState();
             return;
         }
 
@@ -195,11 +312,57 @@ public partial class ViewportPanel
 
             CancelScaleDrag();
             e.Handled = true;
+            ClearLmbState();
+            return;
         }
+
+        if (!_lmbDown || ViewModel is not MainViewModel vmClick)
+        {
+            return;
+        }
+
+        _lmbDown = false;
+
+        if (!_lmbDragCommitted)
+        {
+            if (_lmbCandidate is not null)
+            {
+                if (_lmbMods == ModifierKeys.Shift)
+                {
+                    vmClick.ApplyViewportPickToggle(_lmbCandidate);
+                }
+                else if (_lmbMods == ModifierKeys.Alt)
+                {
+                    vmClick.SelectAssetsSameDefinition(_lmbCandidate);
+                }
+                else
+                {
+                    vmClick.ApplyViewportPickReplace(_lmbCandidate);
+                }
+
+                e.Handled = true;
+            }
+            else if (_lmbMods == ModifierKeys.None)
+            {
+                vmClick.ClearViewportSelection();
+                e.Handled = true;
+            }
+        }
+
+        ClearLmbState();
+    }
+
+    private void ClearLmbState()
+    {
+        _lmbCandidate = null;
+        _lmbDragCommitted = false;
     }
 
     private void Viewport_OnLostMouseCapture(object sender, MouseEventArgs e)
     {
+        _lmbDown = false;
+        ClearLmbState();
+
         if (_isTranslateDragging)
         {
             if (DataContext is MainViewModel vm)
@@ -233,26 +396,19 @@ public partial class ViewportPanel
         }
     }
 
-    private void TryBeginTranslateDrag(MouseButtonEventArgs e)
+    private void StartTranslateDragFromCandidate(PlacedAsset picked)
     {
         if (_presenter is null || DataContext is not MainViewModel vm)
         {
             return;
         }
 
-        if (vm.Mode != EditorMode.Edit || vm.TransformMode != TransformMode.Translate)
+        if (vm.TransformMode != TransformMode.Translate)
         {
             return;
         }
 
-        var pt = e.GetPosition(Viewport.Viewport);
-        if (!_presenter.TryPickPlaced(pt, out var picked) || picked is null)
-        {
-            return;
-        }
-
-        // Force a single selection for dragging.
-        vm.SetSelectionIds(new[] { picked.Id });
+        var pt = Mouse.GetPosition(Viewport.Viewport);
 
         _dragAssetId = picked.Id;
         _dragPlaneY = picked.PositionMeters.Y;
@@ -268,36 +424,22 @@ public partial class ViewportPanel
         _isTranslateDragging = true;
         vm.BeginViewportTranslateDrag();
 
-        e.Handled = true;
         Viewport.CaptureMouse();
     }
 
-    private void CancelTranslateDrag()
-    {
-        _isTranslateDragging = false;
-        _dragAssetId = null;
-        Viewport.ReleaseMouseCapture();
-    }
-
-    private void TryBeginRotateDrag(MouseButtonEventArgs e)
+    private void StartRotateDragFromCandidate(PlacedAsset picked)
     {
         if (_presenter is null || DataContext is not MainViewModel vm)
         {
             return;
         }
 
-        if (vm.Mode != EditorMode.Edit || vm.TransformMode != TransformMode.Rotate)
+        if (vm.TransformMode != TransformMode.Rotate)
         {
             return;
         }
 
-        var pt = e.GetPosition(Viewport.Viewport);
-        if (!_presenter.TryPickPlaced(pt, out var picked) || picked is null)
-        {
-            return;
-        }
-
-        vm.SetSelectionIds(new[] { picked.Id });
+        var pt = Mouse.GetPosition(Viewport.Viewport);
 
         _dragAssetId = picked.Id;
         _rotatePointerStartX = pt.X;
@@ -306,36 +448,22 @@ public partial class ViewportPanel
         _isRotateDragging = true;
         vm.BeginViewportRotateDrag();
 
-        e.Handled = true;
         Viewport.CaptureMouse();
     }
 
-    private void CancelRotateDrag()
-    {
-        _isRotateDragging = false;
-        _dragAssetId = null;
-        Viewport.ReleaseMouseCapture();
-    }
-
-    private void TryBeginScaleDrag(MouseButtonEventArgs e)
+    private void StartScaleDragFromCandidate(PlacedAsset picked)
     {
         if (_presenter is null || DataContext is not MainViewModel vm)
         {
             return;
         }
 
-        if (vm.Mode != EditorMode.Edit || vm.TransformMode != TransformMode.Scale)
+        if (vm.TransformMode != TransformMode.Scale)
         {
             return;
         }
 
-        var pt = e.GetPosition(Viewport.Viewport);
-        if (!_presenter.TryPickPlaced(pt, out var picked) || picked is null)
-        {
-            return;
-        }
-
-        vm.SetSelectionIds(new[] { picked.Id });
+        var pt = Mouse.GetPosition(Viewport.Viewport);
 
         _dragAssetId = picked.Id;
         _scalePointerStartY = pt.Y;
@@ -349,8 +477,21 @@ public partial class ViewportPanel
         _isScaleDragging = true;
         vm.BeginViewportScaleDrag();
 
-        e.Handled = true;
         Viewport.CaptureMouse();
+    }
+
+    private void CancelTranslateDrag()
+    {
+        _isTranslateDragging = false;
+        _dragAssetId = null;
+        Viewport.ReleaseMouseCapture();
+    }
+
+    private void CancelRotateDrag()
+    {
+        _isRotateDragging = false;
+        _dragAssetId = null;
+        Viewport.ReleaseMouseCapture();
     }
 
     private void CancelScaleDrag()

@@ -73,18 +73,39 @@ public sealed partial class MainViewModel : ObservableObject
     /// </summary>
     public ObservableCollection<AssetDefinition> AssetDefinitions { get; } = new();
 
-    public MainViewModel()
+    /// <summary>
+    /// Persisted preferences (also written by <see cref="Services.AppSettingsStore"/>).
+    /// </summary>
+    [ObservableProperty]
+    private AppSettings _settings = new();
+
+    /// <summary>
+    /// UI scale for root layout transform (mirrors <see cref="AppSettings.UiScale"/>).
+    /// </summary>
+    [ObservableProperty]
+    private double _uiScale = 1.0;
+
+    public MainViewModel(AppSettings? appSettings = null)
     {
+        Settings = appSettings ?? new AppSettings();
+        UiScale = Settings.UiScale;
+
         Library = new AssetLibraryViewModel();
         Inspector = new InspectorViewModel();
 
-        SelectedAssetIds.CollectionChanged += (_, _) => SyncSelectionToInspector();
+        SelectedAssetIds.CollectionChanged += (_, _) =>
+        {
+            SyncSelectionToInspector();
+            NotifySelectionDependentCommands();
+        };
 
         InspectorMetadataRows.CollectionChanged += (_, _) => OnPropertyChanged(nameof(InspectorMetadataEmptyVisible));
 
         BootstrapLayoutCollections();
         RefreshInspectorSelection();
     }
+
+    partial void OnUiScaleChanged(double value) => Settings.UiScale = value;
 
     partial void OnLayoutChanged(LayoutFile value)
     {
@@ -128,6 +149,7 @@ public sealed partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(IsTransformTranslateActive));
         OnPropertyChanged(nameof(IsTransformRotateActive));
         OnPropertyChanged(nameof(IsTransformScaleActive));
+        TranslatePlaneConstraint = TranslatePlaneConstraint.None;
     }
 
     /// <summary>
@@ -153,6 +175,7 @@ public sealed partial class MainViewModel : ObservableObject
         CurrentFilePath = null;
         HasUnsavedChanges = false;
         History.Clear();
+        ResetViewportModesAfterDocumentSwitch();
         StatusText = "Neues Layout";
         NotifyUndoRedoCommands();
     }
@@ -478,6 +501,16 @@ public sealed partial class MainViewModel : ObservableObject
         RedoCommand.NotifyCanExecuteChanged();
     }
 
+    private void NotifySelectionDependentCommands()
+    {
+        DeleteSelectedCommand.NotifyCanExecuteChanged();
+        DuplicateSelectedCommand.NotifyCanExecuteChanged();
+        NudgeSelectedCommand.NotifyCanExecuteChanged();
+        RotateSelectedCommand.NotifyCanExecuteChanged();
+        HideSelectedPlacedCommand.NotifyCanExecuteChanged();
+        ToggleIsolateSelectionCommand.NotifyCanExecuteChanged();
+    }
+
     /// <summary>
     /// Clears viewport-driven selection (inspector + status).
     /// </summary>
@@ -488,15 +521,42 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Applies selection after a viewport hit-test (single asset).
+    /// Replaces selection with one viewport hit (Blender LMB).
     /// </summary>
-    public void ApplyViewportPick(PlacedAsset picked)
+    public void ApplyViewportPickReplace(PlacedAsset picked)
+    {
+        SetSelectionIds(new[] { picked.Id });
+        var label = AssetDefinitions.FirstOrDefault(d =>
+                string.Equals(d.Id, picked.AssetDefinitionId, StringComparison.Ordinal))
+            ?.DisplayName ?? picked.AssetDefinitionId;
+        StatusText = $"Auswahl: {label}";
+    }
+
+    /// <summary>
+    /// Toggles one instance in the selection set (Shift+LMB).
+    /// </summary>
+    public void ApplyViewportPickToggle(PlacedAsset picked)
     {
         ToggleSelectionId(picked.Id);
         var label = AssetDefinitions.FirstOrDefault(d =>
                 string.Equals(d.Id, picked.AssetDefinitionId, StringComparison.Ordinal))
             ?.DisplayName ?? picked.AssetDefinitionId;
         StatusText = $"Auswahl: {label}";
+    }
+
+    /// <summary>
+    /// Selects every placed instance that shares the same asset definition (Alt+LMB).
+    /// </summary>
+    public void SelectAssetsSameDefinition(PlacedAsset picked)
+    {
+        var ids = PlacedAssets
+            .Where(p => string.Equals(p.AssetDefinitionId, picked.AssetDefinitionId, StringComparison.Ordinal))
+            .Select(p => p.Id);
+        SetSelectionIds(ids);
+        var label = AssetDefinitions.FirstOrDefault(d =>
+                string.Equals(d.Id, picked.AssetDefinitionId, StringComparison.Ordinal))
+            ?.DisplayName ?? picked.AssetDefinitionId;
+        StatusText = $"Auswahl: alles „{label}“";
     }
 
     public void SetSelectionIds(IEnumerable<string> ids)
@@ -506,6 +566,31 @@ public sealed partial class MainViewModel : ObservableObject
         {
             SelectedAssetIds.Add(id);
         }
+    }
+
+    /// <summary>
+    /// Box/circle selection from the viewport (Shift = additive).
+    /// </summary>
+    public void ApplyViewportBrushSelection(IEnumerable<string> ids, bool additive)
+    {
+        var list = ids.Distinct(StringComparer.Ordinal).ToList();
+        if (!additive)
+        {
+            SetSelectionIds(list);
+            StatusText = $"Auswahl: {list.Count} Objekt(e)";
+            return;
+        }
+
+        var hs = SelectedAssetIds.ToHashSet(StringComparer.Ordinal);
+        foreach (var id in list)
+        {
+            if (!hs.Contains(id))
+            {
+                SelectedAssetIds.Add(id);
+            }
+        }
+
+        StatusText = $"Auswahl erweitert (+{list.Count})";
     }
 
     private void ToggleSelectionId(string id)
@@ -595,6 +680,8 @@ public sealed partial class MainViewModel : ObservableObject
             CurrentFilePath = path;
             HasUnsavedChanges = false;
             History.Clear();
+
+            ResetViewportModesAfterDocumentSwitch();
 
             StatusText = "Layout geladen";
             NotifyUndoRedoCommands();

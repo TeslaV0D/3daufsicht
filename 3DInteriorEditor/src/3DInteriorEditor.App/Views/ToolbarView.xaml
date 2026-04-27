@@ -119,7 +119,7 @@
                     MinWidth="40"
                     Margin="0,0,4,0"
                     Padding="8,4"
-                    ToolTip="Verschieben — Shift+Drag (XZ)"
+                    ToolTip="Verschieben (G) — Ziehen im Viewport im Verschieben-Modus"
                     Command="{Binding SetTransformToolCommand}">
               <Button.CommandParameter>
                 <x:Static Member="vm:TransformMode.Translate" />
@@ -141,7 +141,7 @@
                     MinWidth="40"
                     Margin="0,0,4,0"
                     Padding="8,4"
-                    ToolTip="Drehen — Alt+Drag (Yaw)"
+                    ToolTip="Drehen (R) — Ziehen im Viewport im Drehen-Modus"
                     Command="{Binding SetTransformToolCommand}">
               <Button.CommandParameter>
                 <x:Static Member="vm:TransformMode.Rotate" />
@@ -162,7 +162,7 @@
             <Button MinHeight="40"
                     MinWidth="40"
                     Padding="8,4"
-                    ToolTip="Skalieren — Strg+Umschalt+Drag"
+                    ToolTip="Skalieren (S) — Ziehen im Viewport im Skalieren-Modus"
                     Command="{Binding SetTransformToolCommand}">
               <Button.CommandParameter>
                 <x:Static Member="vm:TransformMode.Scale" />
