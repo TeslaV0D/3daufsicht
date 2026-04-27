@@ -95,5 +95,26 @@
 
 ### Notes
 
-- The 3D viewport + toolbars/sidebars UI wiring comes in Phase 6/7; Phase 5 focuses on **state ownership** and MVVM seams.
+- Phase 5 focuses on **state ownership** and MVVM seams. Phase 6 adds the main chrome (menu/toolbar/sidebars) and binds it to VM commands.
+
+## Phase 6 (Main window chrome)
+
+### What’s implemented
+
+- `Views/MainWindow.xaml`:
+  - `Grid` shell: fixed **240px** left sidebar, **280px** right sidebar, **48px** toolbar row, **28px** status row, centered **viewport placeholder** (`TextBlock`)
+  - `Menu` + `Command` key bindings for early `MainViewModel` file actions (New/Open/Save/Save As)
+- `Views/ToolbarView.xaml`:
+  - **48px** row with primary file actions bound to `MainViewModel` (`New`, `Open`, `Save`, `Save As`) plus a mode badge (`ModeLabel`)
+- `Views/AssetLibraryPanel.xaml`:
+  - Search box + refresh (`RefreshFilterCommand`) + `ItemsControl` bound to `AssetLibraryViewModel.FilteredDefinitions`
+  - Bottom line shows filtered count via `FilteredCount`
+- `Views/InspectorPanel.xaml`:
+  - Header bound to `InspectorViewModel.HeaderText` + a small summary card (`PlacedAssets.Count`, `AssetDefinitions.Count`)
+- ViewModel polish:
+  - `AssetLibraryViewModel`: `RefreshFilterCommand`, `FilteredCount`, and explicit filter refresh notifications
+
+### Notes
+
+- Undo/Redo + 3D interaction are still placeholders; wiring to `HistoryService` and the viewport comes in later phases.
 

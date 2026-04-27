@@ -1,0 +1,79 @@
+<UserControl x:Class="_3DInteriorEditor.App.Views.ToolbarView"
+               xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+               xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+               xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+               xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+               xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+               mc:Ignorable="d"
+               d:DesignHeight="48"
+               d:DesignWidth="1280">
+
+  <materialDesign:ColorZone Mode="PrimaryMid"
+                             Padding="8,0"
+                             materialDesign:ElevationAssist.Elevation="Dp2"
+                             Background="{DynamicResource App.PanelBrush}">
+    <DockPanel LastChildFill="True">
+
+      <!-- Primary actions -->
+      <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
+        <Button Style="{DynamicResource MaterialDesignFlatButton}"
+                Command="{Binding NewLayoutCommand}"
+                Margin="0,0,8,0"
+                MinHeight="44"
+                ToolTip="Neu (Strg+N)">
+          <StackPanel Orientation="Horizontal">
+            <materialDesign:PackIcon Kind="FileOutline" VerticalAlignment="Center" />
+            <TextBlock Margin="8,0,0,0" VerticalAlignment="Center" Text="Neu" />
+          </StackPanel>
+        </Button>
+
+        <Button Style="{DynamicResource MaterialDesignFlatButton}"
+                Command="{Binding OpenLayoutCommand}"
+                Margin="0,0,8,0"
+                MinHeight="44"
+                ToolTip="Öffnen (Strg+O)">
+          <StackPanel Orientation="Horizontal">
+            <materialDesign:PackIcon Kind="FolderOpenOutline" VerticalAlignment="Center" />
+            <TextBlock Margin="8,0,0,0" VerticalAlignment="Center" Text="Öffnen" />
+          </StackPanel>
+        </Button>
+
+        <Button Style="{DynamicResource MaterialDesignFlatButton}"
+                Command="{Binding SaveLayoutCommand}"
+                Margin="0,0,8,0"
+                MinHeight="44"
+                ToolTip="Speichern (Strg+S)">
+          <StackPanel Orientation="Horizontal">
+            <materialDesign:PackIcon Kind="ContentSaveOutline" VerticalAlignment="Center" />
+            <TextBlock Margin="8,0,0,0" VerticalAlignment="Center" Text="Speichern" />
+          </StackPanel>
+        </Button>
+
+        <Button Style="{DynamicResource MaterialDesignFlatButton}"
+                Command="{Binding SaveLayoutAsCommand}"
+                Margin="0,0,8,0"
+                MinHeight="44"
+                ToolTip="Speichern unter (Strg+Shift+S)">
+          <StackPanel Orientation="Horizontal">
+            <materialDesign:PackIcon Kind="ContentSaveMoveOutline" VerticalAlignment="Center" />
+            <TextBlock Margin="8,0,0,0" VerticalAlignment="Center" Text="Speichern unter" />
+          </StackPanel>
+        </Button>
+      </StackPanel>
+
+      <!-- Mode badge -->
+      <Border DockPanel.Dock="Right"
+              Margin="12,6"
+              Padding="10,4"
+              CornerRadius="6"
+              Background="{DynamicResource App.ElevatedBrush}">
+        <TextBlock VerticalAlignment="Center"
+                   FontSize="12"
+                   FontWeight="SemiBold"
+                   Foreground="{DynamicResource App.TextSecondaryBrush}"
+                   Text="{Binding ModeLabel}" />
+      </Border>
+
+    </DockPanel>
+  </materialDesign:ColorZone>
+</UserControl>

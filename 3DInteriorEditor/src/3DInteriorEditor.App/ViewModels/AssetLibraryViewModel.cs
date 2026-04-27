@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using _3DInteriorEditor.App.Data;
 using _3DInteriorEditor.App.Models;
 
@@ -31,6 +32,12 @@ public sealed partial class AssetLibraryViewModel : ObservableObject
     partial void OnSearchTextChanged(string value) => ApplyFilter();
 
     /// <summary>
+    /// Explicit refresh (toolbar button); useful after programmatic catalog changes.
+    /// </summary>
+    [RelayCommand]
+    private void RefreshFilter() => ApplyFilter();
+
+    /// <summary>
     /// Re-applies the current search filter.
     /// </summary>
     public void ApplyFilter()
@@ -53,7 +60,14 @@ public sealed partial class AssetLibraryViewModel : ObservableObject
                 FilteredDefinitions.Add(def);
             }
         }
+
+        OnPropertyChanged(nameof(FilteredCount));
     }
+
+    /// <summary>
+    /// Convenience count for bindings.
+    /// </summary>
+    public int FilteredCount => FilteredDefinitions.Count;
 
     private void ResetFilter()
     {

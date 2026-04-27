@@ -11,6 +11,12 @@ public sealed partial class InspectorViewModel : ObservableObject
     [ObservableProperty]
     private IReadOnlyList<PlacedAsset> _selectedAssets = Array.Empty<PlacedAsset>();
 
+    partial void OnSelectedAssetsChanged(IReadOnlyList<PlacedAsset> value)
+    {
+        OnPropertyChanged(nameof(SelectedCount));
+        OnPropertyChanged(nameof(HeaderText));
+    }
+
     /// <summary>
     /// Number of currently selected assets.
     /// </summary>
@@ -32,7 +38,5 @@ public sealed partial class InspectorViewModel : ObservableObject
     public void SetSelection(IReadOnlyList<PlacedAsset> selected)
     {
         SelectedAssets = selected;
-        OnPropertyChanged(nameof(SelectedCount));
-        OnPropertyChanged(nameof(HeaderText));
     }
 }
