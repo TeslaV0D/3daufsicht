@@ -1,4 +1,3 @@
-using System.Text;
 using System.IO;
 using System.Text.Json;
 using _3DInteriorEditor.App.Models;
@@ -11,8 +10,6 @@ namespace _3DInteriorEditor.App.Services;
 /// </summary>
 public sealed class FileService
 {
-    private static readonly UTF8Encoding Utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
-
     /// <summary>
     /// Loads a layout file from disk.
     /// </summary>
