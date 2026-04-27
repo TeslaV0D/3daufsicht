@@ -29,5 +29,6 @@ From repo root:
 - ✅ Phase 9: undo/redo UX (`HistoryService`: snapshot before placement, toolbar + Bearbeiten menu + Strg+Z / Strg+Y)
 - ✅ Phase 10: selection model (selected ids in `MainViewModel`), Ctrl+click toggle selection, viewport highlight + inspector selection list
 - ✅ Phase 11: keyboard transforms (move/rotate/delete) with undo snapshots + inspector shows pos/rot
+- ✅ Phase 12: duplicate selection (Ctrl+D) + fine move/rotate steps (Shift modifiers) + toolbar/edit menu shortcuts
 - ⏳ Next: gizmo/drag transforms, mesh import rendering, richer inspector fields
 

@@ -81,6 +81,22 @@
                 ToolTip="Wiederholen (Strg+Y)">
           <materialDesign:PackIcon Kind="RedoVariant" VerticalAlignment="Center" />
         </Button>
+
+        <Button Style="{DynamicResource MaterialDesignFlatButton}"
+                Command="{Binding DuplicateSelectedCommand}"
+                Margin="0,0,8,0"
+                MinHeight="44"
+                ToolTip="Duplizieren (Strg+D)">
+          <materialDesign:PackIcon Kind="ContentDuplicate" VerticalAlignment="Center" />
+        </Button>
+
+        <Button Style="{DynamicResource MaterialDesignFlatButton}"
+                Command="{Binding DeleteSelectedCommand}"
+                Margin="0,0,8,0"
+                MinHeight="44"
+                ToolTip="Löschen (Entf)">
+          <materialDesign:PackIcon Kind="TrashCanOutline" VerticalAlignment="Center" />
+        </Button>
       </StackPanel>
 
       <!-- Mode badge -->

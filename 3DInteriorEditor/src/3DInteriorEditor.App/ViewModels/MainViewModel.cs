@@ -235,10 +235,12 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
-        // Fine nudge when Shift is held (wired via separate key bindings).
-        var step = Constants.SnapUnitDefault;
+        var step = direction.EndsWith("Fine", StringComparison.Ordinal)
+            ? Constants.SnapUnitDefault * 0.1
+            : Constants.SnapUnitDefault;
 
-        (double dx, double dz) = direction switch
+        var dir = direction.Replace("Fine", "", StringComparison.Ordinal);
+        (double dx, double dz) = dir switch
         {
             "Left" => (-step, 0d),
             "Right" => (step, 0d),
@@ -276,8 +278,12 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
-        var step = Constants.RotationSnapDegrees;
-        var delta = direction switch
+        var step = direction.EndsWith("Fine", StringComparison.Ordinal)
+            ? 5.0
+            : Constants.RotationSnapDegrees;
+
+        var dir = direction.Replace("Fine", "", StringComparison.Ordinal);
+        var delta = dir switch
         {
             "Left" => -step,
             "Right" => step,
@@ -340,6 +346,62 @@ public sealed partial class MainViewModel : ObservableObject
     private bool CanRedo() => History.CanRedo;
 
     private bool HasAnySelection() => SelectedAssetIds.Count > 0;
+
+    [RelayCommand(CanExecute = nameof(HasAnySelection))]
+    private void DuplicateSelected()
+    {
+        if (SelectedAssetIds.Count == 0)
+        {
+            return;
+        }
+
+        History.Push(PlacedAssets.ToList(), CurrentSelectionIds());
+
+        var selectedIds = SelectedAssetIds.ToList();
+        var newIds = new List<string>();
+
+        foreach (var id in selectedIds)
+        {
+            var src = PlacedAssets.FirstOrDefault(p => string.Equals(p.Id, id, StringComparison.Ordinal));
+            if (src is null)
+            {
+                continue;
+            }
+
+            var copyId = Guid.NewGuid().ToString("N");
+            var copy = CloneAsset(src, positionMeters: new JsonVector3
+            {
+                X = src.PositionMeters.X + Constants.PasteOffsetX,
+                Y = src.PositionMeters.Y,
+                Z = src.PositionMeters.Z + Constants.PasteOffsetZ,
+            });
+
+            // CloneAsset keeps id; override id for the new instance.
+            copy = new PlacedAsset
+            {
+                Id = copyId,
+                AssetDefinitionId = copy.AssetDefinitionId,
+                PositionMeters = copy.PositionMeters,
+                RotationDegrees = copy.RotationDegrees,
+                DimensionsMeters = copy.DimensionsMeters,
+                ColorHex = copy.ColorHex,
+                Metadata = copy.Metadata,
+                IsVisible = copy.IsVisible,
+            };
+
+            PlacedAssets.Add(copy);
+            newIds.Add(copyId);
+        }
+
+        if (newIds.Count > 0)
+        {
+            SetSelectionIds(newIds);
+        }
+
+        MarkDirty();
+        NotifyUndoRedoCommands();
+        StatusText = "Dupliziert";
+    }
 
     private HistorySnapshot CaptureSnapshot()
     {

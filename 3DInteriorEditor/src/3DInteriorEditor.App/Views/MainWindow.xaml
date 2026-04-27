@@ -20,14 +20,22 @@
     <KeyBinding Key="Z" Modifiers="Control" Command="{Binding UndoCommand}" />
     <KeyBinding Key="Y" Modifiers="Control" Command="{Binding RedoCommand}" />
     <KeyBinding Key="Delete" Command="{Binding DeleteSelectedCommand}" />
+    <KeyBinding Key="D" Modifiers="Control" Command="{Binding DuplicateSelectedCommand}" />
 
     <KeyBinding Key="Left" Command="{Binding NudgeSelectedCommand}" CommandParameter="Left" />
     <KeyBinding Key="Right" Command="{Binding NudgeSelectedCommand}" CommandParameter="Right" />
     <KeyBinding Key="Up" Command="{Binding NudgeSelectedCommand}" CommandParameter="Forward" />
     <KeyBinding Key="Down" Command="{Binding NudgeSelectedCommand}" CommandParameter="Back" />
 
+    <KeyBinding Key="Left" Modifiers="Shift" Command="{Binding NudgeSelectedCommand}" CommandParameter="LeftFine" />
+    <KeyBinding Key="Right" Modifiers="Shift" Command="{Binding NudgeSelectedCommand}" CommandParameter="RightFine" />
+    <KeyBinding Key="Up" Modifiers="Shift" Command="{Binding NudgeSelectedCommand}" CommandParameter="ForwardFine" />
+    <KeyBinding Key="Down" Modifiers="Shift" Command="{Binding NudgeSelectedCommand}" CommandParameter="BackFine" />
+
     <KeyBinding Key="Q" Command="{Binding RotateSelectedCommand}" CommandParameter="Left" />
     <KeyBinding Key="E" Command="{Binding RotateSelectedCommand}" CommandParameter="Right" />
+    <KeyBinding Key="Q" Modifiers="Shift" Command="{Binding RotateSelectedCommand}" CommandParameter="LeftFine" />
+    <KeyBinding Key="E" Modifiers="Shift" Command="{Binding RotateSelectedCommand}" CommandParameter="RightFine" />
   </Window.InputBindings>
 
   <Grid>
@@ -54,6 +62,13 @@
         <MenuItem Header="_Wiederholen"
                   InputGestureText="Strg+Y"
                   Command="{Binding RedoCommand}" />
+        <Separator />
+        <MenuItem Header="_Duplizieren"
+                  InputGestureText="Strg+D"
+                  Command="{Binding DuplicateSelectedCommand}" />
+        <MenuItem Header="_Löschen"
+                  InputGestureText="Entf"
+                  Command="{Binding DeleteSelectedCommand}" />
       </MenuItem>
     </Menu>
 

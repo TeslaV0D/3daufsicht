@@ -69,7 +69,7 @@
       </Border.Effect>
       <TextBlock FontSize="11"
                  Foreground="{DynamicResource App.TextSecondaryBrush}">
-        <Run Text="Linke Maustaste: Drehen · Rechte/Mitte: Schwenken · Rad: Zoom · Strg+Klick: Auswahl · Pfeile: Move · Q/E: Rotate · Entf: Delete" />
+        <Run Text="Orbit/Pan/Zoom · Strg+Klick: Select · Pfeile: Move · Shift+Pfeile: Fine · Q/E: Rotate · Shift+Q/E: Fine · Strg+D: Duplicate · Entf: Delete" />
       </TextBlock>
     </Border>
   </Grid>

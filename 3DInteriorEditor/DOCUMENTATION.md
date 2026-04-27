@@ -200,3 +200,21 @@
 
 - This phase intentionally uses **keyboard transforms** to avoid introducing a full gizmo/drag-manipulation system yet.
 
+## Phase 12 (Duplicate + fine steps)
+
+### What’s implemented
+
+- Duplicate:
+  - `MainViewModel.DuplicateSelectedCommand` duplicates selected instances (new ids) with offset `Constants.PasteOffsetX/Z`.
+  - Bound to **Ctrl+D** and available in **Bearbeiten → Duplizieren** and the toolbar.
+- Fine steps:
+  - `NudgeSelectedCommand` supports `*Fine` directions (Shift+Arrow) for \(0.1 \times\) `Constants.SnapUnitDefault`.
+  - `RotateSelectedCommand` supports `*Fine` (Shift+Q/E) using 5° steps.
+- UI polish:
+  - Toolbar buttons for Duplicate / Delete.
+  - Viewport hint text updated with the new shortcuts.
+
+### Notes
+
+- Duplicate uses the same undo pattern as other edits: history is captured **before** mutation.
+
