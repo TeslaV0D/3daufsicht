@@ -931,6 +931,21 @@ input {
   background: radial-gradient(circle at top left, #12202e 0%, #050a11 75%);
 }
 
+/* Presentation + inspector column visible (read-only) */
+.workspace.view-mode.workspace--view-with-inspector {
+  grid-template-columns: 0 1fr 320px;
+  background: radial-gradient(circle at top left, #12202e 0%, #050a11 75%);
+}
+
+.workspace.view-mode.workspace--view-with-inspector .panel.right {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+  padding: inherit;
+  border-color: inherit;
+  overflow: auto;
+}
+
 .workspace.view-mode .scene-wrapper {
   cursor: pointer;
 }
