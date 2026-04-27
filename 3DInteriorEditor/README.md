@@ -24,5 +24,6 @@ From repo root:
 - ✅ Phase 4: `Services/*` file IO + auto-save loop + undo/redo history (no UI wiring yet)
 - ✅ Phase 5: MVVM skeleton (`MainViewModel`, `AssetLibraryViewModel`, `InspectorViewModel`) + window composition
 - ✅ Phase 6: main window chrome (menu, 48px toolbar, 240/280 sidebars, status bar) + Asset Library / Inspector panels bound to VMs
-- ⏳ Next: Phase 7 (3D viewport host + orbit/pan/zoom interaction)
+- ✅ Phase 7: `HelixViewport3D` viewport host + built-in orbit / pan / zoom (reference grid + coordinate triad)
+- ⏳ Next: scene graph for layout content (placed assets, meshes, picking)
 

@@ -52,13 +52,9 @@
         <views:AssetLibraryPanel />
       </Border>
 
-      <Border Grid.Column="1">
-        <Grid>
-          <TextBlock HorizontalAlignment="Center"
-                     VerticalAlignment="Center"
-                     Foreground="{DynamicResource App.TextSecondaryBrush}"
-                     Text="Phase 6 chrome — viewport comes in Phase 7" />
-        </Grid>
+      <Border Grid.Column="1"
+              Background="{DynamicResource App.BackgroundBrush}">
+        <views:ViewportPanel />
       </Border>
 
       <Border Grid.Column="2"

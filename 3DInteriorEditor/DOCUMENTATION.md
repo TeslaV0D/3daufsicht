@@ -116,5 +116,19 @@
 
 ### Notes
 
-- Undo/Redo + 3D interaction are still placeholders; wiring to `HistoryService` and the viewport comes in later phases.
+- Phase 6 intentionally stopped at chrome + MVVM seams; Phase 7 adds the 3D viewport host. Undo/redo remains service-level until wired to the UI.
+
+## Phase 7 (3D viewport host)
+
+### What’s implemented
+
+- `Views/ViewportPanel.xaml`:
+  - `HelixToolkit.Wpf` `HelixViewport3D` as the central editor viewport (`ZoomExtentsWhenLoaded`, `RotateAroundMouseDownPoint`)
+  - Default **Y-up** scene: `PerspectiveCamera`, `SunLight`, ground-aligned `GridLinesVisual3D` (XZ plane), thin `BoxVisual3D` ground slab, `CoordinateSystemVisual3D`
+  - On-screen hint for mouse controls (rotate / pan / zoom)
+- `Views/MainWindow.xaml`: center column hosts `ViewportPanel` instead of the Phase 6 placeholder text
+
+### Notes
+
+- Navigation uses Helix **built-in** camera handlers (no custom manipulation code in this phase). Scene graph content for placed assets arrives in a later phase.
 
