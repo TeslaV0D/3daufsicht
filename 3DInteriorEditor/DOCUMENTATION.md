@@ -147,3 +147,20 @@
 
 - Imported mesh paths (`AssetDefinition.ImportedModelPath`) are not rendered yet — definitions still draw as primitives using instance dimensions.
 
+## Phase 9 (Undo / Redo UX)
+
+### What’s implemented
+
+- `HistoryService` integration in `MainViewModel`:
+  - **`History.Push`** records the document state **before** `PlaceAssetFromLibrary` runs (deep-copied lists + selection ids via `DeepCopy`).
+  - **`Undo` / `Redo`** commands capture `HistorySnapshot`, move between undo/redo stacks (`PushRedo` / `PushUndo`), then **`ApplySnapshot`** rebuilds `PlacedAssets`, syncs layout, restores inspector selection, and **`MarkDirty`**.
+- UI:
+  - **Toolbar**: separator + undo/redo icon buttons (`UndoCommand`, `RedoCommand`).
+  - **Menu** `Bearbeiten`: Rückgängig / Wiederholen with gesture hints.
+  - **Shortcuts**: Strg+Z / Strg+Y on the main window (`KeyBinding`).
+- Commands use **`CanExecute`** (`History.CanUndo` / `History.CanRedo`); **`NotifyUndoRedoCommands`** runs after placement, undo/redo, new layout, and successful open.
+
+### Notes
+
+- Undo history is cleared on **Neu** and **Öffnen** (`History.Clear`). Further editing actions should call the same **`History.Push`** pattern before mutating scene data.
+

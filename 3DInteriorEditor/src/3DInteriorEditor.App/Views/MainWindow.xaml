@@ -17,6 +17,8 @@
     <KeyBinding Key="O" Modifiers="Control" Command="{Binding OpenLayoutCommand}" />
     <KeyBinding Key="S" Modifiers="Control" Command="{Binding SaveLayoutCommand}" />
     <KeyBinding Key="S" Modifiers="Control+Shift" Command="{Binding SaveLayoutAsCommand}" />
+    <KeyBinding Key="Z" Modifiers="Control" Command="{Binding UndoCommand}" />
+    <KeyBinding Key="Y" Modifiers="Control" Command="{Binding RedoCommand}" />
   </Window.InputBindings>
 
   <Grid>
@@ -34,6 +36,15 @@
         <Separator />
         <MenuItem Header="_Speichern" InputGestureText="Strg+S" Command="{Binding SaveLayoutCommand}" />
         <MenuItem Header="Speichern _unter…" InputGestureText="Strg+Umschalt+S" Command="{Binding SaveLayoutAsCommand}" />
+      </MenuItem>
+
+      <MenuItem Header="_Bearbeiten">
+        <MenuItem Header="_Rückgängig"
+                  InputGestureText="Strg+Z"
+                  Command="{Binding UndoCommand}" />
+        <MenuItem Header="_Wiederholen"
+                  InputGestureText="Strg+Y"
+                  Command="{Binding RedoCommand}" />
       </MenuItem>
     </Menu>
 

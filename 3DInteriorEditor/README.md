@@ -26,5 +26,6 @@ From repo root:
 - ✅ Phase 6: main window chrome (menu, 48px toolbar, 240/280 sidebars, status bar) + Asset Library / Inspector panels bound to VMs
 - ✅ Phase 7: `HelixViewport3D` viewport host + built-in orbit / pan / zoom (reference grid + coordinate triad)
 - ✅ Phase 8: scene sync for `PlacedAssets` (primitive shapes via Helix), double-click library to place, Strg+click pick → inspector
-- ⏳ Next: transforms / gizmos, mesh import rendering, undo-redo UX
+- ✅ Phase 9: undo/redo UX (`HistoryService`: snapshot before placement, toolbar + Bearbeiten menu + Strg+Z / Strg+Y)
+- ⏳ Next: transforms / gizmo, mesh import rendering, richer inspector fields
 

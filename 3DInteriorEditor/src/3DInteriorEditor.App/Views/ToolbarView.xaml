@@ -59,6 +59,28 @@
             <TextBlock Margin="8,0,0,0" VerticalAlignment="Center" Text="Speichern unter" />
           </StackPanel>
         </Button>
+
+        <Rectangle Width="1"
+                   Height="28"
+                   Margin="10,0,12,0"
+                   VerticalAlignment="Center"
+                   Fill="{DynamicResource App.BorderBrush}" />
+
+        <Button Style="{DynamicResource MaterialDesignFlatButton}"
+                Command="{Binding UndoCommand}"
+                Margin="0,0,8,0"
+                MinHeight="44"
+                ToolTip="Rückgängig (Strg+Z)">
+          <materialDesign:PackIcon Kind="UndoVariant" VerticalAlignment="Center" />
+        </Button>
+
+        <Button Style="{DynamicResource MaterialDesignFlatButton}"
+                Command="{Binding RedoCommand}"
+                Margin="0,0,8,0"
+                MinHeight="44"
+                ToolTip="Wiederholen (Strg+Y)">
+          <materialDesign:PackIcon Kind="RedoVariant" VerticalAlignment="Center" />
+        </Button>
       </StackPanel>
 
       <!-- Mode badge -->

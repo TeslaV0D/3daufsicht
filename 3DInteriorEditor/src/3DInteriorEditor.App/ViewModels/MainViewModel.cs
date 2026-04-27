@@ -105,6 +105,7 @@ public sealed partial class MainViewModel : ObservableObject
         HasUnsavedChanges = false;
         History.Clear();
         StatusText = "Neues Layout";
+        NotifyUndoRedoCommands();
     }
 
     [RelayCommand]
@@ -165,6 +166,8 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
+        History.Push(PlacedAssets.ToList(), CurrentSelectionIds());
+
         var dims = definition.DefaultDimensionsMeters;
         var halfY = dims.Y * 0.5;
 
@@ -187,6 +190,79 @@ public sealed partial class MainViewModel : ObservableObject
 
         PlacedAssets.Add(placed);
         MarkDirty();
+        NotifyUndoRedoCommands();
+    }
+
+    [RelayCommand(CanExecute = nameof(CanUndo))]
+    private void Undo()
+    {
+        var current = CaptureSnapshot();
+        if (!History.TryUndo(out var prev) || prev is null)
+        {
+            return;
+        }
+
+        History.PushRedo(current);
+        ApplySnapshot(prev);
+        StatusText = "Rückgängig";
+        NotifyUndoRedoCommands();
+    }
+
+    private bool CanUndo() => History.CanUndo;
+
+    [RelayCommand(CanExecute = nameof(CanRedo))]
+    private void Redo()
+    {
+        var current = CaptureSnapshot();
+        if (!History.TryRedo(out var next) || next is null)
+        {
+            return;
+        }
+
+        History.PushUndo(current);
+        ApplySnapshot(next);
+        StatusText = "Wiederholen";
+        NotifyUndoRedoCommands();
+    }
+
+    private bool CanRedo() => History.CanRedo;
+
+    private HistorySnapshot CaptureSnapshot()
+    {
+        return new HistorySnapshot
+        {
+            Assets = DeepCopy.CloneList(PlacedAssets),
+            SelectedAssetIds = DeepCopy.CloneList(CurrentSelectionIds()),
+        };
+    }
+
+    private void ApplySnapshot(HistorySnapshot snap)
+    {
+        PlacedAssets.Clear();
+        foreach (var a in snap.Assets)
+        {
+            PlacedAssets.Add(a);
+        }
+
+        SyncCollectionsToLayout();
+
+        var selected = snap.SelectedAssetIds
+            .Select(id => PlacedAssets.FirstOrDefault(p => string.Equals(p.Id, id, StringComparison.Ordinal)))
+            .Where(a => a is not null)
+            .Cast<PlacedAsset>()
+            .ToList();
+
+        Inspector.SetSelection(selected);
+        MarkDirty();
+    }
+
+    private List<string> CurrentSelectionIds() =>
+        Inspector.SelectedAssets.Select(a => a.Id).ToList();
+
+    private void NotifyUndoRedoCommands()
+    {
+        UndoCommand.NotifyCanExecuteChanged();
+        RedoCommand.NotifyCanExecuteChanged();
     }
 
     /// <summary>
@@ -231,6 +307,7 @@ public sealed partial class MainViewModel : ObservableObject
             History.Clear();
 
             StatusText = "Layout geladen";
+            NotifyUndoRedoCommands();
         }
         catch (Exception ex)
         {
