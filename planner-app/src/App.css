@@ -1160,6 +1160,8 @@ input {
   border-top: 1px solid rgba(42, 60, 84, 0.6);
   display: flex;
   justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.5rem;
   flex-shrink: 0;
 }
 
@@ -1178,6 +1180,113 @@ input {
   color: #fff;
 }
 
+.presentation-details-footer-spacer {
+  flex: 1;
+  min-width: 0.5rem;
+}
+
+.presentation-details-btn-edit {
+  padding: 0.45rem 0.9rem;
+  font-size: 0.8rem;
+  border-radius: 0.4rem;
+  border: 1px solid #3d6a9a;
+  background: #1a3a52;
+  color: #e0ecf8;
+  cursor: pointer;
+}
+
+.presentation-details-btn-edit:hover {
+  background: #224a68;
+  color: #fff;
+}
+
+.presentation-details-btn-primary {
+  padding: 0.45rem 0.9rem;
+  font-size: 0.8rem;
+  border-radius: 0.4rem;
+  border: 1px solid #4a8a5a;
+  background: #1e4a32;
+  color: #e8f5ec;
+  cursor: pointer;
+}
+
+.presentation-details-btn-primary:hover {
+  background: #256340;
+  color: #fff;
+}
+
+.presentation-details-btn-secondary {
+  padding: 0.45rem 0.9rem;
+  font-size: 0.8rem;
+  border-radius: 0.4rem;
+  border: 1px solid #3a4f68;
+  background: #1e2a3a;
+  color: #b8c5d4;
+  cursor: pointer;
+}
+
+.presentation-details-btn-secondary:hover {
+  background: #26364a;
+  color: #f0f6ff;
+}
+
+.presentation-details-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin: 0;
+}
+
+.presentation-details-form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+}
+
+.presentation-details-form-label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #7a8fa8;
+  font-weight: 600;
+}
+
+.presentation-details-input,
+.presentation-details-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.4rem 0.55rem;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  font-family: inherit;
+  color: #e8f0f8;
+  background: #0d1218;
+  border: 1px solid #3a4f68;
+  border-radius: 0.35rem;
+  outline: none;
+}
+
+.presentation-details-textarea {
+  min-height: 4.5rem;
+  resize: vertical;
+}
+
+.presentation-details-textarea--notes {
+  min-height: 5rem;
+}
+
+.presentation-details-input:focus,
+.presentation-details-textarea:focus {
+  border-color: #5a8ac4;
+  box-shadow: 0 0 0 1px rgba(90, 138, 196, 0.35);
+}
+
+.presentation-details-form-hint {
+  margin: 0.1rem 0 0;
+  font-size: 0.7rem;
+  line-height: 1.4;
+  color: #6b7f95;
+}
 
 @keyframes asset-info-enter {
   from {

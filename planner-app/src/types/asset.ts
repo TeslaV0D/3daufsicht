@@ -117,6 +117,8 @@ export interface CustomMetadataRow {
 export interface AssetMetadata {
   name?: string
   description?: string
+  /** Freitext, z. B. im Präsentations-Dialog bearbeitet (Sitzungs-/Auftrags-Notizen). */
+  presentationNotes?: string
   zoneType?: string
   /**
    * Text content for text/label assets. Rendered by the label primitive
@@ -398,6 +400,8 @@ export function sanitizeMetadata(value: unknown): AssetMetadata {
     return {
       name: typeof entry.name === 'string' ? entry.name : undefined,
       description: typeof entry.description === 'string' ? entry.description : undefined,
+      presentationNotes:
+        typeof entry.presentationNotes === 'string' ? entry.presentationNotes : undefined,
       zoneType: typeof entry.zoneType === 'string' ? entry.zoneType : undefined,
       text: typeof entry.text === 'string' ? entry.text : undefined,
       customData: dataOut,
