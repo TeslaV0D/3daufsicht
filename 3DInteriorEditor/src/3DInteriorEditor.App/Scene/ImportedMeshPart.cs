@@ -1,5 +1,6 @@
 using System.Windows.Media;
 using System.Windows.Media.Media3D;
+using GltfAlphaMode = SharpGLTF.Schema2.AlphaMode;
 using TextureWrapMode = SharpGLTF.Schema2.TextureWrapMode;
 
 namespace _3DInteriorEditor.App.Scene;
@@ -41,4 +42,14 @@ public sealed class ImportedMeshPart
     /// <see cref="GeometryModel3D.Material"/> only so back faces are not lit (WPF back-face culling style).
     /// </summary>
     public bool DoubleSided { get; init; }
+
+    /// <summary>
+    /// glTF <see cref="GltfAlphaMode"/> (opaque / mask / blend). Blend uses base-color factor alpha in materials.
+    /// </summary>
+    public GltfAlphaMode AlphaMode { get; init; }
+
+    /// <summary>
+    /// glTF <c>material.alphaCutoff</c>; used when <see cref="AlphaMode"/> is MASK (viewport does not evaluate cutout pixels yet).
+    /// </summary>
+    public float AlphaCutoff { get; init; }
 }

@@ -5,6 +5,7 @@ using System.Windows.Media.Media3D;
 using SharpGLTF.Runtime;
 using SharpGLTF.Schema2;
 using SharpGLTF.Transforms;
+using GltfAlphaMode = SharpGLTF.Schema2.AlphaMode;
 using GltfMaterial = SharpGLTF.Schema2.Material;
 using _3DInteriorEditor.App.Models;
 
@@ -126,6 +127,8 @@ public static class GltfModelLoader
     {
         var mat = primitive.Material;
         var doubleSided = mat?.DoubleSided ?? false;
+        var alphaMode = mat?.Alpha ?? GltfAlphaMode.OPAQUE;
+        var alphaCutoff = mat?.AlphaCutoff ?? 0.5f;
 
         var albedo = GltfAlbedoResolver.TryResolve(mat);
 
@@ -199,6 +202,8 @@ public static class GltfModelLoader
                 ? GltfSamplerBitmapScalingMapping.ToBitmapScalingMode(albedo.MagFilter, albedo.MinFilter)
                 : null,
             DoubleSided = doubleSided,
+            AlphaMode = alphaMode,
+            AlphaCutoff = alphaCutoff,
         };
     }
 }

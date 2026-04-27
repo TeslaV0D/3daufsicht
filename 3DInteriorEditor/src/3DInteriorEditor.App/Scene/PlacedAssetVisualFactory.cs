@@ -1,6 +1,7 @@
 using System.Windows.Media;
 using System.Windows.Media.Media3D;
 using HelixToolkit.Wpf;
+using GltfAlphaMode = SharpGLTF.Schema2.AlphaMode;
 using TextureWrapMode = SharpGLTF.Schema2.TextureWrapMode;
 using _3DInteriorEditor.App.Helpers;
 using _3DInteriorEditor.App.Models;
@@ -97,15 +98,45 @@ public static class PlacedAssetVisualFactory
             RenderOptions.SetBitmapScalingMode(ib, part.BaseColorBitmapScalingMode ?? BitmapScalingMode.HighQuality);
             ib.Freeze();
             var mat = MaterialHelper.CreateMaterial(ib, 100.0, (byte)255, true);
-            ApplyBaseColorFactorTint(mat, part.BaseColorRgb ?? Colors.White);
+            ApplyBaseColorFactorTint(mat, ResolveFactorTint(part));
             return mat;
         }
 
-        string hex = part.BaseColorRgb is { } rgb
-            ? ColorHexHelper.ToRgbHex(rgb)
-            : placementColorHex;
+        var diffuseColor = ResolveDiffuseColor(part, placementColorHex);
+        return MaterialHelper.CreateMaterial(ColorHexHelper.ToDiffuseBrush(diffuseColor));
+    }
 
-        return MaterialHelper.CreateMaterial(ColorHexHelper.ToDiffuseBrush(hex));
+    /// <summary>
+    /// Base color factor tint; uses full alpha only for <see cref="GltfAlphaMode.BLEND"/>.
+    /// </summary>
+    private static Color ResolveFactorTint(ImportedMeshPart part)
+    {
+        var c = part.BaseColorRgb ?? Colors.White;
+        if (part.AlphaMode == GltfAlphaMode.BLEND)
+        {
+            return c;
+        }
+
+        return Color.FromArgb(255, c.R, c.G, c.B);
+    }
+
+    /// <summary>
+    /// Diffuse fill when there is no base-color texture — respects blend alpha when a glTF factor exists.
+    /// </summary>
+    private static Color ResolveDiffuseColor(ImportedMeshPart part, string placementHex)
+    {
+        if (part.BaseColorRgb is { } rgb)
+        {
+            if (part.AlphaMode == GltfAlphaMode.BLEND)
+            {
+                return rgb;
+            }
+
+            return Color.FromArgb(255, rgb.R, rgb.G, rgb.B);
+        }
+
+        ColorHexHelper.TryParseColor(placementHex, out var placement);
+        return Color.FromArgb(255, placement.R, placement.G, placement.B);
     }
 
     /// <summary>

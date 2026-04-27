@@ -415,3 +415,18 @@
 
 - This is a **rasterization** approximation; it is not a full glTF **front-face** / winding test, but it matches the common “no back pass” reading of **`doubleSided: false`** for the viewport.
 
+## Phase 27 (glTF alpha mode + base-color factor alpha)
+
+### What’s implemented
+
+- **`Scene/GltfAlbedoResolver.cs`**: Base color factor includes **alpha** (**`Vector4.W`**) via **`Color.FromArgb`**.
+- **`Scene/GltfModelLoader.cs`**: Copies **`material.alpha`** (**`AlphaMode`**) and **`material.alphaCutoff`** per primitive (cutoff default **0.5** when absent, matching glTF).
+- **`Scene/ImportedMeshPart.cs`**: **`AlphaMode`** + **`AlphaCutoff`** alongside **`BaseColorRgb`** (**`Color`** may carry **A &lt; 255**).
+- **`Helpers/ColorHexHelper.cs`**: **`ToDiffuseBrush(Color)`** overload for brushes that preserve alpha.
+- **`Scene/PlacedAssetVisualFactory.cs`**: **BLEND** uses full **factor** tint alpha on diffuse / textured paths; **OPAQUE** / **MASK** force **factor** tint **A = 255** for the multiplier (texture pixels can still carry alpha from PNG/JPEG). **Selection** remains an opaque accent.
+
+### Notes
+
+- **MASK** / **`alphaCutoff`** does **not** implement **alpha testing** (no per-pixel discard); textures may still show soft edges via bitmap alpha.
+- **Viewport** transparency sorting for overlapping translucent meshes is **not** addressed (general WPF 3D limitation).
+

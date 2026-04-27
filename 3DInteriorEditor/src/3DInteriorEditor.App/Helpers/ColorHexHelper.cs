@@ -60,7 +60,12 @@ public static class ColorHexHelper
     public static SolidColorBrush ToDiffuseBrush(string? hex)
     {
         TryParseColor(hex, out var c);
-        var brush = new SolidColorBrush(c);
+        return ToDiffuseBrush(c);
+    }
+
+    public static SolidColorBrush ToDiffuseBrush(Color color)
+    {
+        var brush = new SolidColorBrush(color);
         brush.Freeze();
         return brush;
     }

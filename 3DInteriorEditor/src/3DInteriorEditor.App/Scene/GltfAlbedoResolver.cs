@@ -5,6 +5,7 @@ using SharpGLTF.Memory;
 using SharpGLTF.Schema2;
 using GltfMaterial = SharpGLTF.Schema2.Material;
 using GltfTexture = SharpGLTF.Schema2.Texture;
+using GltfAlphaMode = SharpGLTF.Schema2.AlphaMode;
 
 namespace _3DInteriorEditor.App.Scene;
 
@@ -128,7 +129,7 @@ internal static class GltfAlbedoResolver
         {
             var v = channel.Color;
             static byte ToByte(float f) => (byte)Math.Clamp((int)MathF.Round(f * 255f), 0, 255);
-            return Color.FromRgb(ToByte(v.X), ToByte(v.Y), ToByte(v.Z));
+            return Color.FromArgb(ToByte(v.W), ToByte(v.X), ToByte(v.Y), ToByte(v.Z));
         }
         catch (InvalidOperationException)
         {
