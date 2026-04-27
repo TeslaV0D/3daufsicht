@@ -14,7 +14,10 @@
                        Background="{DynamicResource App.BackgroundBrush}"
                        ZoomExtentsWhenLoaded="True"
                        RotateAroundMouseDownPoint="True"
-                       PreviewMouseLeftButtonDown="Viewport_OnPreviewMouseLeftButtonDown">
+                       PreviewMouseLeftButtonDown="Viewport_OnPreviewMouseLeftButtonDown"
+                       PreviewMouseMove="Viewport_OnPreviewMouseMove"
+                       PreviewMouseLeftButtonUp="Viewport_OnPreviewMouseLeftButtonUp"
+                       LostMouseCapture="Viewport_OnLostMouseCapture">
 
       <!-- Y-up scene: floor lies in XZ at y = 0 -->
       <h:HelixViewport3D.DefaultCamera>
@@ -69,7 +72,7 @@
       </Border.Effect>
       <TextBlock FontSize="11"
                  Foreground="{DynamicResource App.TextSecondaryBrush}">
-        <Run Text="Orbit/Pan/Zoom · Strg+Klick: Select · Pfeile: Move · Shift+Pfeile: Fine · Q/E: Rotate · Shift+Q/E: Fine · Strg+D: Duplicate · Entf: Delete" />
+        <Run Text="Orbit/Pan/Zoom · Strg+Klick: Select · Shift+Drag: Move · Pfeile: Move · Shift+Pfeile: Fine · Q/E: Rotate · Shift+Q/E: Fine · Strg+D: Duplicate · Entf: Delete" />
       </TextBlock>
     </Border>
   </Grid>

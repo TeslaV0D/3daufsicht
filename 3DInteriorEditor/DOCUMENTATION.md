@@ -250,3 +250,21 @@
 - Materials from the glTF file are not mapped yet — all triangles use the instance **color** (`PlacedAsset.ColorHex` / selection tint).
 - Skinning / animation / morph targets are not evaluated beyond the default **bind pose** for placement and bounds.
 
+## Phase 15 (Viewport drag translate)
+
+### What’s implemented
+
+- **Shift+Drag translation** in the viewport (`Views/ViewportPanel.xaml(.cs)`):
+  - **Shift + left mouse drag** moves a placed instance on a plane parallel to the floor (XZ) at the asset’s current **Y** height.
+  - Drag starts when the cursor hits a placed asset (hit-tested via `PlacedAssetScenePresenter`).
+  - Drag forces **single selection** (so we edit exactly one instance).
+- **Undo integration** (`ViewModels/MainViewModel.ViewportDragging.cs`):
+  - A single `History.Push(...)` is taken **once** at drag start.
+  - During drag, updates do **not** push additional history entries.
+  - Inspector transform text fields update live via `RefreshInspectorTransformFieldsFromScene()`.
+
+### Notes
+
+- This is a “gizmo-light” interaction that avoids conflicting with Helix camera orbit/pan/zoom gestures.
+- Rotation and scaling drags are deferred to later phases.
+

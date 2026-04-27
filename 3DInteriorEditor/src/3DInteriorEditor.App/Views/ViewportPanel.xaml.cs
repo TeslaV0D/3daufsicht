@@ -1,5 +1,7 @@
 using System.Windows;
+using System.Windows.Media.Media3D;
 using System.Windows.Input;
+using HelixToolkit.Wpf;
 using _3DInteriorEditor.App.Scene;
 using _3DInteriorEditor.App.ViewModels;
 
@@ -11,6 +13,12 @@ namespace _3DInteriorEditor.App.Views;
 public partial class ViewportPanel
 {
     private PlacedAssetScenePresenter? _presenter;
+    private bool _isTranslateDragging;
+    private string? _dragAssetId;
+    private double _dragPlaneY;
+    private Point3D _dragStartWorld;
+    private double _dragStartX;
+    private double _dragStartZ;
 
     public ViewportPanel()
     {
@@ -35,6 +43,13 @@ public partial class ViewportPanel
 
     private void Viewport_OnPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
+        // Phase 15: Shift+drag translates selection on a plane (XZ at asset Y).
+        if (Keyboard.Modifiers == ModifierKeys.Shift)
+        {
+            TryBeginTranslateDrag(e);
+            return;
+        }
+
         if (Keyboard.Modifiers != ModifierKeys.Control)
         {
             return;
@@ -55,5 +70,122 @@ public partial class ViewportPanel
 
         e.Handled = true;
         vm.ApplyViewportPick(picked);
+    }
+
+    private void Viewport_OnPreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (!_isTranslateDragging || _dragAssetId is null)
+        {
+            return;
+        }
+
+        if (DataContext is not MainViewModel vm)
+        {
+            CancelTranslateDrag();
+            return;
+        }
+
+        var pt = e.GetPosition(Viewport.Viewport);
+        if (!TryUnprojectToPlaneY(pt, _dragPlaneY, out var world))
+        {
+            return;
+        }
+
+        var dx = world.X - _dragStartWorld.X;
+        var dz = world.Z - _dragStartWorld.Z;
+
+        vm.ApplyViewportTranslateDrag(_dragAssetId, _dragStartX + dx, _dragStartZ + dz);
+        e.Handled = true;
+    }
+
+    private void Viewport_OnPreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (!_isTranslateDragging)
+        {
+            return;
+        }
+
+        if (DataContext is MainViewModel vm)
+        {
+            vm.EndViewportTranslateDrag();
+        }
+
+        CancelTranslateDrag();
+        e.Handled = true;
+    }
+
+    private void Viewport_OnLostMouseCapture(object sender, MouseEventArgs e)
+    {
+        if (!_isTranslateDragging)
+        {
+            return;
+        }
+
+        if (DataContext is MainViewModel vm)
+        {
+            vm.EndViewportTranslateDrag();
+        }
+
+        CancelTranslateDrag();
+    }
+
+    private void TryBeginTranslateDrag(MouseButtonEventArgs e)
+    {
+        if (_presenter is null || DataContext is not MainViewModel vm)
+        {
+            return;
+        }
+
+        if (vm.Mode != EditorMode.Edit || vm.TransformMode != TransformMode.Translate)
+        {
+            return;
+        }
+
+        var pt = e.GetPosition(Viewport.Viewport);
+        if (!_presenter.TryPickPlaced(pt, out var picked) || picked is null)
+        {
+            return;
+        }
+
+        // Force a single selection for dragging.
+        vm.SetSelectionIds(new[] { picked.Id });
+
+        _dragAssetId = picked.Id;
+        _dragPlaneY = picked.PositionMeters.Y;
+        _dragStartX = picked.PositionMeters.X;
+        _dragStartZ = picked.PositionMeters.Z;
+
+        if (!TryUnprojectToPlaneY(pt, _dragPlaneY, out _dragStartWorld))
+        {
+            _dragAssetId = null;
+            return;
+        }
+
+        _isTranslateDragging = true;
+        vm.BeginViewportTranslateDrag();
+
+        e.Handled = true;
+        Viewport.CaptureMouse();
+    }
+
+    private void CancelTranslateDrag()
+    {
+        _isTranslateDragging = false;
+        _dragAssetId = null;
+        Viewport.ReleaseMouseCapture();
+    }
+
+    private bool TryUnprojectToPlaneY(Point viewportPointPixels, double planeY, out Point3D world)
+    {
+        world = default;
+
+        var ray = Viewport3DHelper.Point2DtoRay3D(Viewport.Viewport, viewportPointPixels);
+        if (ray is null)
+        {
+            return false;
+        }
+
+        var normal = new Vector3D(0, 1, 0);
+        return ray.PlaneIntersection(new Point3D(0, planeY, 0), normal, out world);
     }
 }
