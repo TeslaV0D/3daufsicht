@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
@@ -78,6 +79,8 @@ public sealed partial class MainViewModel : ObservableObject
         Inspector = new InspectorViewModel();
 
         SelectedAssetIds.CollectionChanged += (_, _) => SyncSelectionToInspector();
+
+        InspectorMetadataRows.CollectionChanged += (_, _) => OnPropertyChanged(nameof(InspectorMetadataEmptyVisible));
 
         BootstrapLayoutCollections();
         RefreshInspectorSelection();
@@ -505,7 +508,8 @@ public sealed partial class MainViewModel : ObservableObject
         JsonVector3? rotationDegrees = null,
         JsonVector3? dimensionsMeters = null,
         string? colorHex = null,
-        bool? isVisible = null)
+        bool? isVisible = null,
+        IReadOnlyDictionary<string, string>? metadata = null)
     {
         return new PlacedAsset
         {
@@ -515,7 +519,9 @@ public sealed partial class MainViewModel : ObservableObject
             RotationDegrees = rotationDegrees ?? a.RotationDegrees,
             DimensionsMeters = dimensionsMeters ?? a.DimensionsMeters,
             ColorHex = colorHex ?? a.ColorHex,
-            Metadata = new Dictionary<string, string>(a.Metadata, StringComparer.Ordinal),
+            Metadata = metadata is not null
+                ? new Dictionary<string, string>(metadata, StringComparer.Ordinal)
+                : new Dictionary<string, string>(a.Metadata, StringComparer.Ordinal),
             IsVisible = isVisible ?? a.IsVisible,
         };
     }

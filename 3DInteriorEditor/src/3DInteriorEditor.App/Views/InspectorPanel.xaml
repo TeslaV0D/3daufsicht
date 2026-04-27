@@ -5,6 +5,7 @@
                xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
                xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
                xmlns:helpers="clr-namespace:_3DInteriorEditor.App.Helpers"
+               xmlns:viewModels="clr-namespace:_3DInteriorEditor.App.ViewModels"
                mc:Ignorable="d"
                d:DesignWidth="280">
 
@@ -192,6 +193,70 @@
                 <Button Margin="6,0,0,0"
                         Style="{DynamicResource MaterialDesignOutlinedButton}"
                         Command="{Binding ResetInspectorAppearanceCommand}"
+                        Content="Zurücksetzen" />
+              </UniformGrid>
+            </StackPanel>
+          </Border>
+
+          <!-- Phase 19: metadata (template keys + instance values) -->
+          <Border Margin="0,0,0,12"
+                  Padding="10"
+                  CornerRadius="10"
+                  Background="{DynamicResource App.ElevatedBrush}"
+                  Visibility="{Binding IsInspectorTransformVisible, Converter={StaticResource BoolToVis}}">
+            <StackPanel>
+              <TextBlock Margin="0,0,0,10"
+                         FontWeight="SemiBold"
+                         Foreground="{DynamicResource App.TextPrimaryBrush}"
+                         Text="Metadaten" />
+
+              <TextBlock Margin="0,0,0,8"
+                         FontSize="11"
+                         Foreground="{DynamicResource App.TextSecondaryBrush}"
+                         Text="Schlüssel aus Vorlage; zusätzliche Schlüssel aus der Instanz. Übernehmen speichert alle Werte."
+                         TextWrapping="Wrap" />
+
+              <TextBlock Margin="0,0,0,10"
+                         FontSize="11"
+                         Foreground="{DynamicResource App.TextSecondaryBrush}"
+                         Text="Keine Metadatenfelder für diese Auswahl."
+                         TextWrapping="Wrap"
+                         Visibility="{Binding InspectorMetadataEmptyVisible, Converter={StaticResource BoolToVis}}" />
+
+              <ItemsControl ItemsSource="{Binding InspectorMetadataRows}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate DataType="{x:Type viewModels:InspectorMetadataRowViewModel}">
+                    <Grid Margin="0,0,0,8">
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" MaxWidth="118" />
+                        <ColumnDefinition Width="12" />
+                        <ColumnDefinition Width="2*" />
+                      </Grid.ColumnDefinitions>
+                      <TextBlock Grid.Column="0"
+                                 VerticalAlignment="Center"
+                                 FontSize="12"
+                                 Foreground="{DynamicResource App.TextSecondaryBrush}"
+                                 Text="{Binding Key}"
+                                 TextTrimming="CharacterEllipsis"
+                                 ToolTip="{Binding Key}" />
+                      <TextBox Grid.Column="2"
+                               materialDesign:HintAssist.Hint="Wert"
+                               Style="{DynamicResource MaterialDesignOutlinedTextBox}"
+                               FontSize="12"
+                               Text="{Binding ValueText, UpdateSourceTrigger=PropertyChanged}" />
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+
+              <UniformGrid Margin="0,4,0,0" Columns="2">
+                <Button Margin="0,0,6,0"
+                        Style="{DynamicResource MaterialDesignRaisedButton}"
+                        Command="{Binding ApplyInspectorMetadataCommand}"
+                        Content="Übernehmen" />
+                <Button Margin="6,0,0,0"
+                        Style="{DynamicResource MaterialDesignOutlinedButton}"
+                        Command="{Binding ResetInspectorMetadataCommand}"
                         Content="Zurücksetzen" />
               </UniformGrid>
             </StackPanel>

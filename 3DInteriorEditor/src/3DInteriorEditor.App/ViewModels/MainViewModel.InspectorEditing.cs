@@ -8,7 +8,7 @@ namespace _3DInteriorEditor.App.ViewModels;
 
 /// <summary>
 /// Inspector numeric editing for a single selected <see cref="Models.PlacedAsset"/> (Phase 13).
-/// Appearance (dimensions + color): Phase 18.
+/// Appearance (dimensions + color): Phase 18. Metadata: Phase 19.
 /// </summary>
 public sealed partial class MainViewModel
 {
@@ -168,6 +168,7 @@ public sealed partial class MainViewModel
             ClearInspectorAppearanceTexts();
             NotifyInspectorTransformCommands();
             NotifyInspectorAppearanceCommands();
+            RebuildInspectorMetadataRows();
             return;
         }
 
@@ -179,6 +180,7 @@ public sealed partial class MainViewModel
             ClearInspectorAppearanceTexts();
             NotifyInspectorTransformCommands();
             NotifyInspectorAppearanceCommands();
+            RebuildInspectorMetadataRows();
             return;
         }
 
@@ -196,6 +198,8 @@ public sealed partial class MainViewModel
 
         NotifyInspectorTransformCommands();
         NotifyInspectorAppearanceCommands();
+
+        RebuildInspectorMetadataRows();
     }
 
     /// <summary>

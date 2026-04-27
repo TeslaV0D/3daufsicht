@@ -308,3 +308,16 @@
 
 - Applying appearance does **not** implicitly apply transform text fields (two independent **Übernehmen** actions).
 
+## Phase 19 (Inspector metadata)
+
+### What’s implemented
+
+- **`ViewModels/InspectorMetadataRowViewModel.cs`**: one row = **key** (read-only) + **ValueText** (editable).
+- **`ViewModels/MainViewModel.InspectorMetadata.cs`**: `InspectorMetadataRows` is built for the **single** selected `PlacedAsset` by merging **definition** `MetadataTemplates` keys and **instance** `Metadata.Keys` (sorted).
+- **`ApplyInspectorMetadataCommand`**: **`History.Push(...)`**, then **`CloneAsset(..., metadata: dict)`** storing the edited dictionary (`MainViewModel.CloneAsset` extended with optional metadata replace).
+- **`InspectorMetadataEmptyVisible`** + caption when the merged key set is empty but one asset remains selected.
+
+### Notes
+
+- Metadata edits are independent of transform / Maße+Farb **Übernehmen** buttons.
+

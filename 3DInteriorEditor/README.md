@@ -36,5 +36,6 @@ From repo root:
 - ✅ Phase 16: viewport drag rotate yaw (Alt+Drag) with undo snapshot + inspector live update
 - ✅ Phase 17: viewport drag uniform scale (Strg+Umschalt+Drag) with undo snapshot
 - ✅ Phase 18: inspector dimensions + color (#RRGGBB), palette swatches, undo on apply (single selection)
-- ⏳ Next: richer gizmo UX, inspector metadata/other fields, optional glTF material mapping
+- ✅ Phase 19: inspector metadata key/value editor (template + instance keys), undo on apply (single selection)
+- ⏳ Next: richer gizmo UX (transform mode toolbar), optional glTF material mapping, further polish
 
