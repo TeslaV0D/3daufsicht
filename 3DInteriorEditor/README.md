@@ -38,6 +38,7 @@ From repo root:
 - ✅ Phase 18: inspector dimensions + color (#RRGGBB), palette swatches, undo on apply (single selection)
 - ✅ Phase 19: inspector metadata key/value editor (template + instance keys), undo on apply (single selection)
 - ✅ Phase 20: toolbar transform modes (translate / rotate / scale) + viewport drag gestures gated by active mode
-- ✅ Phase 21: glTF **baseColor** / **diffuse** **factor** → per-part viewport diffuse (textures still optional / later)
-- ⏳ Next: optional **baseColorTexture** sampling, further polish / UX
+- ✅ Phase 21: glTF **baseColor** / **diffuse** **factor** → per-part viewport diffuse
+- ✅ Phase 22: glTF **baseColorTexture** / **diffuseTexture** + UVs (`TEXCOORD_*`) → **ImageBrush** viewport materials (factor tint multiply approximated)
+- ⏳ Next: further polish / UX (transform extension, precise sampler mapping, …)
 

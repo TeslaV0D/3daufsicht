@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using System.IO;
 using System.Numerics;
-using System.Windows.Media;
 using System.Windows.Media.Media3D;
 using SharpGLTF.Runtime;
 using SharpGLTF.Schema2;
@@ -125,12 +124,17 @@ public static class GltfModelLoader
         Vector3 center,
         float uniformScale)
     {
-        var diffuseRgb = TryResolveDiffuseFactorRgb(primitive.Material);
+        var albedo = GltfAlbedoResolver.TryResolve(primitive.Material);
+
+        var canSampleTexture =
+            albedo.Texture is not null
+            && primitive.TexCoordsCount > albedo.UvSetIndex;
 
         var mesh = new MeshGeometry3D();
         var positions = mesh.Positions;
         var normals = mesh.Normals;
         var indices = mesh.TriangleIndices;
+        var texCoords = mesh.TextureCoordinates;
 
         foreach (var (a, b, c) in primitive.TriangleIndices)
         {
@@ -151,6 +155,12 @@ public static class GltfModelLoader
                 }
 
                 normals.Add(new Vector3D(n.X, n.Y, n.Z));
+
+                if (canSampleTexture)
+                {
+                    var uv = primitive.GetTextureCoord(idx, albedo.UvSetIndex);
+                    texCoords.Add(new System.Windows.Point(uv.X, 1.0 - uv.Y));
+                }
             }
 
             var baseIdx = positions.Count;
@@ -167,44 +177,18 @@ public static class GltfModelLoader
             return null;
         }
 
+        if (canSampleTexture && texCoords.Count != positions.Count)
+        {
+            texCoords.Clear();
+            canSampleTexture = false;
+        }
+
         mesh.Freeze();
         return new ImportedMeshPart
         {
             Geometry = mesh,
-            BaseColorRgb = diffuseRgb,
+            BaseColorRgb = albedo.FactorRgb,
+            BaseColorTexture = canSampleTexture ? albedo.Texture : null,
         };
-    }
-
-    /// <summary>
-    /// Reads metallic-roughness <c>baseColorFactor</c> or spec-gloss <c>diffuseFactor</c> (factor only; textures ignored).
-    /// </summary>
-    private static Color? TryResolveDiffuseFactorRgb(GltfMaterial? material)
-    {
-        if (material is null)
-        {
-            return null;
-        }
-
-        foreach (var key in new[] { "BaseColor", "Diffuse" })
-        {
-            var channel = material.FindChannel(key);
-            if (!channel.HasValue)
-            {
-                continue;
-            }
-
-            try
-            {
-                var v = channel.Value.Color;
-                static byte ToByte(float f) => (byte)Math.Clamp((int)MathF.Round(f * 255f), 0, 255);
-                return Color.FromRgb(ToByte(v.X), ToByte(v.Y), ToByte(v.Z));
-            }
-            catch (InvalidOperationException)
-            {
-                // Channel exists but RGB/RGBA layout is unexpected — try next channel name.
-            }
-        }
-
-        return null;
     }
 }

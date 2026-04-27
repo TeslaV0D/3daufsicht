@@ -1,3 +1,4 @@
+using System.Windows.Media;
 using System.Windows.Media.Media3D;
 using HelixToolkit.Wpf;
 using _3DInteriorEditor.App.Helpers;
@@ -59,22 +60,7 @@ public static class PlacedAssetVisualFactory
         var group = new Model3DGroup();
         foreach (var part in parts)
         {
-            string hex;
-            if (isSelected)
-            {
-                hex = selectionHex;
-            }
-            else if (part.BaseColorRgb is { } rgb)
-            {
-                hex = ColorHexHelper.ToRgbHex(rgb);
-            }
-            else
-            {
-                hex = placementColorHex;
-            }
-
-            var fill = ColorHexHelper.ToDiffuseBrush(hex);
-            var material = MaterialHelper.CreateMaterial(fill);
+            var material = CreateImportedPartMaterial(part, placementColorHex, selectionHex, isSelected);
             group.Children.Add(new GeometryModel3D
             {
                 Geometry = part.Geometry,
@@ -84,6 +70,57 @@ public static class PlacedAssetVisualFactory
         }
 
         return new ModelVisual3D { Content = group };
+    }
+
+    private static Material CreateImportedPartMaterial(
+        ImportedMeshPart part,
+        string placementColorHex,
+        string selectionHex,
+        bool isSelected)
+    {
+        if (isSelected)
+        {
+            return MaterialHelper.CreateMaterial(ColorHexHelper.ToDiffuseBrush(selectionHex));
+        }
+
+        if (part.BaseColorTexture is { } texSrc)
+        {
+            var ib = new ImageBrush(texSrc)
+            {
+                TileMode = TileMode.Tile,
+                Stretch = Stretch.Fill,
+            };
+            ib.Freeze();
+            var mat = MaterialHelper.CreateMaterial(ib, 100.0, (byte)255, true);
+            ApplyBaseColorFactorTint(mat, part.BaseColorRgb ?? Colors.White);
+            return mat;
+        }
+
+        string hex = part.BaseColorRgb is { } rgb
+            ? ColorHexHelper.ToRgbHex(rgb)
+            : placementColorHex;
+
+        return MaterialHelper.CreateMaterial(ColorHexHelper.ToDiffuseBrush(hex));
+    }
+
+    /// <summary>
+    /// Approximates glTF baseColorFactor × texture by tinting WPF diffuse materials.
+    /// </summary>
+    private static void ApplyBaseColorFactorTint(Material material, Color factor)
+    {
+        switch (material)
+        {
+            case DiffuseMaterial dm:
+                dm.Color = factor;
+                return;
+            case MaterialGroup mg:
+                foreach (var child in mg.Children)
+                {
+                    ApplyBaseColorFactorTint(child, factor);
+                }
+
+                break;
+        }
     }
 
     private static ModelVisual3D CreateBox(JsonVector3 dim, Material material)
