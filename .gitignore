@@ -1,0 +1,15 @@
+# Local SDK + package caches (keep local, not in git)
+tools/dotnet/
+.nuget/packages/
+.worktrees/
+
+# .NET
+**/bin/
+**/obj/
+
+# VS
+.vs/
+
+# Logs / temp
+*.log
+*.tmp

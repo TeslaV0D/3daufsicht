@@ -1,0 +1,83 @@
+<UserControl x:Class="_3DInteriorEditor.App.Views.AssetLibraryPanel"
+               xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+               xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+               xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+               xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+               xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+               mc:Ignorable="d"
+               d:DesignWidth="240">
+
+  <DockPanel Background="{DynamicResource App.PanelBrush}">
+    <Border DockPanel.Dock="Top" Padding="12,12,12,8">
+      <DockPanel LastChildFill="True">
+        <Button DockPanel.Dock="Right"
+                Style="{DynamicResource MaterialDesignIconForegroundButton}"
+                Margin="8,0,0,0"
+                MinWidth="44"
+                MinHeight="44"
+                ToolTip="Filter aktualisieren"
+                Command="{Binding Library.RefreshFilterCommand}">
+          <materialDesign:PackIcon Kind="Refresh" />
+        </Button>
+
+        <TextBox MinHeight="44"
+                 materialDesign:HintAssist.Hint="Suche…"
+                 materialDesign:TextFieldAssist.DecorationVisibility="Collapsed"
+                 Style="{DynamicResource MaterialDesignOutlinedTextBox}"
+                 Text="{Binding Library.SearchText, UpdateSourceTrigger=PropertyChanged}" />
+      </DockPanel>
+    </Border>
+
+    <Border DockPanel.Dock="Bottom" Padding="12,8,12,12">
+      <TextBlock FontSize="11"
+                 Foreground="{DynamicResource App.TextSecondaryBrush}"
+                 TextWrapping="Wrap"
+                 Text="{Binding Library.FilteredCount, StringFormat=Vorlagen (gefiltert): {0}}" />
+    </Border>
+
+    <ScrollViewer Padding="12,0,12,12" VerticalScrollBarVisibility="Auto">
+      <ItemsControl ItemsSource="{Binding Library.FilteredDefinitions}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <Border Margin="0,0,0,10"
+                    Padding="10"
+                    CornerRadius="10"
+                    Background="{DynamicResource App.ElevatedBrush}">
+              <DockPanel LastChildFill="True">
+                <materialDesign:PackIcon DockPanel.Dock="Left"
+                                         Width="28"
+                                         Height="28"
+                                         Margin="0,0,10,0"
+                                         VerticalAlignment="Top"
+                                         Kind="CubeOutline"
+                                         Foreground="{DynamicResource App.AccentBrush}" />
+
+                <StackPanel>
+                  <TextBlock FontWeight="SemiBold"
+                             Text="{Binding DisplayName}"
+                             TextTrimming="CharacterEllipsis" />
+                  <TextBlock Margin="0,4,0,0"
+                             FontSize="12"
+                             Foreground="{DynamicResource App.TextSecondaryBrush}"
+                             Text="{Binding CategoryName}"
+                             TextTrimming="CharacterEllipsis" />
+
+                  <TextBlock Margin="0,8,0,0"
+                             FontSize="11"
+                             Foreground="{DynamicResource App.TextSecondaryBrush}">
+                    <Run Text="{Binding DefaultDimensionsMeters.X, Mode=OneWay, StringFormat={}{0:0.##}}" />
+                    <Run Text="×" />
+                    <Run Text="{Binding DefaultDimensionsMeters.Y, Mode=OneWay, StringFormat={}{0:0.##}}" />
+                    <Run Text="×" />
+                    <Run Text="{Binding DefaultDimensionsMeters.Z, Mode=OneWay, StringFormat={}{0:0.##}}" />
+                    <Run Text=" m" />
+                  </TextBlock>
+                </StackPanel>
+              </DockPanel>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </ScrollViewer>
+  </DockPanel>
+</UserControl>

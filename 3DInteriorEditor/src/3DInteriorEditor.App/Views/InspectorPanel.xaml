@@ -1,0 +1,56 @@
+<UserControl x:Class="_3DInteriorEditor.App.Views.InspectorPanel"
+               xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+               xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+               xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+               xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+               xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+               mc:Ignorable="d"
+               d:DesignWidth="280">
+
+  <DockPanel Background="{DynamicResource App.PanelBrush}">
+    <Border DockPanel.Dock="Top" Padding="12,12,12,10">
+      <DockPanel LastChildFill="True">
+        <materialDesign:PackIcon DockPanel.Dock="Left"
+                                 Kind="Tune"
+                                 Margin="0,0,10,0"
+                                 VerticalAlignment="Center"
+                                 Foreground="{DynamicResource App.AccentBrush}" />
+        <StackPanel>
+          <TextBlock FontWeight="SemiBold"
+                     Text="{Binding Inspector.HeaderText}" />
+          <TextBlock Margin="0,4,0,0"
+                     FontSize="12"
+                     Foreground="{DynamicResource App.TextSecondaryBrush}"
+                     Text="Selektion/Gizmo folgt in späteren Phasen" />
+        </StackPanel>
+      </DockPanel>
+    </Border>
+
+    <ScrollViewer Padding="12,0,12,12" VerticalScrollBarVisibility="Auto">
+      <materialDesign:Card Padding="12"
+                           materialDesign:ElevationAssist.Elevation="Dp1">
+        <StackPanel>
+          <TextBlock FontSize="13"
+                     Foreground="{DynamicResource App.TextSecondaryBrush}"
+                     Text="Noch keine Felder aktiv — Platzierung/Auswahl kommt später." />
+
+          <Separator Margin="0,12,0,12"
+                     Background="{DynamicResource App.BorderBrush}" />
+
+          <TextBlock FontSize="12"
+                     Foreground="{DynamicResource App.TextSecondaryBrush}">
+            Assets:
+            <Run Text="{Binding PlacedAssets.Count, Mode=OneWay}" />
+          </TextBlock>
+
+          <TextBlock Margin="0,10,0,0"
+                     FontSize="12"
+                     Foreground="{DynamicResource App.TextSecondaryBrush}">
+            Vorlagen im Dokument:
+            <Run Text="{Binding AssetDefinitions.Count, Mode=OneWay}" />
+          </TextBlock>
+        </StackPanel>
+      </materialDesign:Card>
+    </ScrollViewer>
+  </DockPanel>
+</UserControl>
