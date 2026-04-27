@@ -38,6 +38,11 @@ public static class Constants
     public const double RotationSnapDegrees = 15.0;
 
     /// <summary>
+    /// Viewport Alt+drag rotation: degrees of yaw (Y) per horizontal pixel.
+    /// </summary>
+    public const double ViewportRotateDragDegreesPerPixel = 0.35;
+
+    /// <summary>
     /// Minimum asset dimension along any axis (meters).
     /// </summary>
     public const double MinAssetDimension = 0.1;

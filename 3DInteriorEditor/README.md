@@ -33,5 +33,6 @@ From repo root:
 - ✅ Phase 13: inspector transform editor (single selection) with apply/reset, invariant number parsing, history on apply
 - ✅ Phase 14: glTF/glB mesh import rendering (`ImportedModelPath`), path resolution vs layout + app `samples/`, uniform fit to instance dimensions, built-in sample cube asset
 - ✅ Phase 15: viewport drag translate (Shift+Drag) on XZ plane with undo snapshot + inspector live update
-- ⏳ Next: rotate/scale drag, more inspector properties (dims, color, …), optional glTF material mapping
+- ✅ Phase 16: viewport drag rotate yaw (Alt+Drag) with undo snapshot + inspector live update
+- ⏳ Next: scale drag / richer gizmo UX, more inspector properties (dims, color, …), optional glTF material mapping
 

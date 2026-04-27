@@ -3,11 +3,12 @@ using _3DInteriorEditor.App.Models;
 namespace _3DInteriorEditor.App.ViewModels;
 
 /// <summary>
-/// Viewport-driven interactive transforms (Phase 15).
+/// Viewport-driven interactive transforms (Phase 15–16).
 /// </summary>
 public sealed partial class MainViewModel
 {
     private bool _isViewportTranslateDragActive;
+    private bool _isViewportRotateDragActive;
 
     /// <summary>
     /// Starts a translate drag operation (pushes undo snapshot once).
@@ -68,6 +69,67 @@ public sealed partial class MainViewModel
 
         _isViewportTranslateDragActive = false;
         StatusText = "Verschoben";
+    }
+
+    /// <summary>
+    /// Starts a rotate drag operation (pushes undo snapshot once).
+    /// </summary>
+    public void BeginViewportRotateDrag()
+    {
+        if (_isViewportRotateDragActive)
+        {
+            return;
+        }
+
+        if (SelectedAssetIds.Count != 1)
+        {
+            return;
+        }
+
+        _isViewportRotateDragActive = true;
+        History.Push(PlacedAssets.ToList(), CurrentSelectionIds());
+        NotifyUndoRedoCommands();
+        StatusText = "Drehen…";
+    }
+
+    /// <summary>
+    /// Applies a rotate drag update (no additional history snapshots).
+    /// </summary>
+    public void ApplyViewportRotateDrag(string assetId, double rotationYDegrees)
+    {
+        if (!_isViewportRotateDragActive)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(assetId))
+        {
+            return;
+        }
+
+        UpdatePlacedAsset(assetId, a => CloneAsset(a, rotationDegrees: new JsonVector3
+        {
+            X = a.RotationDegrees.X,
+            Y = rotationYDegrees,
+            Z = a.RotationDegrees.Z,
+        }));
+
+        MarkDirty();
+        RefreshInspectorTransformFieldsFromScene();
+    }
+
+    /// <summary>
+    /// Ends a rotate drag operation.
+    /// </summary>
+    public void EndViewportRotateDrag()
+    {
+        if (!_isViewportRotateDragActive)
+        {
+            return;
+        }
+
+        _isViewportRotateDragActive = false;
+        StatusText = "Gedreht";
     }
 }
 

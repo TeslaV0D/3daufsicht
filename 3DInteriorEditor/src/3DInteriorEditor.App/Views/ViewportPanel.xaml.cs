@@ -4,6 +4,7 @@ using System.Windows.Input;
 using HelixToolkit.Wpf;
 using _3DInteriorEditor.App.Scene;
 using _3DInteriorEditor.App.ViewModels;
+using Constants = _3DInteriorEditor.App.Constants;
 
 namespace _3DInteriorEditor.App.Views;
 
@@ -14,11 +15,14 @@ public partial class ViewportPanel
 {
     private PlacedAssetScenePresenter? _presenter;
     private bool _isTranslateDragging;
+    private bool _isRotateDragging;
     private string? _dragAssetId;
     private double _dragPlaneY;
     private Point3D _dragStartWorld;
     private double _dragStartX;
     private double _dragStartZ;
+    private double _rotatePointerStartX;
+    private double _rotateStartYawDegrees;
 
     public ViewportPanel()
     {
@@ -50,6 +54,13 @@ public partial class ViewportPanel
             return;
         }
 
+        // Phase 16: Alt+drag rotates selection around world Y (yaw).
+        if (Keyboard.Modifiers == ModifierKeys.Alt)
+        {
+            TryBeginRotateDrag(e);
+            return;
+        }
+
         if (Keyboard.Modifiers != ModifierKeys.Control)
         {
             return;
@@ -74,59 +85,92 @@ public partial class ViewportPanel
 
     private void Viewport_OnPreviewMouseMove(object sender, MouseEventArgs e)
     {
-        if (!_isTranslateDragging || _dragAssetId is null)
+        if (_isTranslateDragging && _dragAssetId is not null)
         {
+            if (DataContext is not MainViewModel vm)
+            {
+                CancelTranslateDrag();
+                return;
+            }
+
+            var pt = e.GetPosition(Viewport.Viewport);
+            if (!TryUnprojectToPlaneY(pt, _dragPlaneY, out var world))
+            {
+                return;
+            }
+
+            var dx = world.X - _dragStartWorld.X;
+            var dz = world.Z - _dragStartWorld.Z;
+
+            vm.ApplyViewportTranslateDrag(_dragAssetId, _dragStartX + dx, _dragStartZ + dz);
+            e.Handled = true;
             return;
         }
 
-        if (DataContext is not MainViewModel vm)
+        if (_isRotateDragging && _dragAssetId is not null)
         {
-            CancelTranslateDrag();
-            return;
+            if (DataContext is not MainViewModel vm)
+            {
+                CancelRotateDrag();
+                return;
+            }
+
+            var pt = e.GetPosition(Viewport.Viewport);
+            var deltaX = pt.X - _rotatePointerStartX;
+            var yaw = _rotateStartYawDegrees + deltaX * Constants.ViewportRotateDragDegreesPerPixel;
+            vm.ApplyViewportRotateDrag(_dragAssetId, yaw);
+            e.Handled = true;
         }
-
-        var pt = e.GetPosition(Viewport.Viewport);
-        if (!TryUnprojectToPlaneY(pt, _dragPlaneY, out var world))
-        {
-            return;
-        }
-
-        var dx = world.X - _dragStartWorld.X;
-        var dz = world.Z - _dragStartWorld.Z;
-
-        vm.ApplyViewportTranslateDrag(_dragAssetId, _dragStartX + dx, _dragStartZ + dz);
-        e.Handled = true;
     }
 
     private void Viewport_OnPreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
-        if (!_isTranslateDragging)
+        if (_isTranslateDragging)
         {
+            if (DataContext is MainViewModel vm)
+            {
+                vm.EndViewportTranslateDrag();
+            }
+
+            CancelTranslateDrag();
+            e.Handled = true;
             return;
         }
 
-        if (DataContext is MainViewModel vm)
+        if (_isRotateDragging)
         {
-            vm.EndViewportTranslateDrag();
-        }
+            if (DataContext is MainViewModel vm)
+            {
+                vm.EndViewportRotateDrag();
+            }
 
-        CancelTranslateDrag();
-        e.Handled = true;
+            CancelRotateDrag();
+            e.Handled = true;
+        }
     }
 
     private void Viewport_OnLostMouseCapture(object sender, MouseEventArgs e)
     {
-        if (!_isTranslateDragging)
+        if (_isTranslateDragging)
         {
+            if (DataContext is MainViewModel vm)
+            {
+                vm.EndViewportTranslateDrag();
+            }
+
+            CancelTranslateDrag();
             return;
         }
 
-        if (DataContext is MainViewModel vm)
+        if (_isRotateDragging)
         {
-            vm.EndViewportTranslateDrag();
-        }
+            if (DataContext is MainViewModel vm)
+            {
+                vm.EndViewportRotateDrag();
+            }
 
-        CancelTranslateDrag();
+            CancelRotateDrag();
+        }
     }
 
     private void TryBeginTranslateDrag(MouseButtonEventArgs e)
@@ -171,6 +215,44 @@ public partial class ViewportPanel
     private void CancelTranslateDrag()
     {
         _isTranslateDragging = false;
+        _dragAssetId = null;
+        Viewport.ReleaseMouseCapture();
+    }
+
+    private void TryBeginRotateDrag(MouseButtonEventArgs e)
+    {
+        if (_presenter is null || DataContext is not MainViewModel vm)
+        {
+            return;
+        }
+
+        if (vm.Mode != EditorMode.Edit)
+        {
+            return;
+        }
+
+        var pt = e.GetPosition(Viewport.Viewport);
+        if (!_presenter.TryPickPlaced(pt, out var picked) || picked is null)
+        {
+            return;
+        }
+
+        vm.SetSelectionIds(new[] { picked.Id });
+
+        _dragAssetId = picked.Id;
+        _rotatePointerStartX = pt.X;
+        _rotateStartYawDegrees = picked.RotationDegrees.Y;
+
+        _isRotateDragging = true;
+        vm.BeginViewportRotateDrag();
+
+        e.Handled = true;
+        Viewport.CaptureMouse();
+    }
+
+    private void CancelRotateDrag()
+    {
+        _isRotateDragging = false;
         _dragAssetId = null;
         Viewport.ReleaseMouseCapture();
     }

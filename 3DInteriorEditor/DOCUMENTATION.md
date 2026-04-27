@@ -266,5 +266,17 @@
 ### Notes
 
 - This is a “gizmo-light” interaction that avoids conflicting with Helix camera orbit/pan/zoom gestures.
-- Rotation and scaling drags are deferred to later phases.
+- **Rotate-drag** arrives in Phase 16; scale-drag is still deferred.
+
+## Phase 16 (Viewport drag rotate — yaw)
+
+### What’s implemented
+
+- **Alt+Drag rotate** (`Views/ViewportPanel.xaml(.cs)`): **Alt + left mouse drag** rotates the picked instance around **world Y** (yaw). Horizontal mouse movement scales rotation using `Constants.ViewportRotateDragDegreesPerPixel`.
+- Requires **Edit mode** (`MainViewModel.Mode == EditorMode.Edit`).
+- Same undo rules as Phase 15: **`History.Push(...)` once** at drag start; live inspector rotation fields during drag (`MainViewModel.ViewportDragging.cs`).
+
+### Notes
+
+- Pitch/roll viewport drags remain **out of scope** for this phase.
 
