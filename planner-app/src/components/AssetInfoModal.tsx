@@ -10,16 +10,22 @@ export default function AssetInfoModal({ asset, onClose }: AssetInfoModalProps) 
   const modalRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    const handlePointerDown = (event: MouseEvent) => {
+    // The click that opened the modal can still deliver a follow-up mousedown to document; ignore briefly.
+    const openStartedAt = performance.now()
+
+    const onOutside = (event: Event) => {
+      if (performance.now() - openStartedAt < 500) return
       const target = event.target
       if (!(target instanceof Node)) return
       if (modalRef.current?.contains(target)) return
       onClose()
     }
 
-    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('pointerdown', onOutside, true)
+    document.addEventListener('mousedown', onOutside, true)
     return () => {
-      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('pointerdown', onOutside, true)
+      document.removeEventListener('mousedown', onOutside, true)
     }
   }, [onClose])
 

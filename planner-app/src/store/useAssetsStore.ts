@@ -34,6 +34,7 @@ import {
   sanitizeLighting,
   type LightingSettings,
 } from '../types/lighting'
+import { sanitizeLayoutSession, type LayoutSessionState } from '../types/layoutSession'
 import {
   applyTemplateDisplayOverrides,
   cloneLibraryOrganization,
@@ -51,7 +52,7 @@ import {
 
 export const STORAGE_KEY = 'factory-layout'
 export const STORAGE_SLOTS_KEY = 'factory-layout-slots'
-export const STORAGE_VERSION = 8
+export const STORAGE_VERSION = 9
 const MAX_HISTORY = 50
 
 export type LayoutExportKind = 'workspace' | 'complete'
@@ -76,6 +77,8 @@ export interface StoredPayload {
   shellMode?: PlannerShellMode
   /** Ausgeklappte Bibliotheks-Sektionen (`true` = offen) */
   librarySectionExpanded?: Record<string, boolean>
+  /** Shell-UI (Modus, Auswahl, Panels) – wird bei Refresh wiederhergestellt */
+  layoutSession?: LayoutSessionState
 }
 
 export interface LayoutImportResult {
@@ -112,6 +115,9 @@ export function finalizeImportedPayload(p: StoredPayload): StoredPayload {
     perspectiveCamera: clonePerspective(sanitizePerspectiveCamera(p.perspectiveCamera)),
     performanceSettings: sanitizePerformanceSettings(p.performanceSettings),
     axisViewCameras: cloneAxisViewCameras(sanitizeAxisViewCameras(p.axisViewCameras)),
+    ...(p.layoutSession != null
+      ? { layoutSession: sanitizeLayoutSession(p.layoutSession) }
+      : {}),
   }
 }
 
@@ -252,7 +258,14 @@ export interface AssetsStore {
   paste: () => void
   canPaste: boolean
   save: () => void
-  load: () => boolean
+  load: () =>
+    | {
+        ok: true
+        layoutSession: LayoutSessionState | null
+        restorableSelectedIds: string[]
+        assets: Asset[]
+      }
+    | { ok: false }
   reset: () => void
   slots: LayoutSlot[]
   saveSlot: (name: string) => LayoutSlot
@@ -268,6 +281,9 @@ export interface AssetsStore {
   importLayoutFromFile: (file: File) => Promise<LayoutImportResult>
   importLayoutFromData: (data: unknown) => LayoutImportResult
   recordRecentTemplatePlacement: (templateType: string) => void
+  initialLayoutSession?: LayoutSessionState
+  /** Synchronisiere Shell-UI in den Auto-Save; aus PlannerApp nach jedem relevanten SetState aufrufen */
+  setLayoutSessionSnapshot: (s: LayoutSessionState | null) => void
 }
 
 function parseStoredPayload(raw: string | null): StoredPayload | null {
@@ -340,6 +356,9 @@ function parseStoredPayload(raw: string | null): StoredPayload | null {
       exportKind,
       shellMode: sanitizeUiMode(entry.shellMode),
       librarySectionExpanded,
+      ...(entry.layoutSession && typeof entry.layoutSession === 'object'
+        ? { layoutSession: entry.layoutSession as LayoutSessionState }
+        : {}),
       ...(rawPerspective && typeof rawPerspective === 'object'
         ? { perspectiveCamera: rawPerspective as PerspectiveCameraSettings }
         : {}),
@@ -440,6 +459,7 @@ export interface InitialPlannerState {
   perspectiveCamera: PerspectiveCameraSettings
   axisViewCameras: AxisViewCamerasState
   performanceSettings: PerformanceSettings
+  layoutSession?: LayoutSessionState
 }
 
 export function loadInitialPlannerState(): InitialPlannerState {
@@ -476,6 +496,9 @@ export function loadInitialPlannerState(): InitialPlannerState {
       perspectiveCamera: clonePerspective(sanitizePerspectiveCamera(stored.perspectiveCamera)),
       axisViewCameras: cloneAxisViewCameras(sanitizeAxisViewCameras(stored.axisViewCameras)),
       performanceSettings: sanitizePerformanceSettings(stored.performanceSettings),
+      layoutSession: stored.layoutSession
+        ? sanitizeLayoutSession(stored.layoutSession)
+        : undefined,
     }
   }
   return fallback
@@ -510,11 +533,20 @@ export function useAssetsStore(): AssetsStore {
   const [libraryOrganization, setLibraryOrganizationState] = useState<LibraryOrganizationState>(
     () => cloneLibraryOrganization(initial.libraryOrganization),
   )
-  const [selectedIds, setSelectedIdsState] = useState<string[]>([])
+  const [selectedIds, setSelectedIdsState] = useState<string[]>(() => {
+    const s = initial.layoutSession
+    if (!s?.selectedIds?.length) return []
+    const byId = new Set(initial.assets.map((a) => a.id))
+    return s.selectedIds.filter((id) => byId.has(id))
+  })
   const [historyPast, setHistoryPast] = useState<HistorySnapshot[]>([])
   const [historyFuture, setHistoryFuture] = useState<HistorySnapshot[]>([])
   const [clipboard, setClipboard] = useState<Asset[]>([])
   const [slots, setSlots] = useState<LayoutSlot[]>(() => loadSlots())
+  const layoutSessionSnapshotRef = useRef<LayoutSessionState | null>(null)
+  const setLayoutSessionSnapshot = useCallback((s: LayoutSessionState | null) => {
+    layoutSessionSnapshotRef.current = s
+  }, [])
 
   const assetsRef = useRef(assets)
   const selectedIdsRef = useRef(selectedIds)
@@ -1105,6 +1137,7 @@ export function useAssetsStore(): AssetsStore {
 
   const save = useCallback(() => {
     try {
+      const snap = layoutSessionSnapshotRef.current
       const payload: StoredPayload = {
         version: STORAGE_VERSION,
         layoutFormatSemver: LAYOUT_FORMAT_SEMVER,
@@ -1117,6 +1150,9 @@ export function useAssetsStore(): AssetsStore {
         perspectiveCamera: clonePerspective(perspectiveCamera),
         axisViewCameras: cloneAxisViewCameras(axisViewCameras),
         performanceSettings: { ...performanceSettings },
+        ...(snap != null
+          ? { layoutSession: sanitizeLayoutSession(snap) }
+          : {}),
       }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
     } catch (error) {
@@ -1133,10 +1169,12 @@ export function useAssetsStore(): AssetsStore {
     performanceSettings,
   ])
 
-  const load = useCallback((): boolean => {
+  const load = useCallback(():
+    | { ok: true; layoutSession: LayoutSessionState | null; restorableSelectedIds: string[]; assets: Asset[] }
+    | { ok: false } => {
     try {
       const parsed = parseStoredPayload(localStorage.getItem(STORAGE_KEY))
-      if (!parsed) return false
+      if (!parsed) return { ok: false }
       setAssetsState(parsed.assets)
       setSelectedIdsState([])
       setHistoryPast([])
@@ -1156,10 +1194,23 @@ export function useAssetsStore(): AssetsStore {
           mergeLibraryOrgWithUserTemplates(parsed.libraryOrganization, ct),
         ),
       )
-      return true
+      const session = parsed.layoutSession
+        ? sanitizeLayoutSession(parsed.layoutSession)
+        : null
+      const byId = new Set(parsed.assets.map((a) => a.id))
+      const restorableSelectedIds =
+        session != null
+          ? session.selectedIds.filter((id) => byId.has(id))
+          : []
+      return {
+        ok: true,
+        layoutSession: session,
+        restorableSelectedIds,
+        assets: parsed.assets,
+      }
     } catch (error) {
       console.error('Failed to load layout', error)
-      return false
+      return { ok: false }
     }
   }, [])
 
@@ -1177,6 +1228,7 @@ export function useAssetsStore(): AssetsStore {
   }, [applyChange])
 
   const buildPayload = useCallback((): StoredPayload => {
+    const snap = layoutSessionSnapshotRef.current
     return {
       version: STORAGE_VERSION,
       layoutFormatSemver: LAYOUT_FORMAT_SEMVER,
@@ -1188,6 +1240,7 @@ export function useAssetsStore(): AssetsStore {
       perspectiveCamera: clonePerspective(perspectiveCamera),
       axisViewCameras: cloneAxisViewCameras(axisViewCameras),
       performanceSettings: { ...performanceSettings },
+      ...(snap != null ? { layoutSession: sanitizeLayoutSession(snap) } : {}),
       customTemplates: customTemplates.map((template) => ({
         ...template,
         scale: [...template.scale] as Vector3Tuple,
@@ -1235,6 +1288,7 @@ export function useAssetsStore(): AssetsStore {
           : undefined,
         visual: template.visual ? { ...template.visual } : undefined,
       }))
+    const snap = layoutSessionSnapshotRef.current
     return {
       version: STORAGE_VERSION,
       layoutFormatSemver: LAYOUT_FORMAT_SEMVER,
@@ -1246,6 +1300,7 @@ export function useAssetsStore(): AssetsStore {
       perspectiveCamera: clonePerspective(perspectiveCamera),
       axisViewCameras: cloneAxisViewCameras(axisViewCameras),
       performanceSettings: { ...performanceSettings },
+      ...(snap != null ? { layoutSession: sanitizeLayoutSession(snap) } : {}),
       ...(neededCustom.length > 0 ? { customTemplates: neededCustom } : {}),
     }
   }, [
@@ -1568,5 +1623,7 @@ export function useAssetsStore(): AssetsStore {
     importLayoutFromFile,
     importLayoutFromData,
     recordRecentTemplatePlacement,
+    initialLayoutSession: initial.layoutSession,
+    setLayoutSessionSnapshot,
   }
 }

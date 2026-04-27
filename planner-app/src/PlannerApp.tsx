@@ -42,6 +42,7 @@ import PostFxBloom from './components/PostFxBloom'
 import SceneAtmosphere from './components/SceneAtmosphere'
 import LoadLayoutModal from './components/LoadLayoutModal'
 import ScenePlacementRaycast from './components/ScenePlacementRaycast'
+import { OrbitControlsCleanup } from './components/OrbitControlsCleanup'
 import CustomMetadataRowEditModal from './components/CustomMetadataRowEditModal'
 import SaveAssetFromSceneModal from './components/SaveAssetFromSceneModal'
 import ShortcutsModal from './components/ShortcutsModal'
@@ -59,6 +60,7 @@ import {
   geometryKindSupports2D,
 } from './AssetFactory'
 import { useAssetsStore, type LayoutExportKind } from './store/useAssetsStore'
+import { sanitizeLayoutSession, type LayoutSessionState } from './types/layoutSession'
 import type {
   Asset,
   AssetDecal,
@@ -1064,9 +1066,20 @@ function MultiTransformGizmo({
 export default function PlannerApp() {
   const orbitRef = useRef<OrbitControlsImpl | null>(null)
   const store = useAssetsStore()
+  const s0: LayoutSessionState | undefined = store.initialLayoutSession
+    ? sanitizeLayoutSession(store.initialLayoutSession)
+    : undefined
+  const initialInfoFromSession: string | null = (() => {
+    if (!s0?.infoAssetId) return null
+    const a = store.assets.find((x) => x.id === s0.infoAssetId)
+    if (a && !a.isLocked && a.category !== CATEGORY_ZONES) {
+      return a.id
+    }
+    return null
+  })()
 
-  const [mode, setMode] = useState<PlannerMode>('edit')
-  const [tool, setTool] = useState<PlannerTool>('select')
+  const [mode, setMode] = useState<PlannerMode>(() => (s0?.shellMode === 'view' ? 'view' : 'edit'))
+  const [tool, setTool] = useState<PlannerTool>(() => (s0?.tool === 'place' ? 'place' : 'select'))
   const [transformMode, setTransformMode] = useState<TransformMode>('translate')
   const [selectedTemplateType, setSelectedTemplateType] = useState<string | null>(null)
   const [previewPosition, setPreviewPosition] = useState<Vector3Tuple | null>(null)
@@ -1078,16 +1091,16 @@ export default function PlannerApp() {
   const [isCtrlPressed, setIsCtrlPressed] = useState(false)
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const hoverLeaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [infoAssetId, setInfoAssetId] = useState<string | null>(null)
+  const [infoAssetId, setInfoAssetId] = useState<string | null>(initialInfoFromSession)
   const [saveFeedback, setSaveFeedback] = useState<string | null>(null)
   const [isLoadModalOpen, setIsLoadModalOpen] = useState(false)
-  const [floorInspectorOpen, setFloorInspectorOpen] = useState(false)
+  const [floorInspectorOpen, setFloorInspectorOpen] = useState(() => s0?.floorInspectorOpen ?? false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [exportDialogOpen, setExportDialogOpen] = useState(false)
   const [saveAssetModalOpen, setSaveAssetModalOpen] = useState(false)
   const [customRowEditId, setCustomRowEditId] = useState<string | null>(null)
   const [exportModalKey, setExportModalKey] = useState(0)
-  const [lightingPanelOpen, setLightingPanelOpen] = useState(false)
+  const [lightingPanelOpen, setLightingPanelOpen] = useState(() => s0?.lightingPanelOpen ?? false)
   const lightingBarRef = useRef<HTMLDivElement>(null)
   const lightingButtonRef = useRef<HTMLButtonElement>(null)
   const lightingPopoverRef = useRef<HTMLDivElement>(null)
@@ -1184,6 +1197,7 @@ export default function PlannerApp() {
     importLayoutFromFile,
     recordRecentTemplatePlacement,
     saveSceneAssetAsTemplate,
+    setLayoutSessionSnapshot,
   } = store
 
   const resolvedTemplates = useMemo(
@@ -1260,6 +1274,20 @@ export default function PlannerApp() {
       /* ignore quota / private mode */
     }
   }, [viewMenuPerfExpanded])
+
+  useEffect(() => {
+    const onCopyPaste = () => {
+      if (document.pointerLockElement) {
+        document.exitPointerLock()
+      }
+    }
+    window.addEventListener('copy', onCopyPaste)
+    window.addEventListener('paste', onCopyPaste)
+    return () => {
+      window.removeEventListener('copy', onCopyPaste)
+      window.removeEventListener('paste', onCopyPaste)
+    }
+  }, [])
 
   useEffect(() => {
     if (!viewMenuOpen || !viewMenuPerfExpanded) return
@@ -1409,8 +1437,8 @@ export default function PlannerApp() {
     return undefined
   }, [floor.placementSnapEnabled, floor.placementSnapStep])
 
-  const [leftPanelHidden, setLeftPanelHidden] = useState(false)
-  const [rightPanelHidden, setRightPanelHidden] = useState(false)
+  const [leftPanelHidden, setLeftPanelHidden] = useState(() => s0?.leftPanelHidden ?? false)
+  const [rightPanelHidden, setRightPanelHidden] = useState(() => s0?.rightPanelHidden ?? false)
 
   const favoriteTypeSet = useMemo(
     () => new Set(libraryOrganization.favoriteTemplateTypes),
@@ -1506,10 +1534,22 @@ export default function PlannerApp() {
     return transformableSelected.length > 1
   }, [selectedAssets, transformableSelected])
 
+  const presentationInfoId = useMemo(() => {
+    if (mode !== 'view' || !infoAssetId) return null
+    const a = assets.find((x) => x.id === infoAssetId)
+    if (!a || a.isLocked || a.category === CATEGORY_ZONES) return null
+    return infoAssetId
+  }, [assets, mode, infoAssetId])
+
   const infoAsset = useMemo(
-    () => (infoAssetId ? assets.find((asset) => asset.id === infoAssetId) ?? null : null),
-    [assets, infoAssetId],
+    () => (presentationInfoId ? assets.find((asset) => asset.id === presentationInfoId) ?? null : null),
+    [assets, presentationInfoId],
   )
+
+  const presentationInspectorReadOnly =
+    mode === 'view' && singleSelected != null && !singleSelected.isLocked
+
+  const showPresentationSideInspector = presentationInspectorReadOnly && !rightPanelHidden
 
   const changeMode = useCallback((nextMode: PlannerMode) => {
     setMode(nextMode)
@@ -1525,6 +1565,45 @@ export default function PlannerApp() {
     setViewMenuOpen(false)
     setLibraryMenu(null)
   }, [])
+
+  useEffect(() => {
+    setLayoutSessionSnapshot({
+      shellMode: mode === 'view' ? 'view' : 'edit',
+      tool,
+      selectedIds,
+      infoAssetId: presentationInfoId,
+      floorInspectorOpen,
+      lightingPanelOpen,
+      leftPanelHidden,
+      rightPanelHidden,
+    })
+  }, [
+    mode,
+    tool,
+    selectedIds,
+    presentationInfoId,
+    floorInspectorOpen,
+    lightingPanelOpen,
+    leftPanelHidden,
+    rightPanelHidden,
+    setLayoutSessionSnapshot,
+  ])
+
+  useEffect(() => {
+    try {
+      save()
+    } catch {
+      /* ignore */
+    }
+    const id = window.setInterval(() => {
+      try {
+        save()
+      } catch {
+        /* ignore */
+      }
+    }, 30_000)
+    return () => clearInterval(id)
+  }, [save, mode, tool, selectedIds, infoAssetId, floorInspectorOpen, lightingPanelOpen, leftPanelHidden, rightPanelHidden])
 
   useEffect(() => {
     if (!libraryMenu) return
@@ -1562,6 +1641,7 @@ export default function PlannerApp() {
         if (asset.isLocked || asset.category === CATEGORY_ZONES) {
           return
         }
+        setSelectedIds([asset.id])
         setInfoAssetId(asset.id)
         return
       }
@@ -1580,7 +1660,7 @@ export default function PlannerApp() {
       setSelectedIds([asset.id])
       assetPointerSuppressFloorUntilRef.current = Date.now() + 400
     },
-    [mode, selectedIds, setSelectedIds, tool],
+    [mode, selectedIds, setInfoAssetId, setSelectedIds, tool],
   )
 
   const onAssetPointerDown = useCallback(
@@ -1904,8 +1984,36 @@ export default function PlannerApp() {
   }, [])
 
   const handleLoadCurrentAutoSlot = useCallback((): boolean => {
-    return load()
-  }, [load])
+    const r = load()
+    if (!r.ok) return false
+    if (r.layoutSession) {
+      const s = r.layoutSession
+      setMode(s.shellMode === 'view' ? 'view' : 'edit')
+      setTool(s.tool === 'place' ? 'place' : 'select')
+      setInfoAssetId(null)
+      if (r.restorableSelectedIds.length > 0) {
+        setSelectedIds(r.restorableSelectedIds)
+      } else {
+        setSelectedIds([])
+      }
+      if (s.infoAssetId) {
+        const a = r.assets.find((x) => x.id === s.infoAssetId)
+        if (a && !a.isLocked && a.category !== CATEGORY_ZONES) {
+          setInfoAssetId(a.id)
+        }
+      } else {
+        setInfoAssetId(null)
+      }
+      setFloorInspectorOpen(s.floorInspectorOpen)
+      setLightingPanelOpen(s.lightingPanelOpen)
+      setLeftPanelHidden(s.leftPanelHidden)
+      setRightPanelHidden(s.rightPanelHidden)
+    } else {
+      setSelectedIds([])
+      setInfoAssetId(null)
+    }
+    return true
+  }, [load, setInfoAssetId, setSelectedIds, setMode, setTool])
 
   const onLibraryBatchImport = useCallback(
     async (event: ChangeEvent<HTMLInputElement>) => {
@@ -2023,7 +2131,7 @@ export default function PlannerApp() {
           setShortcutsOpen(false)
           return
         }
-        if (mode === 'view' && infoAssetId) {
+        if (mode === 'view' && presentationInfoId) {
           event.preventDefault()
           setInfoAssetId(null)
           return
@@ -2078,6 +2186,13 @@ export default function PlannerApp() {
       }
 
       if (mode === 'view') {
+        if (hasModifier && !editable && key === 'c') {
+          event.preventDefault()
+          copy()
+        } else if (hasModifier && !editable && key === 'v') {
+          event.preventDefault()
+          paste()
+        }
         return
       }
 
@@ -2240,6 +2355,7 @@ export default function PlannerApp() {
     favoriteTypeSet,
     floorInspectorOpen,
     infoAssetId,
+    presentationInfoId,
     isLoadModalOpen,
     libraryMenu,
     librarySearchInput,
@@ -3401,7 +3517,7 @@ export default function PlannerApp() {
       </header>
 
       <div
-        className={`workspace${mode === 'view' ? ' view-mode' : ''}${leftPanelHidden ? ' workspace--hide-library' : ''}${rightPanelHidden ? ' workspace--hide-inspector' : ''}`}
+        className={`workspace${mode === 'view' ? ' view-mode' : ''}${leftPanelHidden ? ' workspace--hide-library' : ''}${rightPanelHidden ? ' workspace--hide-inspector' : ''}${showPresentationSideInspector ? ' workspace--view-with-inspector' : ''}`}
       >
         <aside className="panel left" aria-hidden={mode === 'view'}>
           <h2 className="inspector-inline-label panel-library-heading">
@@ -4133,7 +4249,7 @@ export default function PlannerApp() {
         </aside>
 
         <main className="scene-wrapper">
-          {mode === 'view' && infoAsset && (
+          {mode === 'view' && infoAsset && rightPanelHidden && (
             <AssetInfoModal asset={infoAsset} onClose={() => setInfoAssetId(null)} />
           )}
 
@@ -4302,6 +4418,7 @@ export default function PlannerApp() {
               rotateSpeed={mode === 'view' ? 0.85 : 1}
               zoomSpeed={mode === 'view' ? 0.9 : 1}
             />
+            <OrbitControlsCleanup controlsRef={orbitRef} />
           </Canvas>
 
           {saveFeedback ? (
@@ -4320,9 +4437,17 @@ export default function PlannerApp() {
           )}
         </main>
 
-        <aside className="panel right" aria-hidden={mode === 'view'}>
+        <aside
+          className="panel right"
+          aria-hidden={mode === 'view' && !showPresentationSideInspector}
+        >
           <h2>Inspector</h2>
           {singleSelected ? (
+              <fieldset
+                className="inspector-content-fieldset"
+                disabled={presentationInspectorReadOnly}
+                style={{ border: 'none', margin: 0, padding: 0, minWidth: 0 }}
+              >
               <div
                 className={`inspector-content${singleSelected.isLocked ? ' inspector-asset-locked' : ''}`}
               >
@@ -5253,6 +5378,7 @@ export default function PlannerApp() {
                   + Feld hinzufügen
                 </button>
               </div>
+              </fieldset>
             ) : selectedAssets.length > 1 ? (
               <div className="inspector-content">
                 <p className="selected-title">{selectedAssets.length} Assets ausgewählt</p>

@@ -1,5 +1,6 @@
 import tinycolor from 'tinycolor2'
 import {
+  memo,
   useCallback,
   useEffect,
   useMemo,
@@ -12,6 +13,17 @@ import InfoIcon from './InfoIcon'
 
 export const COLOR_FAVORITES_STORAGE_KEY = 'factory-color-favorites'
 const MAX_FAVORITES = 10
+
+const HEX_VALID = /^#[0-9A-Fa-f]{6}$/
+const HEX_DEBOUNCE_MS = 300
+
+function formatHexInput(s: string): string {
+  const t = s.trim()
+  if (t === '') return ''
+  if (t.startsWith('#')) return t
+  if (/^[0-9A-Fa-f]+$/i.test(t)) return `#${t}`
+  return t
+}
 
 export interface ColorHistoryEntry {
   color: string
@@ -66,7 +78,7 @@ interface ColorPickerPopoverProps {
   openSignal?: number
 }
 
-export default function ColorPickerPopover({
+function ColorPickerPopoverImpl({
   value,
   onCommit,
   disabled,
@@ -77,14 +89,48 @@ export default function ColorPickerPopover({
   const safe = sanitizeColor(value)
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState(safe)
+  const [hexInput, setHexInput] = useState(safe)
+  const [hexError, setHexError] = useState(false)
   const [favorites, setFavorites] = useState<ColorHistoryEntry[]>(() => loadFavorites())
   const popoverRef = useRef<HTMLDivElement>(null)
+  const hexDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const hexFocusedRef = useRef(false)
+  const svDragRef = useRef<HTMLDivElement | null>(null)
+  const hueDragRef = useRef<HTMLDivElement | null>(null)
+  const svDraggingRef = useRef(false)
+  const hueDraggingRef = useRef(false)
 
   const hsv = useMemo(() => tinycolor(draft).toHsv(), [draft])
 
   useEffect(() => {
+    if (!open || hexFocusedRef.current) return
+    setHexInput(sanitizeColor(draft))
+  }, [draft, open])
+
+  useEffect(() => {
+    return () => {
+      if (hexDebounceRef.current != null) clearTimeout(hexDebounceRef.current)
+    }
+  }, [])
+
+  const commit = useCallback(
+    (hex: string) => {
+      const n = sanitizeColor(hex)
+      setDraft(n)
+      setHexInput(n)
+      onCommit(n)
+    },
+    [onCommit],
+  )
+
+  useEffect(() => {
     if (!open) {
-      const t = window.setTimeout(() => setDraft(sanitizeColor(value)), 0)
+      const t = window.setTimeout(() => {
+        const c = sanitizeColor(value)
+        setDraft(c)
+        setHexInput(c)
+        setHexError(false)
+      }, 0)
       return () => clearTimeout(t)
     }
   }, [value, open])
@@ -92,7 +138,9 @@ export default function ColorPickerPopover({
   useEffect(() => {
     if (openSignal == null || openSignal < 1 || disabled) return
     const t = window.setTimeout(() => {
-      setDraft(sanitizeColor(value))
+      const c = sanitizeColor(value)
+      setDraft(c)
+      setHexInput(c)
       setOpen(true)
     }, 0)
     return () => clearTimeout(t)
@@ -115,15 +163,6 @@ export default function ColorPickerPopover({
     return registerColorPickerEscape(() => setOpen(false))
   }, [open, disabled])
 
-  const commit = useCallback(
-    (hex: string) => {
-      const n = sanitizeColor(hex)
-      setDraft(n)
-      onCommit(n)
-    },
-    [onCommit],
-  )
-
   const setFromHsv = useCallback(
     (h: number, s: number, v: number) => {
       const next = tinycolor({ h, s, v }).toHexString()
@@ -132,25 +171,53 @@ export default function ColorPickerPopover({
     [commit],
   )
 
-  const onSvGrid = useCallback(
-    (clientX: number, clientY: number, el: HTMLDivElement) => {
+  const onSvFromClient = useCallback(
+    (clientX: number, clientY: number) => {
+      const el = svDragRef.current
+      if (!el) return
       const r = el.getBoundingClientRect()
       const x = Math.min(1, Math.max(0, (clientX - r.left) / r.width))
       const y = Math.min(1, Math.max(0, (clientY - r.top) / r.height))
-      const s = x
-      const v = 1 - y
-      setFromHsv(hsv.h, s, v)
+      setFromHsv(hsv.h, x, 1 - y)
     },
     [hsv.h, setFromHsv],
   )
 
-  const onHue = useCallback(
-    (clientX: number, el: HTMLDivElement) => {
+  const onHueFromClient = useCallback(
+    (clientX: number) => {
+      const el = hueDragRef.current
+      if (!el) return
       const r = el.getBoundingClientRect()
       const x = Math.min(1, Math.max(0, (clientX - r.left) / r.width))
       setFromHsv(x * 360, hsv.s, hsv.v)
     },
     [hsv.s, hsv.v, setFromHsv],
+  )
+
+  const handleHexChange = useCallback(
+    (value: string) => {
+      setHexInput(value)
+      if (hexDebounceRef.current != null) clearTimeout(hexDebounceRef.current)
+      const t = value.trim()
+      if (t === '' || t === '#') {
+        setHexError(false)
+        return
+      }
+      hexDebounceRef.current = setTimeout(() => {
+        if (HEX_VALID.test(value)) {
+          setHexError(false)
+          setDraft(value)
+          onCommit(sanitizeColor(value))
+          return
+        }
+        if (value.length === 7) {
+          setHexError(true)
+        } else {
+          setHexError(false)
+        }
+      }, HEX_DEBOUNCE_MS)
+    },
+    [onCommit],
   )
 
   const addFavorite = useCallback(() => {
@@ -169,9 +236,7 @@ export default function ColorPickerPopover({
   }, [draft])
 
   const removeFavorite = useCallback((timestamp: number) => {
-    if (
-      !window.confirm('Farbe wirklich aus Favoriten entfernen?')
-    ) {
+    if (!window.confirm('Farbe wirklich aus Favoriten entfernen?')) {
       return
     }
     setFavorites((prev) => {
@@ -180,9 +245,6 @@ export default function ColorPickerPopover({
       return next
     })
   }, [])
-
-  const gridRef = useRef<HTMLDivElement>(null)
-  const hueRef = useRef<HTMLDivElement>(null)
 
   const svBg = useMemo(
     () =>
@@ -206,7 +268,10 @@ export default function ColorPickerPopover({
           disabled={disabled}
           onClick={() => {
             if (disabled) return
-            setDraft(sanitizeColor(value))
+            const c = sanitizeColor(value)
+            setDraft(c)
+            setHexInput(c)
+            setHexError(false)
             setOpen((o) => !o)
           }}
         >
@@ -217,16 +282,28 @@ export default function ColorPickerPopover({
         {open && !disabled && (
           <div className="color-popover color-popover-extended" role="dialog" aria-label="Farbe">
             <div
-              ref={gridRef}
+              ref={(el) => {
+                svDragRef.current = el
+              }}
               className="color-sv-grid"
               style={{ background: svBg, width: GRID_SIZE, height: GRID_SIZE }}
               onPointerDown={(e) => {
-                if (!gridRef.current) return
-                onSvGrid(e.clientX, e.clientY, gridRef.current)
+                e.preventDefault()
+                e.currentTarget.setPointerCapture(e.pointerId)
+                svDraggingRef.current = true
+                onSvFromClient(e.clientX, e.clientY)
+              }}
+              onPointerUp={(e) => {
+                svDraggingRef.current = false
+                try {
+                  e.currentTarget.releasePointerCapture(e.pointerId)
+                } catch {
+                  /* not captured */
+                }
               }}
               onPointerMove={(e) => {
-                if (e.buttons !== 1 || !gridRef.current) return
-                onSvGrid(e.clientX, e.clientY, gridRef.current)
+                if (!svDraggingRef.current) return
+                onSvFromClient(e.clientX, e.clientY)
               }}
             >
               <div
@@ -236,16 +313,28 @@ export default function ColorPickerPopover({
             </div>
 
             <div
-              ref={hueRef}
+              ref={(el) => {
+                hueDragRef.current = el
+              }}
               className="color-hue-rail"
               style={{ width: GRID_SIZE, height: HUE_HEIGHT }}
               onPointerDown={(e) => {
-                if (!hueRef.current) return
-                onHue(e.clientX, hueRef.current)
+                e.preventDefault()
+                e.currentTarget.setPointerCapture(e.pointerId)
+                hueDraggingRef.current = true
+                onHueFromClient(e.clientX)
+              }}
+              onPointerUp={(e) => {
+                hueDraggingRef.current = false
+                try {
+                  e.currentTarget.releasePointerCapture(e.pointerId)
+                } catch {
+                  /* not captured */
+                }
               }}
               onPointerMove={(e) => {
-                if (e.buttons !== 1 || !hueRef.current) return
-                onHue(e.clientX, hueRef.current)
+                if (!hueDraggingRef.current) return
+                onHueFromClient(e.clientX)
               }}
             />
 
@@ -253,15 +342,54 @@ export default function ColorPickerPopover({
               Hex
               <input
                 type="text"
-                value={draft}
+                value={hexInput}
                 placeholder="#RRGGBB"
+                maxLength={7}
                 onChange={(e) => {
                   const v = e.target.value
-                  setDraft(v)
-                  if (tinycolor(v).isValid()) commit(v)
+                  if (v.length > 7) return
+                  handleHexChange(v)
                 }}
-                onBlur={() => commit(draft)}
+                onFocus={() => {
+                  hexFocusedRef.current = true
+                }}
+                onBlur={() => {
+                  hexFocusedRef.current = false
+                  const v = formatHexInput(hexInput)
+                  if (HEX_VALID.test(v) || (hexInput.length === 7 && HEX_VALID.test(hexInput))) {
+                    const c = HEX_VALID.test(v) ? v : hexInput
+                    setHexError(false)
+                    setDraft(sanitizeColor(c))
+                    onCommit(sanitizeColor(c))
+                    setHexInput(sanitizeColor(c))
+                    return
+                  }
+                  if (hexInput.trim() === '') {
+                    setHexError(true)
+                    setHexInput(sanitizeColor(draft))
+                    return
+                  }
+                  if (!tinycolor(hexInput).isValid()) {
+                    setHexError(true)
+                    setHexInput(sanitizeColor(draft))
+                  } else {
+                    setHexError(false)
+                    setDraft(sanitizeColor(hexInput))
+                    onCommit(sanitizeColor(hexInput))
+                    setHexInput(sanitizeColor(hexInput))
+                  }
+                }}
+                className={hexError ? 'color-hex-input-invalid' : undefined}
+                style={{
+                  border: `1px solid ${hexError ? 'rgb(220, 80, 80)' : 'var(--form-border, #3a3a3a)'}`,
+                }}
+                aria-invalid={hexError}
               />
+              {hexError && (
+                <span className="color-hex-error" style={{ color: 'rgb(220, 80, 80)', fontSize: 11 }}>
+                  Ungültiger Hex-Wert
+                </span>
+              )}
             </label>
 
             <div className="color-favorites-row">
@@ -310,3 +438,6 @@ export default function ColorPickerPopover({
     </label>
   )
 }
+
+const ColorPickerPopover = memo(ColorPickerPopoverImpl)
+export default ColorPickerPopover
