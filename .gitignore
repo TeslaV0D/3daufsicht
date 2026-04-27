@@ -13,12 +13,3 @@ tools/dotnet/
 # Logs / temp
 *.log
 *.tmp
-
-tools/dotnet/
-.nuget/packages/
-.worktrees/
-**/bin/
-**/obj/
-.vs/
-*.log
-*.tmp
