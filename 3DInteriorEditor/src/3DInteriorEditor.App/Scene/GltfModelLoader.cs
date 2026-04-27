@@ -158,7 +158,8 @@ public static class GltfModelLoader
 
                 if (canSampleTexture)
                 {
-                    var uv = primitive.GetTextureCoord(idx, albedo.UvSetIndex);
+                    var uvRaw = primitive.GetTextureCoord(idx, albedo.UvSetIndex);
+                    var uv = GltfTextureUvTransform.Apply(uvRaw, albedo.TextureUvTransform);
                     texCoords.Add(new System.Windows.Point(uv.X, 1.0 - uv.Y));
                 }
             }

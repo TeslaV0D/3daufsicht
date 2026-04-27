@@ -353,7 +353,7 @@
 ### What’s implemented
 
 - **`Scene/GltfAlbedoResolver.cs`**: Reads **BaseColor** / **Diffuse** channels; decodes **`MemoryImage`** (PNG/JPEG/WebP via **`BitmapImage`**) from **`Texture.PrimaryImage`**. Returns factor RGB plus optional **`ImageSource`** and the channel’s **`TextureCoordinate`** set index.
-- **`Scene/GltfModelLoader.cs`**: For each primitive with a decodable texture and matching **`TEXCOORD_N`** (`IMeshPrimitiveDecoder.GetTextureCoord`), fills **`MeshGeometry3D.TextureCoordinates`** with **V flipped** (\(1 - v\)) for glTF ↔ WPF bitmap convention. **KHR_texture_transform** is not applied yet (UVs use raw attributes).
+- **`Scene/GltfModelLoader.cs`**: For each primitive with a decodable texture and matching **`TEXCOORD_N`** (`IMeshPrimitiveDecoder.GetTextureCoord`), fills **`MeshGeometry3D.TextureCoordinates`** with **V flipped** (\(1 - v\)) for glTF ↔ WPF bitmap convention. **`KHR_texture_transform`** (scale → rotate → offset) is applied in Phase 23 when present.
 - **`Scene/ImportedMeshPart.cs`**: Optional **`BaseColorTexture`** (`ImageSource`) alongside **`BaseColorRgb`** (factor tint).
 - **`Scene/PlacedAssetVisualFactory.cs`**: Uses **`ImageBrush`** + **`MaterialHelper.CreateMaterial`** for textured parts; **`ApplyBaseColorFactorTint`** walks **`MaterialGroup`** children and sets **`DiffuseMaterial.Color`** to approximate **factor × texture**. **Selection** still replaces materials with the accent tint.
 
@@ -361,4 +361,17 @@
 
 - Unsupported or undecodable images (e.g. **KTX2** without a decoder) fall back to **factor-only** / placement color when possible.
 - Texture **sampler** wrap modes are approximated (**Tile**); **mirror** / precise repeat vs clamp mapping is not implemented.
+
+## Phase 23 (`KHR_texture_transform` on base / diffuse UVs)
+
+### What’s implemented
+
+- **`Scene/GltfTextureUvTransform.cs`**: Applies **KHR_texture_transform** in **glTF UV space** before the WPF **V flip**: **scale** (component-wise), **rotation** (radians, CCW about origin), **translation** (**offset**).
+- **`Scene/GltfAlbedoResolver.cs`**: Passes **`TextureTransform`** from the resolved **BaseColor** / **Diffuse** channel and honors **`TextureCoordinateOverride`** when choosing the **`TEXCOORD_*`** slot.
+- **`Scene/GltfModelLoader.cs`**: Runs transformed UVs into **`MeshGeometry3D.TextureCoordinates`** for textured parts.
+
+### Notes
+
+- If **`TextureCoordinateOverride`** points at a missing UV set on the primitive, sampling falls back (no texture mapping) like any other mismatch.
+- Sampler wrap / repeat behavior is unchanged from Phase 22 (**ImageBrush** tiling approximation).
 

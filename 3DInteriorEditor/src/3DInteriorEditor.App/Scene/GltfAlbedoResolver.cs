@@ -15,23 +15,31 @@ internal static class GltfAlbedoResolver
 {
     internal readonly struct AlbedoResolve
     {
-        public AlbedoResolve(Color? factorRgb, ImageSource? texture, int uvSetIndex)
+        public AlbedoResolve(
+            Color? factorRgb,
+            ImageSource? texture,
+            int uvSetIndex,
+            TextureTransform? textureUvTransform)
         {
             FactorRgb = factorRgb;
             Texture = texture;
             UvSetIndex = uvSetIndex;
+            TextureUvTransform = textureUvTransform;
         }
 
         public Color? FactorRgb { get; }
         public ImageSource? Texture { get; }
         public int UvSetIndex { get; }
+
+        /// <summary>Optional <c>KHR_texture_transform</c> taken from the same channel as <see cref="Texture"/>.</summary>
+        public TextureTransform? TextureUvTransform { get; }
     }
 
     internal static AlbedoResolve TryResolve(GltfMaterial? material)
     {
         if (material is null)
         {
-            return new AlbedoResolve(null, null, 0);
+            return new AlbedoResolve(null, null, 0, null);
         }
 
         foreach (var key in new[] { "BaseColor", "Diffuse" })
@@ -54,13 +62,19 @@ internal static class GltfAlbedoResolver
             }
 
             var uvSet = ch.TextureCoordinate;
+            var texTransform = ch.TextureTransform;
+            if (texTransform?.TextureCoordinateOverride is { } uvOverride)
+            {
+                uvSet = uvOverride;
+            }
+
             if (texSource is not null || factorRgb.HasValue)
             {
-                return new AlbedoResolve(factorRgb, texSource, uvSet);
+                return new AlbedoResolve(factorRgb, texSource, uvSet, texTransform);
             }
         }
 
-        return new AlbedoResolve(null, null, 0);
+        return new AlbedoResolve(null, null, 0, null);
     }
 
     private static Color? TryChannelFactorRgb(MaterialChannel channel)

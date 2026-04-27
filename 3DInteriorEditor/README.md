@@ -40,5 +40,6 @@ From repo root:
 - ✅ Phase 20: toolbar transform modes (translate / rotate / scale) + viewport drag gestures gated by active mode
 - ✅ Phase 21: glTF **baseColor** / **diffuse** **factor** → per-part viewport diffuse
 - ✅ Phase 22: glTF **baseColorTexture** / **diffuseTexture** + UVs (`TEXCOORD_*`) → **ImageBrush** viewport materials (factor tint multiply approximated)
-- ⏳ Next: further polish / UX (transform extension, precise sampler mapping, …)
+- ✅ Phase 23: **KHR_texture_transform** (scale/rotate/offset + optional `texCoord` override) on base/diffuse UVs
+- ⏳ Next: further polish / UX (precise sampler wrap/repeat mapping, …)
 
