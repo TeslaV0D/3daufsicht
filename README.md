@@ -72,16 +72,21 @@ npm run lint
 
 ### Config Persistence (inkl. Shell-UI)
 
-- **Auto-Save:** `factory-layout` wird bei relevanten Zustandsänderungen (Szene, Kamera, Beleuchtung, **Shell inkl. Modus, Werkzeug, Selektion, offene Paneele, Panel-Visibility** etc.) in `localStorage` geschrieben, zusätzlich **alle 30 s** Sicherheits-Intervall.
-- **F5 / Refresh:** Volles Layout inkl. **Kamera, Beleuchtung, Placements**; `layoutSession` stellt u. a. **Präsentation vs. Bearbeiten, Tool, Selektion, offene Beleuchtung/Boden-Inspector, linke/rechte Leiste sichtbar** wieder her, soweit die referenzierten Asset-IDs noch existieren. Ältere Saves ohne `layoutSession` bleiben nutzbar.
+- **Auto-Save:** `factory-layout` wird in `localStorage` mit **~300 ms Debounce** (kein synchrones `JSON.stringify` in jedem Takt) und **30 s** Intervall geschrieben; inhaltlich: Szene, Kamera, Beleuchtung, **Shell** (u. a. **Modus, Werkzeug,** Edit-**Selektion,** Fokus-Info im View-Mode, offene Beleuchtung/Boden, Panel-Visibility).
+- **F5 / Refresh:** Volles Layout; `layoutSession` stellt o. a. Zustand wieder her, **Präsentation:** rechter Inspector **nicht** sichtbar — Details erscheinen im **Dialog** (s. unten).
 
 ### Camera Controls
 
-- **OrbitControls:** Zusätzliches `dispose` beim Unmount, damit Listener in langen Sessions/Modus-Wechseln nicht hängen bleiben; **Copy/Paste** ggf. `exitPointerLock()` damit kein festsitzender Fokus die Maus-Steuerung stört. **Strg/Cmd + C/V** funktionieren im **Präsentationsmodus** (ohne Vorrang vorm globalen Tastenhandler).
+- **OrbitControls** (drei): Damping, Zoom-to-Cursor; `key={mode}` beim Moduswechsel. **Copy/Paste** ggf. `exitPointerLock()`. **Strg/Cmd + C/V** im **Präsentationsmodus** im globalen Tastenhandler.
 
-### Presentation Mode
+### Presentation Mode (Details-Dialog)
 
-- Klick setzt Selektion und (Lesemodus) **rechten Inspector** mit vollständiger, **deaktiviert** lesbarer Eigenschaften-Ansicht (Feld-Set, wenn kein Kompakt-Popup nötig); oberes **Info-Popup** erscheint, wenn der **Inspector** mit **H** zugeklappt ist, und schließt nicht sofort im Öffnungsklick. Gesperrte Assets / Zonen: wie bisher nicht wählbar.
+- **Klick** auf **nicht gesperrtes** Asset (kein **Zonen**-Asset): zentriertes **Vollbild-Overlay** (`PresentationDetailsModal`) mit abgedunkeltem Hintergrund — **alle relevanten Instanzdaten nur lesend** (Basis-Infos, **Transform,** Geometrie, **Material** inkl. Farb-Swatch und **Deckkraft,** weitere **Custom-Metadaten**).
+- **Schließen:** X, **Schließen**-Button, Klick ins Overlay (nach kurzer Schutzphase), **ESC** (wenn Fokus nicht woanders fängt). **Gesperrte** / **Zonen:** unverändert **nicht** wählbar. **Rechter Inspector** ist im **View-Mode** ausgeblendet — **Edit** nutzt weiter **Inspector**-Sidebar. Kein doppelter **Selektions-Ring** in der 3D-Ansicht im **View-Mode** (bessere Performance bei Instancing).
+
+### Performance (Auswahl & Speichern)
+
+- **Debounce** für `localStorage`-Serialisierung (verhindert spürbare Pausen nach Kamera-/Klicks); **Klick-Guard** (~80 ms) im **View-Mode** gegen doppelte Handler.
 
 ### Bibliothek & Gruppen (Feinschliff)
 
