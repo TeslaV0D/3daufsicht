@@ -4,6 +4,7 @@
                xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
                xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
                xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+               xmlns:vm="clr-namespace:_3DInteriorEditor.App.ViewModels"
                mc:Ignorable="d"
                d:DesignHeight="48"
                d:DesignWidth="1280">
@@ -97,6 +98,90 @@
                 ToolTip="Löschen (Entf)">
           <materialDesign:PackIcon Kind="TrashCanOutline" VerticalAlignment="Center" />
         </Button>
+
+        <Rectangle Width="1"
+                   Height="28"
+                   Margin="10,0,12,0"
+                   VerticalAlignment="Center"
+                   Fill="{DynamicResource App.BorderBrush}" />
+
+        <!-- Phase 20: transform tool (viewport Shift/Alt/Ctrl+Shift drags follow this mode) -->
+        <StackPanel Orientation="Horizontal"
+                    VerticalAlignment="Center"
+                    Margin="0,0,4,0">
+          <TextBlock VerticalAlignment="Center"
+                     Margin="0,0,10,0"
+                     FontSize="11"
+                     Foreground="{DynamicResource App.TextSecondaryBrush}"
+                     Text="Transform" />
+          <StackPanel Orientation="Horizontal">
+            <Button MinHeight="40"
+                    MinWidth="40"
+                    Margin="0,0,4,0"
+                    Padding="8,4"
+                    ToolTip="Verschieben — Shift+Drag (XZ)"
+                    Command="{Binding SetTransformToolCommand}">
+              <Button.CommandParameter>
+                <x:Static Member="vm:TransformMode.Translate" />
+              </Button.CommandParameter>
+              <Button.Style>
+                <Style BasedOn="{StaticResource MaterialDesignFlatButton}" TargetType="Button">
+                  <Setter Property="BorderThickness" Value="2" />
+                  <Setter Property="BorderBrush" Value="Transparent" />
+                  <Style.Triggers>
+                    <DataTrigger Binding="{Binding IsTransformTranslateActive}" Value="True">
+                      <Setter Property="BorderBrush" Value="{DynamicResource App.AccentBrush}" />
+                    </DataTrigger>
+                  </Style.Triggers>
+                </Style>
+              </Button.Style>
+              <materialDesign:PackIcon Kind="CursorMove" VerticalAlignment="Center" />
+            </Button>
+            <Button MinHeight="40"
+                    MinWidth="40"
+                    Margin="0,0,4,0"
+                    Padding="8,4"
+                    ToolTip="Drehen — Alt+Drag (Yaw)"
+                    Command="{Binding SetTransformToolCommand}">
+              <Button.CommandParameter>
+                <x:Static Member="vm:TransformMode.Rotate" />
+              </Button.CommandParameter>
+              <Button.Style>
+                <Style BasedOn="{StaticResource MaterialDesignFlatButton}" TargetType="Button">
+                  <Setter Property="BorderThickness" Value="2" />
+                  <Setter Property="BorderBrush" Value="Transparent" />
+                  <Style.Triggers>
+                    <DataTrigger Binding="{Binding IsTransformRotateActive}" Value="True">
+                      <Setter Property="BorderBrush" Value="{DynamicResource App.AccentBrush}" />
+                    </DataTrigger>
+                  </Style.Triggers>
+                </Style>
+              </Button.Style>
+              <materialDesign:PackIcon Kind="RotateRight" VerticalAlignment="Center" />
+            </Button>
+            <Button MinHeight="40"
+                    MinWidth="40"
+                    Padding="8,4"
+                    ToolTip="Skalieren — Strg+Umschalt+Drag"
+                    Command="{Binding SetTransformToolCommand}">
+              <Button.CommandParameter>
+                <x:Static Member="vm:TransformMode.Scale" />
+              </Button.CommandParameter>
+              <Button.Style>
+                <Style BasedOn="{StaticResource MaterialDesignFlatButton}" TargetType="Button">
+                  <Setter Property="BorderThickness" Value="2" />
+                  <Setter Property="BorderBrush" Value="Transparent" />
+                  <Style.Triggers>
+                    <DataTrigger Binding="{Binding IsTransformScaleActive}" Value="True">
+                      <Setter Property="BorderBrush" Value="{DynamicResource App.AccentBrush}" />
+                    </DataTrigger>
+                  </Style.Triggers>
+                </Style>
+              </Button.Style>
+              <materialDesign:PackIcon Kind="Resize" VerticalAlignment="Center" />
+            </Button>
+          </StackPanel>
+        </StackPanel>
       </StackPanel>
 
       <!-- Mode badge -->

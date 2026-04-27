@@ -37,5 +37,6 @@ From repo root:
 - ✅ Phase 17: viewport drag uniform scale (Strg+Umschalt+Drag) with undo snapshot
 - ✅ Phase 18: inspector dimensions + color (#RRGGBB), palette swatches, undo on apply (single selection)
 - ✅ Phase 19: inspector metadata key/value editor (template + instance keys), undo on apply (single selection)
-- ⏳ Next: richer gizmo UX (transform mode toolbar), optional glTF material mapping, further polish
+- ✅ Phase 20: toolbar transform modes (translate / rotate / scale) + viewport drag gestures gated by active mode
+- ⏳ Next: optional glTF material mapping, further polish / UX
 

@@ -267,13 +267,14 @@
 
 - This is a “gizmo-light” interaction that avoids conflicting with Helix camera orbit/pan/zoom gestures.
 - **Rotate-drag** is Phase 16; **scale-drag** is Phase 17.
+- Requires **`TransformMode.Translate`** (toolbar / Phase 20).
 
 ## Phase 16 (Viewport drag rotate — yaw)
 
 ### What’s implemented
 
 - **Alt+Drag rotate** (`Views/ViewportPanel.xaml(.cs)`): **Alt + left mouse drag** rotates the picked instance around **world Y** (yaw). Horizontal mouse movement scales rotation using `Constants.ViewportRotateDragDegreesPerPixel`.
-- Requires **Edit mode** (`MainViewModel.Mode == EditorMode.Edit`).
+- Requires **Edit mode** and **`TransformMode.Rotate`** (toolbar / Phase 20).
 - Same undo rules as Phase 15: **`History.Push(...)` once** at drag start; live inspector rotation fields during drag (`MainViewModel.ViewportDragging.cs`).
 
 ### Notes
@@ -286,7 +287,7 @@
 
 - **Strg+Umschalt+Drag scale** (`Views/ViewportPanel.xaml(.cs)`): **Ctrl+Shift + left mouse drag** uniformly scales `PlacedAsset.DimensionsMeters` from the dimensions captured at drag start.
 - Vertical mouse movement adjusts a **uniform multiplier** (`Constants.ViewportScaleDragMultiplierPerPixel`; drag **up** increases size). The multiplier is clamped (`ViewportScaleDragMinMultiplier` … `ViewportScaleDragMaxMultiplier`); each axis is then clamped to `Constants.MinAssetDimension`.
-- Requires **Edit mode**.
+- Requires **Edit mode** and **`TransformMode.Scale`** (toolbar / Phase 20).
 - Undo/history matches prior viewport drags: **`History.Push(...)` once** at drag start (`MainViewModel.ViewportDragging.cs`).
 
 ### Notes
@@ -320,4 +321,17 @@
 ### Notes
 
 - Metadata edits are independent of transform / Maße+Farb **Übernehmen** buttons.
+
+## Phase 20 (Transform toolbar + gesture gating)
+
+### What’s implemented
+
+- **`Views/ToolbarView.xaml`**: **Transform** segment with three tools (**Verschieben / Drehen / Skalieren**) bound to `SetTransformToolCommand` (`TransformMode` enum via `x:Static`). Active tool shows an **accent border** (`IsTransformTranslateActive` / `Rotate` / `Scale`).
+- **`MainViewModel`**: computed flags + `OnTransformModeChanged` notifications; status text updates when switching tools.
+- **`Views/ViewportPanel.xaml.cs`**: drag gestures are **gated** by `MainViewModel.TransformMode` (**Translate** ↔ Shift+drag, **Rotate** ↔ Alt+drag, **Scale** ↔ Ctrl+Shift+drag), in addition to **Edit mode**.
+- **`Views/ViewportPanel.xaml`**: legend text references the toolbar mode.
+
+### Notes
+
+- Presentation mode (`EditorMode.View`) still blocks transform drags via existing edit checks.
 

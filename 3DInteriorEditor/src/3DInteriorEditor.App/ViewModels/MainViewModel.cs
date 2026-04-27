@@ -108,6 +108,44 @@ public sealed partial class MainViewModel : ObservableObject
     /// </summary>
     public string ModeLabel => Mode == EditorMode.Edit ? "EDIT" : "VIEW";
 
+    /// <summary>
+    /// Toolbar highlight: active transform tool matches <see cref="TransformMode.Translate"/>.
+    /// </summary>
+    public bool IsTransformTranslateActive => TransformMode == TransformMode.Translate;
+
+    /// <summary>
+    /// Toolbar highlight: active transform tool matches <see cref="TransformMode.Rotate"/>.
+    /// </summary>
+    public bool IsTransformRotateActive => TransformMode == TransformMode.Rotate;
+
+    /// <summary>
+    /// Toolbar highlight: active transform tool matches <see cref="TransformMode.Scale"/>.
+    /// </summary>
+    public bool IsTransformScaleActive => TransformMode == TransformMode.Scale;
+
+    partial void OnTransformModeChanged(TransformMode value)
+    {
+        OnPropertyChanged(nameof(IsTransformTranslateActive));
+        OnPropertyChanged(nameof(IsTransformRotateActive));
+        OnPropertyChanged(nameof(IsTransformScaleActive));
+    }
+
+    /// <summary>
+    /// Sets the active viewport transform tool (toolbar + drag gestures).
+    /// </summary>
+    [RelayCommand]
+    private void SetTransformTool(TransformMode mode)
+    {
+        TransformMode = mode;
+        StatusText = mode switch
+        {
+            TransformMode.Translate => "Werkzeug: Verschieben",
+            TransformMode.Rotate => "Werkzeug: Drehen",
+            TransformMode.Scale => "Werkzeug: Skalieren",
+            _ => StatusText,
+        };
+    }
+
     [RelayCommand]
     private void NewLayout()
     {

@@ -286,7 +286,7 @@ public partial class ViewportPanel
             return;
         }
 
-        if (vm.Mode != EditorMode.Edit)
+        if (vm.Mode != EditorMode.Edit || vm.TransformMode != TransformMode.Rotate)
         {
             return;
         }
@@ -324,7 +324,7 @@ public partial class ViewportPanel
             return;
         }
 
-        if (vm.Mode != EditorMode.Edit)
+        if (vm.Mode != EditorMode.Edit || vm.TransformMode != TransformMode.Scale)
         {
             return;
         }
