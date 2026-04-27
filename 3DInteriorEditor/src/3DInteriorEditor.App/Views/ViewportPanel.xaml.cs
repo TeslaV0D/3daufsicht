@@ -1,7 +1,9 @@
+using System;
 using System.Windows;
 using System.Windows.Media.Media3D;
 using System.Windows.Input;
 using HelixToolkit.Wpf;
+using _3DInteriorEditor.App.Models;
 using _3DInteriorEditor.App.Scene;
 using _3DInteriorEditor.App.ViewModels;
 using Constants = _3DInteriorEditor.App.Constants;
@@ -16,6 +18,7 @@ public partial class ViewportPanel
     private PlacedAssetScenePresenter? _presenter;
     private bool _isTranslateDragging;
     private bool _isRotateDragging;
+    private bool _isScaleDragging;
     private string? _dragAssetId;
     private double _dragPlaneY;
     private Point3D _dragStartWorld;
@@ -23,6 +26,8 @@ public partial class ViewportPanel
     private double _dragStartZ;
     private double _rotatePointerStartX;
     private double _rotateStartYawDegrees;
+    private double _scalePointerStartY;
+    private JsonVector3 _scaleStartDimensionsMeters = new();
 
     public ViewportPanel()
     {
@@ -58,6 +63,13 @@ public partial class ViewportPanel
         if (Keyboard.Modifiers == ModifierKeys.Alt)
         {
             TryBeginRotateDrag(e);
+            return;
+        }
+
+        // Phase 17: Strg+Umschalt+drag uniformly scales instance dimensions.
+        if (Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift))
+        {
+            TryBeginScaleDrag(e);
             return;
         }
 
@@ -120,6 +132,31 @@ public partial class ViewportPanel
             var yaw = _rotateStartYawDegrees + deltaX * Constants.ViewportRotateDragDegreesPerPixel;
             vm.ApplyViewportRotateDrag(_dragAssetId, yaw);
             e.Handled = true;
+            return;
+        }
+
+        if (_isScaleDragging && _dragAssetId is not null)
+        {
+            if (DataContext is not MainViewModel vm)
+            {
+                CancelScaleDrag();
+                return;
+            }
+
+            var pt = e.GetPosition(Viewport.Viewport);
+            var deltaY = pt.Y - _scalePointerStartY;
+            var mult = 1.0 - (deltaY * Constants.ViewportScaleDragMultiplierPerPixel);
+            mult = Math.Clamp(mult, Constants.ViewportScaleDragMinMultiplier, Constants.ViewportScaleDragMaxMultiplier);
+
+            var dims = new JsonVector3
+            {
+                X = Math.Max(Constants.MinAssetDimension, _scaleStartDimensionsMeters.X * mult),
+                Y = Math.Max(Constants.MinAssetDimension, _scaleStartDimensionsMeters.Y * mult),
+                Z = Math.Max(Constants.MinAssetDimension, _scaleStartDimensionsMeters.Z * mult),
+            };
+
+            vm.ApplyViewportScaleDrag(_dragAssetId, dims);
+            e.Handled = true;
         }
     }
 
@@ -146,6 +183,18 @@ public partial class ViewportPanel
 
             CancelRotateDrag();
             e.Handled = true;
+            return;
+        }
+
+        if (_isScaleDragging)
+        {
+            if (DataContext is MainViewModel vm)
+            {
+                vm.EndViewportScaleDrag();
+            }
+
+            CancelScaleDrag();
+            e.Handled = true;
         }
     }
 
@@ -170,6 +219,17 @@ public partial class ViewportPanel
             }
 
             CancelRotateDrag();
+            return;
+        }
+
+        if (_isScaleDragging)
+        {
+            if (DataContext is MainViewModel vm)
+            {
+                vm.EndViewportScaleDrag();
+            }
+
+            CancelScaleDrag();
         }
     }
 
@@ -253,6 +313,49 @@ public partial class ViewportPanel
     private void CancelRotateDrag()
     {
         _isRotateDragging = false;
+        _dragAssetId = null;
+        Viewport.ReleaseMouseCapture();
+    }
+
+    private void TryBeginScaleDrag(MouseButtonEventArgs e)
+    {
+        if (_presenter is null || DataContext is not MainViewModel vm)
+        {
+            return;
+        }
+
+        if (vm.Mode != EditorMode.Edit)
+        {
+            return;
+        }
+
+        var pt = e.GetPosition(Viewport.Viewport);
+        if (!_presenter.TryPickPlaced(pt, out var picked) || picked is null)
+        {
+            return;
+        }
+
+        vm.SetSelectionIds(new[] { picked.Id });
+
+        _dragAssetId = picked.Id;
+        _scalePointerStartY = pt.Y;
+        _scaleStartDimensionsMeters = new JsonVector3
+        {
+            X = picked.DimensionsMeters.X,
+            Y = picked.DimensionsMeters.Y,
+            Z = picked.DimensionsMeters.Z,
+        };
+
+        _isScaleDragging = true;
+        vm.BeginViewportScaleDrag();
+
+        e.Handled = true;
+        Viewport.CaptureMouse();
+    }
+
+    private void CancelScaleDrag()
+    {
+        _isScaleDragging = false;
         _dragAssetId = null;
         Viewport.ReleaseMouseCapture();
     }

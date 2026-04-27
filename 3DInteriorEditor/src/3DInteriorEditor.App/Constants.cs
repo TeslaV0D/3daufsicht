@@ -43,6 +43,22 @@ public static class Constants
     public const double ViewportRotateDragDegreesPerPixel = 0.35;
 
     /// <summary>
+    /// Viewport Strg+Umschalt+drag scale: uniform size multiplier change per vertical screen pixel (Y down = screen coordinates).
+    /// Drag up (decreasing Y) increases size.
+    /// </summary>
+    public const double ViewportScaleDragMultiplierPerPixel = 0.004;
+
+    /// <summary>
+    /// Minimum uniform scale multiplier during viewport scale-drag (applied before per-axis minimum dimension clamp).
+    /// </summary>
+    public const double ViewportScaleDragMinMultiplier = 0.08;
+
+    /// <summary>
+    /// Maximum uniform scale multiplier during viewport scale-drag.
+    /// </summary>
+    public const double ViewportScaleDragMaxMultiplier = 24.0;
+
+    /// <summary>
     /// Minimum asset dimension along any axis (meters).
     /// </summary>
     public const double MinAssetDimension = 0.1;

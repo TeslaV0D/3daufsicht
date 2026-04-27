@@ -3,12 +3,13 @@ using _3DInteriorEditor.App.Models;
 namespace _3DInteriorEditor.App.ViewModels;
 
 /// <summary>
-/// Viewport-driven interactive transforms (Phase 15–16).
+/// Viewport-driven interactive transforms (Phase 15–17).
 /// </summary>
 public sealed partial class MainViewModel
 {
     private bool _isViewportTranslateDragActive;
     private bool _isViewportRotateDragActive;
+    private bool _isViewportScaleDragActive;
 
     /// <summary>
     /// Starts a translate drag operation (pushes undo snapshot once).
@@ -130,6 +131,62 @@ public sealed partial class MainViewModel
 
         _isViewportRotateDragActive = false;
         StatusText = "Gedreht";
+    }
+
+    /// <summary>
+    /// Starts a uniform scale drag (pushes undo snapshot once).
+    /// </summary>
+    public void BeginViewportScaleDrag()
+    {
+        if (_isViewportScaleDragActive)
+        {
+            return;
+        }
+
+        if (SelectedAssetIds.Count != 1)
+        {
+            return;
+        }
+
+        _isViewportScaleDragActive = true;
+        History.Push(PlacedAssets.ToList(), CurrentSelectionIds());
+        NotifyUndoRedoCommands();
+        StatusText = "Skalieren…";
+    }
+
+    /// <summary>
+    /// Applies uniform scale to instance dimensions (no additional history snapshots).
+    /// </summary>
+    public void ApplyViewportScaleDrag(string assetId, JsonVector3 dimensionsMeters)
+    {
+        if (!_isViewportScaleDragActive)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(assetId))
+        {
+            return;
+        }
+
+        UpdatePlacedAsset(assetId, a => CloneAsset(a, dimensionsMeters: dimensionsMeters));
+
+        MarkDirty();
+        RefreshInspectorTransformFieldsFromScene();
+    }
+
+    /// <summary>
+    /// Ends a scale drag operation.
+    /// </summary>
+    public void EndViewportScaleDrag()
+    {
+        if (!_isViewportScaleDragActive)
+        {
+            return;
+        }
+
+        _isViewportScaleDragActive = false;
+        StatusText = "Skaliert";
     }
 }
 

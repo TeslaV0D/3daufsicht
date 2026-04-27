@@ -266,7 +266,7 @@
 ### Notes
 
 - This is a “gizmo-light” interaction that avoids conflicting with Helix camera orbit/pan/zoom gestures.
-- **Rotate-drag** arrives in Phase 16; scale-drag is still deferred.
+- **Rotate-drag** is Phase 16; **scale-drag** is Phase 17.
 
 ## Phase 16 (Viewport drag rotate — yaw)
 
@@ -279,4 +279,17 @@
 ### Notes
 
 - Pitch/roll viewport drags remain **out of scope** for this phase.
+
+## Phase 17 (Viewport drag scale — uniform)
+
+### What’s implemented
+
+- **Strg+Umschalt+Drag scale** (`Views/ViewportPanel.xaml(.cs)`): **Ctrl+Shift + left mouse drag** uniformly scales `PlacedAsset.DimensionsMeters` from the dimensions captured at drag start.
+- Vertical mouse movement adjusts a **uniform multiplier** (`Constants.ViewportScaleDragMultiplierPerPixel`; drag **up** increases size). The multiplier is clamped (`ViewportScaleDragMinMultiplier` … `ViewportScaleDragMaxMultiplier`); each axis is then clamped to `Constants.MinAssetDimension`.
+- Requires **Edit mode**.
+- Undo/history matches prior viewport drags: **`History.Push(...)` once** at drag start (`MainViewModel.ViewportDragging.cs`).
+
+### Notes
+
+- Non-uniform per-axis scaling remains **inspector/editor tooling** for a later phase.
 

@@ -34,5 +34,6 @@ From repo root:
 - ✅ Phase 14: glTF/glB mesh import rendering (`ImportedModelPath`), path resolution vs layout + app `samples/`, uniform fit to instance dimensions, built-in sample cube asset
 - ✅ Phase 15: viewport drag translate (Shift+Drag) on XZ plane with undo snapshot + inspector live update
 - ✅ Phase 16: viewport drag rotate yaw (Alt+Drag) with undo snapshot + inspector live update
-- ⏳ Next: scale drag / richer gizmo UX, more inspector properties (dims, color, …), optional glTF material mapping
+- ✅ Phase 17: viewport drag uniform scale (Strg+Umschalt+Drag) with undo snapshot
+- ⏳ Next: richer gizmo UX / non-uniform scale UX, more inspector properties (dims, color, …), optional glTF material mapping
 
