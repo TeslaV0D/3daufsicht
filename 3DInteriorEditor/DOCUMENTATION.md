@@ -60,3 +60,25 @@
 
 - The original requirements doc headline says “12 default assets”, but the detailed bullet list enumerates additional “Basis” templates too. `DefaultAssets.All` follows the **explicit template bullets** (unique definitions).
 
+## Phase 4 (Persistence + undo/redo services)
+
+### What’s implemented
+
+- `Services/FileService`:
+  - Async JSON load/save for `*.3dei` using `System.Text.Json`
+  - Helper export for `.json` exports (`ExportJsonAsync`)
+  - Utility `WriteRawJsonAsync` for migration/import scenarios
+- `Services/Serialization/AppJson`:
+  - Shared serializer options (**camelCase** JSON; enums as strings via `JsonStringEnumConverter`)
+- `Services/HistoryService`:
+  - Undo/redo stacks capped to `Constants.MaxHistoryEntries`
+  - Deep snapshots via JSON roundtrip (`DeepCopy`)
+- `Services/AutoSaveService`:
+  - Background timer loop (`Constants.AutoSaveIntervalSeconds`)
+  - Marshals “should save?” + “build layout” callbacks via captured `SynchronizationContext` when provided (future UI thread wiring)
+  - Writes into `%APPDATA%\\3DInteriorEditor\\AutoSave\\…` directory (caller chooses filename)
+
+### JSON naming
+
+- Persisted JSON uses **camelCase** property names (`AppJson.Options`), even though C# models use PascalCase properties.
+
