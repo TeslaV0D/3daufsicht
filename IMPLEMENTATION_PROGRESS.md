@@ -450,6 +450,31 @@ Ergebnis: beide Checks erfolgreich.
 
 - Inspector schlanker; Performance zentral unter **Ansicht** mit optionalem Monitoring.
 
+## Stand 29: Kritische Bugfixes (Color Picker, Save, Kamera, Präsentation)
+
+### Color Picker
+
+- **Hex-Input:** 300 ms Debounce; nur ganzes `#RRGGBB` commit; Fehlermarkierung; **SV/Hue:** Drag per Pointer-Down + Capture, kein dauerndes ungebremstes `pointermove` ohne Ziehen.
+- Picker-Implementierung: `ColorPickerPopover` (memo) mit getrennter Eingabespur und Commit-Pfad.
+
+### Config Persistence (Refresh + Intervall)
+
+- **`STORAGE_VERSION` 9;** neues `layoutSession` in `factory-layout` (Modus, Tool, Selektion, Info-Fokus, offene Beleuchtung/Boden, linke/rechte Leiste) via `setLayoutSessionSnapshot` + Auto-Save und **30 s** Backup-Intervall; Store initialisiert **selectedIds** aus `layoutSession` und persistiertes Layout.
+
+### Camera
+
+- `OrbitControlsCleanup`: `dispose` beim Unmount; **copy/paste**-Listener: `document.exitPointerLock` wenn nötig; **View-Mode:** `Ctrl/Cmd + C` / `V` nicht mehr durch frühen Return in `handleKeyDown` abgeschnitten.
+
+### Presentation Mode
+
+- Klick: **setSelectedIds +** Info-Referenz; **rechter Inspector** sichtbar und **disabled**-Fieldset in View für nicht-gesperrte Selektion (CSS `workspace--view-with-inspector`); **AssetInfoModal** oben **nur** wenn **Inspector** mit H aus; **500 ms** Ignore nach Mount gegen Close durch denselben Klick.
+
+### Test / QA
+
+- `npm run build` und `npm run lint` im `planner-app` erfolgreich.
+
+**Alle relevanten Commits in Branch `cursor/factory-bugfixes-bb8a`**
+
 ## Offene optionale Erweiterungen
 
 - Box-Selection fuer Mehrfachauswahl.

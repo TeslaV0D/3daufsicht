@@ -63,7 +63,25 @@ npm run lint
 - **Performance:** Im Menü **Ansicht** als **einklappbare Sektion „Performance“** (Standard: zugeklappt); Aufklapp-Zustand in `localStorage` unter `factory-planning-view-menu-performance-expanded`. Enthält u. a. HUD (FPS, Draw-Calls, Geometrien, optional JS-Heap in Chrome), max. Pixel-Ratio, **Instancing (Opt-in, standard aus)**, **Distanz-Culling**, **virtuelle Bibliotheks-Liste**, LOD-Hinweis, Schatten-Metadaten — plus **Monitoring-Zeilen**, wenn das HUD im Bearbeiten-Modus aktiv ist (`plannerPerfStats`-Bridge).
 - **Text-Labels:** **`BillboardTextLabel`** mit Canvas-Textur; **Textfarbe** und **Hintergrundfarbe** jeweils mit vollem **`ColorPickerPopover`** (wie andere Objekte, inkl. Favoriten); Hintergrund optional mit **Transparenz**; keine doppelte Material-Farbe für Text-Assets im Inspector.
 - **Ansicht / Kamera:** Toolbar **Ansicht** — **Perspektive** mit Live-Slidern, eingebauten und **eigenen Presets** (`localStorage`); **Top, Front, Seite** mit eigenen Slidern (Höhe, FOV, Abstände, Offsets), Werte werden im Layout mit **`axisViewCameras`** gespeichert.
-- **Backward Compatibility:** `version: 8`, `layoutFormatSemver: "1.2.0"`, `finalizeImportedPayload` beim Laden/Import.
+- **Backward Compatibility:** `version: 9`, `layoutFormatSemver: "1.2.0"`, `finalizeImportedPayload` beim Laden/Import.
+
+### Color Picker
+
+- **Hex-Input:** Debounce (300 ms), nur vollständige `#RRGGBB`-Werte wenden; Eingabefeld zeigt sofort, Zwischenwerte während des Tippens wenden keinen ungültigen Farbton an; rote Markierung bei ungültigem Wert; Blur stellt letzten gültigen Farbwert oder Rollback.
+- **HSV-Fläche & Hue-Schiene:** Drag nur während `pointerdown` (Pointer-Capture, kein dauerndes `mousemove` auf dem Grid während Nicht-Drag), dadurch ruhigere, treffsichere Steuerung.
+
+### Config Persistence (inkl. Shell-UI)
+
+- **Auto-Save:** `factory-layout` wird bei relevanten Zustandsänderungen (Szene, Kamera, Beleuchtung, **Shell inkl. Modus, Werkzeug, Selektion, offene Paneele, Panel-Visibility** etc.) in `localStorage` geschrieben, zusätzlich **alle 30 s** Sicherheits-Intervall.
+- **F5 / Refresh:** Volles Layout inkl. **Kamera, Beleuchtung, Placements**; `layoutSession` stellt u. a. **Präsentation vs. Bearbeiten, Tool, Selektion, offene Beleuchtung/Boden-Inspector, linke/rechte Leiste sichtbar** wieder her, soweit die referenzierten Asset-IDs noch existieren. Ältere Saves ohne `layoutSession` bleiben nutzbar.
+
+### Camera Controls
+
+- **OrbitControls:** Zusätzliches `dispose` beim Unmount, damit Listener in langen Sessions/Modus-Wechseln nicht hängen bleiben; **Copy/Paste** ggf. `exitPointerLock()` damit kein festsitzender Fokus die Maus-Steuerung stört. **Strg/Cmd + C/V** funktionieren im **Präsentationsmodus** (ohne Vorrang vorm globalen Tastenhandler).
+
+### Presentation Mode
+
+- Klick setzt Selektion und (Lesemodus) **rechten Inspector** mit vollständiger, **deaktiviert** lesbarer Eigenschaften-Ansicht (Feld-Set, wenn kein Kompakt-Popup nötig); oberes **Info-Popup** erscheint, wenn der **Inspector** mit **H** zugeklappt ist, und schließt nicht sofort im Öffnungsklick. Gesperrte Assets / Zonen: wie bisher nicht wählbar.
 
 ### Bibliothek & Gruppen (Feinschliff)
 
