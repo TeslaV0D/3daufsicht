@@ -7,6 +7,10 @@
                mc:Ignorable="d"
                d:DesignWidth="280">
 
+  <UserControl.Resources>
+    <BooleanToVisibilityConverter x:Key="BoolToVis" />
+  </UserControl.Resources>
+
   <DockPanel Background="{DynamicResource App.PanelBrush}">
     <Border DockPanel.Dock="Top" Padding="12,12,12,10">
       <DockPanel LastChildFill="True">
@@ -38,6 +42,69 @@
 
           <Separator Margin="0,12,0,12"
                      Background="{DynamicResource App.BorderBrush}" />
+
+          <!-- Phase 13: editable transform when exactly one asset is selected -->
+          <Border Margin="0,0,0,12"
+                  Padding="10"
+                  CornerRadius="10"
+                  Background="{DynamicResource App.ElevatedBrush}"
+                  Visibility="{Binding IsInspectorTransformVisible, Converter={StaticResource BoolToVis}}">
+            <StackPanel>
+              <TextBlock Margin="0,0,0,10"
+                         FontWeight="SemiBold"
+                         Foreground="{DynamicResource App.TextPrimaryBrush}"
+                         Text="Transform (m / °)" />
+
+              <TextBlock Margin="0,0,0,4"
+                         FontSize="11"
+                         Foreground="{DynamicResource App.TextSecondaryBrush}"
+                         Text="Position (m), Dezimalpunkt" />
+
+              <UniformGrid Columns="3" Margin="0,0,0,8">
+                <TextBox Margin="0,0,6,0"
+                         materialDesign:HintAssist.Hint="X"
+                         Style="{DynamicResource MaterialDesignOutlinedTextBox}"
+                         Text="{Binding InspectorPosXText, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBox Margin="0,0,6,0"
+                         materialDesign:HintAssist.Hint="Y"
+                         Style="{DynamicResource MaterialDesignOutlinedTextBox}"
+                         Text="{Binding InspectorPosYText, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBox materialDesign:HintAssist.Hint="Z"
+                         Style="{DynamicResource MaterialDesignOutlinedTextBox}"
+                         Text="{Binding InspectorPosZText, UpdateSourceTrigger=PropertyChanged}" />
+              </UniformGrid>
+
+              <TextBlock Margin="0,4,0,4"
+                         FontSize="11"
+                         Foreground="{DynamicResource App.TextSecondaryBrush}"
+                         Text="Rotation (deg), Euler X/Y/Z" />
+
+              <UniformGrid Columns="3" Margin="0,0,0,10">
+                <TextBox Margin="0,0,6,0"
+                         materialDesign:HintAssist.Hint="RX"
+                         Style="{DynamicResource MaterialDesignOutlinedTextBox}"
+                         Text="{Binding InspectorRotXText, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBox Margin="0,0,6,0"
+                         materialDesign:HintAssist.Hint="RY"
+                         Style="{DynamicResource MaterialDesignOutlinedTextBox}"
+                         Text="{Binding InspectorRotYText, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBox materialDesign:HintAssist.Hint="RZ"
+                         Style="{DynamicResource MaterialDesignOutlinedTextBox}"
+                         Text="{Binding InspectorRotZText, UpdateSourceTrigger=PropertyChanged}" />
+              </UniformGrid>
+
+              <UniformGrid Columns="2">
+                <Button Margin="0,0,6,0"
+                        Style="{DynamicResource MaterialDesignRaisedButton}"
+                        Command="{Binding ApplyInspectorTransformCommand}"
+                        Content="Übernehmen" />
+                <Button Margin="6,0,0,0"
+                        Style="{DynamicResource MaterialDesignOutlinedButton}"
+                        Command="{Binding ResetInspectorTransformCommand}"
+                        Content="Zurücksetzen" />
+              </UniformGrid>
+            </StackPanel>
+          </Border>
 
           <ItemsControl ItemsSource="{Binding Inspector.SelectedAssets}">
             <ItemsControl.ItemTemplate>

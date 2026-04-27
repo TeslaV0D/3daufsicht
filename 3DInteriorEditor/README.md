@@ -30,5 +30,6 @@ From repo root:
 - ✅ Phase 10: selection model (selected ids in `MainViewModel`), Ctrl+click toggle selection, viewport highlight + inspector selection list
 - ✅ Phase 11: keyboard transforms (move/rotate/delete) with undo snapshots + inspector shows pos/rot
 - ✅ Phase 12: duplicate selection (Ctrl+D) + fine move/rotate steps (Shift modifiers) + toolbar/edit menu shortcuts
-- ⏳ Next: gizmo/drag transforms, mesh import rendering, richer inspector fields
+- ✅ Phase 13: inspector transform editor (single selection) with apply/reset, invariant number parsing, history on apply
+- ⏳ Next: gizmo/drag transforms, mesh import rendering, more inspector properties (dims, color, …)
 

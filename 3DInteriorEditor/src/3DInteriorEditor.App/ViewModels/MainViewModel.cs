@@ -268,6 +268,7 @@ public sealed partial class MainViewModel : ObservableObject
 
         MarkDirty();
         NotifyUndoRedoCommands();
+        RefreshInspectorTransformFieldsFromScene();
     }
 
     [RelayCommand(CanExecute = nameof(HasAnySelection))]
@@ -309,6 +310,7 @@ public sealed partial class MainViewModel : ObservableObject
 
         MarkDirty();
         NotifyUndoRedoCommands();
+        RefreshInspectorTransformFieldsFromScene();
     }
 
     [RelayCommand(CanExecute = nameof(CanUndo))]
@@ -527,6 +529,7 @@ public sealed partial class MainViewModel : ObservableObject
             .ToList();
 
         Inspector.SetSelection(selected);
+        RefreshInspectorTransformFieldsFromScene();
     }
 
     /// <summary>
@@ -580,6 +583,8 @@ public sealed partial class MainViewModel : ObservableObject
 
     private void BootstrapLayoutCollections()
     {
+        SelectedAssetIds.Clear();
+
         PlacedAssets.Clear();
         foreach (var a in Layout.PlacedAssets)
         {
@@ -623,7 +628,6 @@ public sealed partial class MainViewModel : ObservableObject
 
     private void RefreshInspectorSelection()
     {
-        // Selection system arrives in Phase 10; keep inspector stable until then.
         Inspector.SetSelection(Array.Empty<PlacedAsset>());
     }
 

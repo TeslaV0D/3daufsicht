@@ -218,3 +218,20 @@
 
 - Duplicate uses the same undo pattern as other edits: history is captured **before** mutation.
 
+## Phase 13 (Inspector transform editing)
+
+### What’s implemented
+
+- `ViewModels/MainViewModel.InspectorEditing.cs` (partial `MainViewModel`):
+  - String text fields for **position (m)** and **rotation (deg)** for a **single** selected instance.
+  - `ApplyInspectorTransformCommand` records a `History` snapshot, then updates the `PlacedAsset` in `PlacedAssets`.
+  - `ResetInspectorTransformCommand` reloads the text fields from the current scene state.
+  - Numbers are parsed with `CultureInfo.InvariantCulture` (use a **`.`** decimal separator in the text fields).
+- `Views/InspectorPanel.xaml` shows the editor when `IsInspectorTransformVisible` and provides **Übernehmen** / **Zurücksetzen** actions.
+- `SyncSelectionToInspector` and keyboard nudges/rotations keep the text fields in sync with the selected instance.
+- `BootstrapLayoutCollections` also clears `SelectedAssetIds` so new/loaded documents do not keep stale selection.
+
+### Notes
+
+- The transform editor is only available for **exactly one** selected item. For multiple selection, the panel still shows the list, but the editor is hidden.
+
